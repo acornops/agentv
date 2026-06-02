@@ -1,0 +1,36 @@
+{
+  "name": "@acornops/vm-agent",
+  "version": "0.0.1-experimental.1",
+  "private": true,
+  "type": "module",
+  "description": "Outbound-only AcornOps Linux/systemd VM agent",
+  "main": "dist/index.js",
+  "scripts": {
+    "dev": "tsx watch src/index.ts",
+    "build": "tsc -p tsconfig.json",
+    "start": "node dist/index.js",
+    "typecheck": "tsc --noEmit",
+    "lint": "node scripts/check-docstrings.mjs && tsc --noEmit",
+    "test": "vitest run --exclude src/e2e.spec.ts",
+    "test:coverage": "vitest run --coverage --exclude src/e2e.spec.ts",
+    "test:watch": "vitest",
+    "contracts:check": "node scripts/check-contracts.mjs",
+    "harness:check": "node scripts/check-harness.mjs",
+    "validate": "npm run lint && npm test && npm run contracts:check && npm run harness:check && npm run build",
+    "validate:ci": "npm run lint && npm test && npm run contracts:check && npm run harness:check && npm run build"
+  },
+  "dependencies": {
+    "ws": "^8.20.1"
+  },
+  "devDependencies": {
+    "@types/node": "^22.13.10",
+    "@types/ws": "^8.5.14",
+    "@vitest/coverage-v8": "^4.1.8",
+    "tsx": "^4.19.3",
+    "typescript": "^5.8.2",
+    "vitest": "^4.1.8"
+  },
+  "engines": {
+    "node": ">=22.0.0"
+  }
+}

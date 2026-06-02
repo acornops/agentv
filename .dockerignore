@@ -1,0 +1,14 @@
+node_modules
+dist
+coverage
+.env
+.env.*
+.git
+.github
+.agents
+.codex
+.DS_Store
+npm-debug.log
+*.log
+__pycache__/
+*.py[cod]
