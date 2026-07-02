@@ -2,32 +2,32 @@
   <img width="220" src="https://raw.githubusercontent.com/acornops/docs-website/main/logo/light.svg" alt="AcornOps" />
 </p>
 
-<h1 align="center">AcornOps VM Agent</h1>
+<h1 align="center">AcornOps AgentV</h1>
 
 <p align="center">
-  <a href="https://github.com/acornops/vm-agent/actions/workflows/ci.yml"><img src="https://github.com/acornops/vm-agent/actions/workflows/ci.yml/badge.svg" alt="CI" /></a>
-  <a href="https://codecov.io/gh/acornops/vm-agent"><img src="https://codecov.io/gh/acornops/vm-agent/branch/main/graph/badge.svg" alt="Coverage" /></a>
+  <a href="https://github.com/acornops/agentv/actions/workflows/ci.yml"><img src="https://github.com/acornops/agentv/actions/workflows/ci.yml/badge.svg" alt="CI" /></a>
+  <a href="https://codecov.io/gh/acornops/agentv"><img src="https://codecov.io/gh/acornops/agentv/branch/main/graph/badge.svg" alt="Coverage" /></a>
   <a href="https://nodejs.org/"><img src="https://img.shields.io/badge/node-22-green.svg" alt="Node 22" /></a>
   <a href="docs/contracts/README.md"><img src="https://img.shields.io/badge/contracts-checked-blue.svg" alt="Contracts checked" /></a>
 </p>
 
 <p align="center">
-  Outbound-only Linux/systemd VM agent for host snapshots, read-only diagnostics, and JSON-RPC tool execution.
+  Outbound-only Linux/systemd AgentV for host snapshots, read-only diagnostics, and JSON-RPC tool execution.
 </p>
 
 ## Status
 
-This repository owns the VM agent code, systemd packaging assets, production image, VM agent protocol contract, and agent-level docs. Central platform deployment wiring belongs in `acornops-deployment`.
+This repository owns the AgentV code, systemd packaging assets, production image, AgentV protocol contract, and agent-level docs. Central platform deployment wiring belongs in `acornops-deployment`.
 
 ## Agent-Assisted Development
 
-This repository supports human and agent-assisted development. Start coding agents from this repository root for VM-agent-only work, and from the `acornops-workspace` root for changes that touch multiple AcornOps repositories.
+This repository supports human and agent-assisted development. Start coding agents from this repository root for AgentV-only work, and from the `acornops-workspace` root for changes that touch multiple AcornOps repositories.
 
 ## Contracts
 
 Cross-repo contract documentation lives in [`docs/contracts/README.md`](docs/contracts/README.md). This repo's direct platform dependency is the control-plane outbound agent bridge documented there.
 Machine-readable contract data lives in [`docs/contracts/manifest.json`](docs/contracts/manifest.json).
-Run `npm run contracts:check` to mechanically verify the documented VM-agent/control-plane contract shape.
+Run `npm run contracts:check` to mechanically verify the documented AgentV/control-plane contract shape.
 
 Coverage is generated in CI with Vitest V8 coverage, uploaded as a workflow
 artifact, and published to Codecov when `CODECOV_TOKEN` is configured for the
@@ -111,11 +111,11 @@ Use `ACORNOPS_VM_COLLECTOR_MODE=mock` for local Docker and CI. Use `live` on a L
 
 Systemd packaging assets live in [`packaging/systemd`](packaging/systemd):
 
-- `acornops-vm-agent.service`: service unit for Linux VMs.
-- `vm-agent.env.example`: environment file template.
+- `acornops-agentv.service`: service unit for Linux VMs.
+- `agentv.env.example`: environment file template.
 - `install.sh` and `uninstall.sh`: install helpers for the service assets.
 
-Runtime configuration belongs in `/etc/acornops/vm-agent.env`. Keep that file owned by `root:acornops-agent` with mode `0640` because it contains the agent key.
+Runtime configuration belongs in `/etc/acornops/agentv.env`. Keep that file owned by `root:acornops-agent` with mode `0640` because it contains the agent key.
 
 ## Validation
 

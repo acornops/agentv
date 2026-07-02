@@ -1,14 +1,14 @@
-# VM Agent Contract
+# AgentV Contract
 
-The VM agent talks to the control plane over the existing outbound WebSocket
+The AgentV talks to the control plane over the existing outbound WebSocket
 agent bridge.
 
 ## Dependency Matrix
 
 | Producer | Consumer | Surface | Compatibility |
 | --- | --- | --- | --- |
-| `vm-agent` | `control-plane` | `lifecycle/handshake`, `lifecycle/heartbeat`, `notify/snapshot`, `tools/list`, `tools/call` | Additive fields are preferred; removing or renaming fields requires a coordinated control-plane change. |
-| `control-plane` | `vm-agent` | WebSocket endpoint, JSON-RPC requests, handshake acknowledgement, session policy | The VM agent expects a JSON-RPC result for handshake acknowledgement before it starts heartbeats and snapshots. |
+| `agentv` | `control-plane` | `lifecycle/handshake`, `lifecycle/heartbeat`, `notify/snapshot`, `tools/list`, `tools/call` | Additive fields are preferred; removing or renaming fields requires a coordinated control-plane change. |
+| `control-plane` | `agentv` | WebSocket endpoint, JSON-RPC requests, handshake acknowledgement, session policy | The AgentV expects a JSON-RPC result for handshake acknowledgement before it starts heartbeats and snapshots. |
 
 ## Handshake
 
@@ -19,7 +19,7 @@ Required params:
 - `agentKey`
 - `targetId`
 - `targetType = "virtual_machine"`
-- `agentType = "vm_agent"`
+- `agentType = "agentv"`
 - `osFamily = "linux"`
 - `serviceManager = "systemd"`
 - `supportedCapabilities[]`
@@ -63,9 +63,9 @@ Built-in tool names:
 
 ## Shared Invariants
 
-- VM agents are outbound-only and authenticate with the agent key assigned by the control plane.
+- AgentV instances are outbound-only and authenticate with the agent key assigned by the control plane.
 - `targetType` is `virtual_machine` for this repository.
-- `agentType` is `vm_agent`.
+- `agentType` is `agentv`.
 - V1 OS support is `linux`; v1 service manager support is `systemd`.
 - Built-in VM tools are read-only and must not mutate packages, files, processes, services, or host configuration.
 - Snapshot and log payloads must remain bounded and redact token-like process arguments.

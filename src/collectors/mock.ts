@@ -22,7 +22,7 @@ export function mockSnapshot(): HostSnapshot {
       network: [{ name: 'eth0', address: '172.18.0.10', state: 'up' }]
     },
     services: [
-      { name: 'acornops-vm-agent.service', loadState: 'loaded', activeState: 'active', subState: 'running', description: 'AcornOps VM Agent' },
+      { name: 'acornops-agentv.service', loadState: 'loaded', activeState: 'active', subState: 'running', description: 'AcornOps AgentV' },
       { name: 'ssh.service', loadState: 'loaded', activeState: 'active', subState: 'running', description: 'OpenSSH server' }
     ],
     processes: [
@@ -33,7 +33,7 @@ export function mockSnapshot(): HostSnapshot {
       { protocol: 'tcp', localAddress: '0.0.0.0', port: 22, process: 'sshd' }
     ],
     logs: [
-      { source: 'journald', timestamp: now, unit: 'acornops-vm-agent.service', severity: 'info', message: 'snapshot uploaded' },
+      { source: 'journald', timestamp: now, unit: 'acornops-agentv.service', severity: 'info', message: 'snapshot uploaded' },
       { source: 'syslog', timestamp: now, severity: 'info', message: 'mock Linux/systemd VM healthy' }
     ],
     findings: [

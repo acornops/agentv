@@ -1,5 +1,5 @@
 {
-  "repo": "vm-agent",
+  "repo": "agentv",
   "version": 1,
   "runtimeDependencies": ["control-plane"],
   "counterparts": {

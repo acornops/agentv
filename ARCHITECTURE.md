@@ -1,16 +1,16 @@
-# VM Agent Architecture
+# AgentV Architecture
 
 ## Purpose
 
-The VM agent runs on Linux/systemd virtual machines, connects outbound to the AcornOps control plane, sends bounded host snapshots, and serves read-only diagnostic tools over the shared JSON-RPC agent bridge.
+The AgentV runs on Linux/systemd virtual machines, connects outbound to the AcornOps control plane, sends bounded host snapshots, and serves read-only diagnostic tools over the shared JSON-RPC agent bridge.
 
-This repository owns the VM-side runtime, host collector adapters, JSON-RPC tool registry, systemd packaging assets, Docker image, and VM agent contract docs. It does not own control-plane target registration, central deployment orchestration, or Kubernetes agent behavior.
+This repository owns the VM-side runtime, host collector adapters, JSON-RPC tool registry, systemd packaging assets, Docker image, and AgentV contract docs. It does not own control-plane target registration, central deployment orchestration, or Kubernetes agent behavior.
 
 ## Runtime Boundaries
 
 - Inbound interfaces: none from the network; the agent only receives messages on the outbound WebSocket it initiated.
 - Outbound dependencies: AcornOps control-plane WebSocket endpoint, local Linux/systemd commands and files used by collectors.
-- Persistent stores: none in the agent process; systemd installs may use `/var/lib/acornops-vm-agent` for future local runtime state.
+- Persistent stores: none in the agent process; systemd installs may use `/var/lib/acornops-agentv` for future local runtime state.
 - Background workers: heartbeat timer, snapshot timer, reconnect timer.
 - External services: control plane at `ACORNOPS_AGENT_PLATFORM_URL`.
 
@@ -24,14 +24,14 @@ src/mcp/                      JSON-RPC request router
 src/tools/                    read-only diagnostic tool registry and handlers
 src/transport/                outbound WebSocket client
 packaging/systemd/            Linux systemd install assets
-docs/contracts/               VM-agent/control-plane contract docs and manifest
+docs/contracts/               AgentV/control-plane contract docs and manifest
 scripts/                      repository harness and contract checks
 ```
 
 ## Data And Control Flow
 
-1. `src/index.ts` loads environment configuration, chooses the live or mock collector, and starts `VmAgentClient`.
-2. `VmAgentClient` connects to `<ACORNOPS_AGENT_PLATFORM_URL>/api/v1/agent/connect` with agent authentication headers.
+1. `src/index.ts` loads environment configuration, chooses the live or mock collector, and starts `AgentVClient`.
+2. `AgentVClient` connects to `<ACORNOPS_AGENT_PLATFORM_URL>/api/v1/agent/connect` with agent authentication headers.
 3. The agent sends `lifecycle/handshake` with target identity, target type, OS family, service manager, and supported capabilities.
 4. After handshake acknowledgement, the agent sends periodic `lifecycle/heartbeat` notifications and bounded `notify/snapshot` payloads.
 5. Control-plane JSON-RPC tool requests are routed through `src/mcp/router.ts` to read-only tool handlers in `src/tools`.
@@ -45,7 +45,7 @@ Contract-sensitive changes include handshake fields, WebSocket paths or headers,
 
 ## Operational Model
 
-The local development path uses Node.js 22 and `ACORNOPS_VM_COLLECTOR_MODE=mock` so contributors can run and test without a Linux/systemd VM. Production-like installs use the systemd assets in `packaging/systemd` and should keep secrets in `/etc/acornops/vm-agent.env`.
+The local development path uses Node.js 22 and `ACORNOPS_VM_COLLECTOR_MODE=mock` so contributors can run and test without a Linux/systemd VM. Production-like installs use the systemd assets in `packaging/systemd` and should keep secrets in `/etc/acornops/agentv.env`.
 
 The agent is intentionally stateless. Restarting the process reconnects, re-handshakes, and resumes heartbeats and snapshots without requiring local recovery.
 

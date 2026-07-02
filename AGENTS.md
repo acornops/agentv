@@ -1,4 +1,4 @@
-# VM Agent Entry Point
+# AgentV Entry Point
 
 Use this file as a map, not as the full source of truth. Durable repository
 knowledge belongs in the linked docs.
@@ -42,7 +42,7 @@ manifest, shared skills, validation helpers, and PR coordination workflow.
 
 - Treat `docs/` as the system of record for repository knowledge.
 - Keep this file short. Push durable protocol and operational rules into linked docs instead of adding ad hoc instructions here.
-- Keep the VM agent outbound-only.
+- Keep the AgentV outbound-only.
 - Keep v1 tools read-only. Do not add shell execution, sudo, package changes,
   process kills, service restarts, or filesystem mutation.
 - Model OS family, service manager, collector mode, and log sources explicitly

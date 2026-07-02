@@ -6,7 +6,7 @@ if [[ "$(id -u)" -ne 0 ]]; then
   exit 1
 fi
 
-systemctl disable --now acornops-vm-agent 2>/dev/null || true
-rm -f /etc/systemd/system/acornops-vm-agent.service
+systemctl disable --now acornops-agentv 2>/dev/null || true
+rm -f /etc/systemd/system/acornops-agentv.service
 systemctl daemon-reload
-echo "Removed acornops-vm-agent.service. /etc/acornops/vm-agent.env was preserved."
+echo "Removed acornops-agentv.service. /etc/acornops/agentv.env was preserved."

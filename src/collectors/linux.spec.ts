@@ -25,7 +25,7 @@ vi.mock('node:os', () => ({ default: osMock }));
 import { LinuxSystemdCollector, redactHostText } from './linux.js';
 
 const systemctlOutput = [
-  'acornops-vm-agent.service loaded active running AcornOps VM Agent',
+  'acornops-agentv.service loaded active running AcornOps AgentV',
   'ssh.service loaded active running OpenSSH server',
   'backup.service loaded failed failed Nightly backup',
   'stopped.service loaded inactive dead Stopped helper'
@@ -58,7 +58,7 @@ const meminfoOutput = [
 ].join('\n');
 
 const journalOutput = [
-  '2026-06-01T00:00:00+00:00 vm agent started token=journal-secret',
+  '2026-06-01T00:00:00+00:00 agentv started token=journal-secret',
   '2026-06-01T00:00:01+00:00 vm Authorization: Bearer bearer-secret'
 ].join('\n');
 
@@ -202,7 +202,7 @@ describe('Linux/systemd collector hygiene', () => {
     });
 
     expect(entries).toEqual([
-      expect.objectContaining({ source: 'journald', message: 'vm agent started token=<redacted>' }),
+      expect.objectContaining({ source: 'journald', message: 'agentv started token=<redacted>' }),
       expect.objectContaining({ source: 'journald', message: 'vm Authorization: Bearer <redacted>' })
     ]);
     expect(execFileMock).toHaveBeenCalledWith(

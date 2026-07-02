@@ -50,7 +50,7 @@ const { MockWebSocket, socketInstances } = vi.hoisted(() => {
 
 vi.mock('ws', () => ({ default: MockWebSocket }));
 
-import { VmAgentClient } from './websocket-client.js';
+import { AgentVClient } from './websocket-client.js';
 
 function baseConfig(overrides: Partial<AgentConfig> = {}): AgentConfig {
   return {
@@ -102,7 +102,7 @@ function sentJson(socket: InstanceType<typeof MockWebSocket>, index: number) {
   };
 }
 
-describe('VmAgentClient', () => {
+describe('AgentVClient', () => {
   beforeEach(() => {
     vi.useFakeTimers();
     vi.clearAllMocks();
@@ -114,8 +114,8 @@ describe('VmAgentClient', () => {
     vi.useRealTimers();
   });
 
-  it('connects to the VM agent endpoint with agent headers and sends a VM handshake', () => {
-    const client = new VmAgentClient(baseConfig(), testCollector(), testLogger());
+  it('connects to the AgentV endpoint with agent headers and sends a VM handshake', () => {
+    const client = new AgentVClient(baseConfig(), testCollector(), testLogger());
 
     client.start();
     socketInstances[0]?.emit('open');
@@ -125,7 +125,7 @@ describe('VmAgentClient', () => {
     expect(socketInstances[0]?.options).toEqual({
       headers: {
         'x-agent-key': 'agent-key-12345678',
-        'x-agent-version': 'vm-agent/0.0.1-experimental.1'
+        'x-agent-version': 'agentv/0.0.1-experimental.1'
       }
     });
     expect(sentJson(socketInstances[0]!, 0)).toEqual({
@@ -136,7 +136,7 @@ describe('VmAgentClient', () => {
         agentKey: 'agent-key-12345678',
         targetId: 'vm-1',
         targetType: 'virtual_machine',
-        agentType: 'vm_agent',
+        agentType: 'agentv',
         osFamily: 'linux',
         serviceManager: 'systemd',
         supportedCapabilities: ['read', 'logs', 'mcp', 'chat', 'systemd', 'linux']
@@ -146,7 +146,7 @@ describe('VmAgentClient', () => {
 
   it('starts heartbeats and sends an immediate bounded snapshot after handshake acknowledgement', async () => {
     const collector = testCollector();
-    const client = new VmAgentClient(baseConfig({ snapshotIntervalMs: 60000 }), collector, testLogger());
+    const client = new AgentVClient(baseConfig({ snapshotIntervalMs: 60000 }), collector, testLogger());
 
     client.start();
     socketInstances[0]!.emit('open');
@@ -175,7 +175,7 @@ describe('VmAgentClient', () => {
   });
 
   it('routes control-plane JSON-RPC tool requests back over the same socket', async () => {
-    const client = new VmAgentClient(baseConfig(), testCollector(), testLogger());
+    const client = new AgentVClient(baseConfig(), testCollector(), testLogger());
 
     client.start();
     socketInstances[0]!.emit('message', JSON.stringify({
@@ -195,7 +195,7 @@ describe('VmAgentClient', () => {
 
   it('logs malformed control-plane messages without tearing down the client', async () => {
     const logger = testLogger();
-    const client = new VmAgentClient(baseConfig(), testCollector(), logger);
+    const client = new AgentVClient(baseConfig(), testCollector(), logger);
 
     client.start();
     socketInstances[0]!.emit('message', '{not-json');
@@ -210,7 +210,7 @@ describe('VmAgentClient', () => {
 
   it('logs websocket errors without scheduling reconnect until close', () => {
     const logger = testLogger();
-    const client = new VmAgentClient(baseConfig(), testCollector(), logger);
+    const client = new AgentVClient(baseConfig(), testCollector(), logger);
 
     client.start();
     socketInstances[0]!.emit('error', new Error('socket boom'));
@@ -231,7 +231,7 @@ describe('VmAgentClient', () => {
       }),
       getLogs: vi.fn(async () => ({ entries: [] }))
     };
-    const client = new VmAgentClient(baseConfig(), collector, logger);
+    const client = new AgentVClient(baseConfig(), collector, logger);
 
     client.start();
     socketInstances[0]!.emit('open');
@@ -247,7 +247,7 @@ describe('VmAgentClient', () => {
   });
 
   it('clears timers on close and reconnects once after the reconnect delay', async () => {
-    const client = new VmAgentClient(baseConfig({ snapshotIntervalMs: 5000 }), testCollector(), testLogger());
+    const client = new AgentVClient(baseConfig({ snapshotIntervalMs: 5000 }), testCollector(), testLogger());
 
     client.start();
     socketInstances[0]!.emit('message', JSON.stringify({ jsonrpc: '2.0', id: 1, result: { ok: true } }));
@@ -265,7 +265,7 @@ describe('VmAgentClient', () => {
 
   it('keeps the reconnect timer refed after unexpected close so the agent process stays alive', () => {
     const setTimeoutSpy = vi.spyOn(global, 'setTimeout');
-    const client = new VmAgentClient(baseConfig(), testCollector(), testLogger());
+    const client = new AgentVClient(baseConfig(), testCollector(), testLogger());
 
     client.start();
     socketInstances[0]!.emit('close');
@@ -275,7 +275,7 @@ describe('VmAgentClient', () => {
   });
 
   it('suppresses reconnects after stop and closes the socket with a shutdown reason', () => {
-    const client = new VmAgentClient(baseConfig(), testCollector(), testLogger());
+    const client = new AgentVClient(baseConfig(), testCollector(), testLogger());
 
     client.start();
     client.stop();
@@ -286,7 +286,7 @@ describe('VmAgentClient', () => {
   });
 
   it('does not send payloads while the websocket is not open', () => {
-    const client = new VmAgentClient(baseConfig(), testCollector(), testLogger());
+    const client = new AgentVClient(baseConfig(), testCollector(), testLogger());
 
     client.start();
     socketInstances[0]!.readyState = MockWebSocket.CLOSED;

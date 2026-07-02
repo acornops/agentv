@@ -2,7 +2,7 @@
 
 ## Purpose
 
-The VM agent gives AcornOps read-only operational visibility into Linux/systemd virtual machines through outbound connectivity, bounded host snapshots, and diagnostic JSON-RPC tools.
+The AgentV gives AcornOps read-only operational visibility into Linux/systemd virtual machines through outbound connectivity, bounded host snapshots, and diagnostic JSON-RPC tools.
 
 ## Users Or Callers
 
@@ -17,7 +17,7 @@ The VM agent gives AcornOps read-only operational visibility into Linux/systemd 
 - Send heartbeats and bounded host snapshots.
 - Serve read-only VM diagnostic tools.
 - Package a Linux/systemd service install path.
-- Document VM-agent/control-plane contracts.
+- Document AgentV/control-plane contracts.
 
 ## Non-Responsibilities
 

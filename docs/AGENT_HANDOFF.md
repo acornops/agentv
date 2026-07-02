@@ -4,7 +4,7 @@ This repository follows the AcornOps vendor-neutral handoff policy.
 
 ## Before Handoff
 
-Run `npm run validate` before handing off VM agent changes. Also run targeted unit, contract, systemd, or platform checks when the change touches behavior covered by those checks.
+Run `npm run validate` before handing off AgentV changes. Also run targeted unit, contract, systemd, or platform checks when the change touches behavior covered by those checks.
 
 ## Required Evidence
 

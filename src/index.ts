@@ -2,7 +2,7 @@ import { loadConfig } from './config.js';
 import { LinuxSystemdCollector } from './collectors/linux.js';
 import { MockHostCollector } from './collectors/mock.js';
 import { createLogger } from './logger.js';
-import { VmAgentClient } from './transport/websocket-client.js';
+import { AgentVClient } from './transport/websocket-client.js';
 
 const config = loadConfig();
 const logger = createLogger(config.logLevel);
@@ -16,14 +16,14 @@ logger.info({
   collectorMode: config.collectorMode,
   osFamily: config.osFamily,
   serviceManager: config.serviceManager
-}, 'VM agent starting');
+}, 'AgentV starting');
 
-const client = new VmAgentClient(config, collector, logger);
+const client = new AgentVClient(config, collector, logger);
 client.start();
 
 for (const signal of ['SIGINT', 'SIGTERM'] as const) {
   process.on(signal, () => {
-    logger.info({ signal }, 'VM agent stopping');
+    logger.info({ signal }, 'AgentV stopping');
     client.stop();
     setTimeout(() => process.exit(0), 250).unref();
   });

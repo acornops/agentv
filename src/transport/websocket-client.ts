@@ -5,7 +5,7 @@ import type { HostCollector } from '../collectors/types.js';
 import { handleAgentRequest } from '../mcp/router.js';
 import { boundSnapshot } from '../tools/index.js';
 
-export class VmAgentClient {
+export class AgentVClient {
   private ws: WebSocket | null = null;
   private heartbeatTimer: NodeJS.Timeout | null = null;
   private snapshotTimer: NodeJS.Timeout | null = null;
@@ -13,7 +13,7 @@ export class VmAgentClient {
   private nextId = 1;
   private stopped = false;
 
-  /** Initialize the outbound VM agent client. */
+  /** Initialize the outbound AgentV client. */
   constructor(
     private readonly config: AgentConfig,
     private readonly collector: HostCollector,
@@ -40,7 +40,7 @@ export class VmAgentClient {
     this.ws = new WebSocket(url, {
       headers: {
         'x-agent-key': this.config.agentKey,
-        'x-agent-version': 'vm-agent/0.0.1-experimental.1'
+        'x-agent-version': 'agentv/0.0.1-experimental.1'
       }
     });
     this.ws.on('open', () => this.handshake());
@@ -72,7 +72,7 @@ export class VmAgentClient {
       agentKey: this.config.agentKey,
       targetId: this.config.targetId,
       targetType: 'virtual_machine',
-      agentType: 'vm_agent',
+      agentType: 'agentv',
       osFamily: this.config.osFamily,
       serviceManager: this.config.serviceManager,
       supportedCapabilities: ['read', 'logs', 'mcp', 'chat', 'systemd', 'linux']

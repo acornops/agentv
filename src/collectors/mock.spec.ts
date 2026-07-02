@@ -12,7 +12,7 @@ describe('MockHostCollector', () => {
         serviceManager: 'systemd'
       },
       services: expect.arrayContaining([
-        expect.objectContaining({ name: 'acornops-vm-agent.service', activeState: 'active' })
+        expect.objectContaining({ name: 'acornops-agentv.service', activeState: 'active' })
       ]),
       listeners: [{ protocol: 'tcp', localAddress: '0.0.0.0', port: 22, process: 'sshd' }]
     });

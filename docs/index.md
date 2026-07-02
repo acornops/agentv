@@ -1,4 +1,4 @@
-# VM Agent Knowledge Base
+# AgentV Knowledge Base
 
 This `docs/` tree is the repository-local system of record for agent-readable design, plans, contracts, and quality expectations.
 

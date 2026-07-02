@@ -1,12 +1,12 @@
 # Operations
 
-The VM agent is outbound-only. It connects to
+The AgentV is outbound-only. It connects to
 `ACORNOPS_AGENT_PLATFORM_URL/api/v1/agent/connect`, performs a
 `lifecycle/handshake`, sends heartbeats, uploads bounded host snapshots, and
 serves read-only JSON-RPC tool calls.
 
-Linux/systemd installs use `packaging/systemd/acornops-vm-agent.service` and
-`/etc/acornops/vm-agent.env`. Keep the env file owned by `root:acornops-agent`
+Linux/systemd installs use `packaging/systemd/acornops-agentv.service` and
+`/etc/acornops/agentv.env`. Keep the env file owned by `root:acornops-agent`
 with mode `0640`.
 
 ## Runtime Requirements
@@ -20,12 +20,12 @@ with mode `0640`.
 
 ## Systemd Model
 
-The service runs as `acornops-agent` with `NoNewPrivileges=true`, `PrivateTmp=true`, `ProtectSystem=strict`, and `ProtectHome=read-only`. Keep writable state limited to `ReadWritePaths=/var/lib/acornops-vm-agent`.
+The service runs as `acornops-agent` with `NoNewPrivileges=true`, `PrivateTmp=true`, `ProtectSystem=strict`, and `ProtectHome=read-only`. Keep writable state limited to `ReadWritePaths=/var/lib/acornops-agentv`.
 
 Operational files:
 
-- Unit: `packaging/systemd/acornops-vm-agent.service`
-- Environment template: `packaging/systemd/vm-agent.env.example`
+- Unit: `packaging/systemd/acornops-agentv.service`
+- Environment template: `packaging/systemd/agentv.env.example`
 - Install helper: `packaging/systemd/install.sh`
 - Uninstall helper: `packaging/systemd/uninstall.sh`
 
@@ -34,7 +34,7 @@ Operational files:
 Use journalctl for systemd installs:
 
 ```bash
-journalctl -u acornops-vm-agent -f
+journalctl -u acornops-agentv -f
 ```
 
 The agent logs startup configuration without secrets, WebSocket connection status, handshake acknowledgement, snapshot upload summaries, snapshot collection failures, and WebSocket errors.
@@ -48,8 +48,8 @@ The agent logs startup configuration without secrets, WebSocket connection statu
 
 ## Rollback
 
-Systemd installs can roll back by restoring the previous `/opt/acornops/vm-agent` release directory and restarting the service:
+Systemd installs can roll back by restoring the previous `/opt/acornops/agentv` release directory and restarting the service:
 
 ```bash
-systemctl restart acornops-vm-agent
+systemctl restart acornops-agentv
 ```

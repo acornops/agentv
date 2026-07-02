@@ -1,5 +1,5 @@
 [Unit]
-Description=AcornOps VM Agent
+Description=AcornOps AgentV
 After=network-online.target
 Wants=network-online.target
 
@@ -7,16 +7,16 @@ Wants=network-online.target
 Type=simple
 User=acornops-agent
 Group=acornops-agent
-EnvironmentFile=/etc/acornops/vm-agent.env
-WorkingDirectory=/opt/acornops/vm-agent
-ExecStart=/usr/bin/node /opt/acornops/vm-agent/dist/index.js
+EnvironmentFile=/etc/acornops/agentv.env
+WorkingDirectory=/opt/acornops/agentv
+ExecStart=/usr/bin/node /opt/acornops/agentv/dist/index.js
 Restart=always
 RestartSec=5
 NoNewPrivileges=true
 PrivateTmp=true
 ProtectSystem=strict
 ProtectHome=read-only
-ReadWritePaths=/var/lib/acornops-vm-agent
+ReadWritePaths=/var/lib/acornops-agentv
 
 [Install]
 WantedBy=multi-user.target

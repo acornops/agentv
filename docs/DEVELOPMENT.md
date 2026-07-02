@@ -1,8 +1,8 @@
-# VM Agent Development
+# AgentV Development
 
 ## Scope
 
-This repository owns the Linux/systemd VM agent, host collectors, JSON-RPC/MCP
+This repository owns the Linux/systemd AgentV, host collectors, JSON-RPC/MCP
 tool bridge, outbound WebSocket lifecycle, and systemd packaging assets.
 
 ## Prerequisites

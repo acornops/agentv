@@ -1,14 +1,14 @@
-# VM Agent Design
+# AgentV Design
 
 ## Product Principles
 
-The VM agent should be boring to operate on production hosts: outbound-only, stateless, read-only by default, and explicit about every host boundary it crosses.
+The AgentV should be boring to operate on production hosts: outbound-only, stateless, read-only by default, and explicit about every host boundary it crosses.
 
 ## Interaction Model
 
 Operators register a VM target in the control plane, install the agent on the VM, provide the target id and agent key through a protected environment file, and observe host health through snapshots and read-only diagnostic tools.
 
-The control plane requests diagnostics through JSON-RPC. The VM agent returns bounded host data and does not expose a general shell, package manager, process control, or service restart interface.
+The control plane requests diagnostics through JSON-RPC. The AgentV returns bounded host data and does not expose a general shell, package manager, process control, or service restart interface.
 
 ## Runtime Design Rules
 

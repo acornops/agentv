@@ -72,7 +72,7 @@ export function redact(value: string): string {
   return `${value.slice(0, 4)}...${value.slice(-4)}`;
 }
 
-/** Load and validate VM agent configuration from the environment. */
+/** Load and validate AgentV configuration from the environment. */
 export function loadConfig(): AgentConfig {
   const allowInsecureTransport = boolEnv('ACORNOPS_AGENT_ALLOW_INSECURE_TRANSPORT');
   const targetType = env('ACORNOPS_AGENT_TARGET_TYPE', 'virtual_machine');

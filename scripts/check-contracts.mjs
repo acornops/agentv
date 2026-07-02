@@ -15,14 +15,14 @@ function read(relativePath) {
 const doc = read('docs/contracts/README.md');
 const manifest = JSON.parse(read('docs/contracts/manifest.json'));
 
-expect(manifest.repo === 'vm-agent', 'Manifest repo must be vm-agent');
+expect(manifest.repo === 'agentv', 'Manifest repo must be agentv');
 expect(manifest.version === 1, 'Manifest version must be 1');
 expect(Array.isArray(manifest.runtimeDependencies), 'Manifest runtimeDependencies must be an array');
 expect(doc.includes('## Dependency Matrix'), 'Contract doc missing dependency matrix');
 expect(doc.includes('## Shared Invariants'), 'Contract doc missing shared invariants');
 expect(doc.includes('## Validation'), 'Contract doc missing validation section');
 expect(doc.includes('targetType = "virtual_machine"'), 'Contract doc missing VM target type');
-expect(doc.includes('agentType = "vm_agent"'), 'Contract doc missing VM agent type');
+expect(doc.includes('agentType = "agentv"'), 'Contract doc missing AgentV type');
 
 const controlPlane = manifest.counterparts?.['control-plane'];
 expect(Boolean(controlPlane), 'Manifest must include control-plane counterpart');

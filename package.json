@@ -1,9 +1,9 @@
 {
-  "name": "@acornops/vm-agent",
+  "name": "@acornops/agentv",
   "version": "0.0.1-experimental.1",
   "private": true,
   "type": "module",
-  "description": "Outbound-only AcornOps Linux/systemd VM agent",
+  "description": "Outbound-only AcornOps Linux/systemd AgentV",
   "main": "dist/index.js",
   "scripts": {
     "dev": "tsx watch src/index.ts",

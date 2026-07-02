@@ -2,11 +2,11 @@
 
 ## Outbound-Only By Default
 
-VM agents should not require inbound network access. They connect to the control plane and receive JSON-RPC requests over that established channel.
+AgentVs should not require inbound network access. They connect to the control plane and receive JSON-RPC requests over that established channel.
 
 ## Read-Only V1
 
-The first VM agent surface is diagnostic. Tool handlers inspect host state but do not mutate packages, files, processes, services, or operating system configuration.
+The first AgentV surface is diagnostic. Tool handlers inspect host state but do not mutate packages, files, processes, services, or operating system configuration.
 
 ## Host Boundaries Are Explicit
 

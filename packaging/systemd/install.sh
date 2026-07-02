@@ -6,16 +6,16 @@ if [[ "$(id -u)" -ne 0 ]]; then
   exit 1
 fi
 
-useradd --system --home /var/lib/acornops-vm-agent --shell /usr/sbin/nologin acornops-agent 2>/dev/null || true
-install -d -o acornops-agent -g acornops-agent -m 0750 /var/lib/acornops-vm-agent
-install -d -o root -g root -m 0755 /opt/acornops/vm-agent
+useradd --system --home /var/lib/acornops-agentv --shell /usr/sbin/nologin acornops-agent 2>/dev/null || true
+install -d -o acornops-agent -g acornops-agent -m 0750 /var/lib/acornops-agentv
+install -d -o root -g root -m 0755 /opt/acornops/agentv
 install -d -o root -g root -m 0750 /etc/acornops
 
-if [[ ! -f /etc/acornops/vm-agent.env ]]; then
-  install -o root -g acornops-agent -m 0640 packaging/systemd/vm-agent.env.example /etc/acornops/vm-agent.env
-  echo "Edit /etc/acornops/vm-agent.env with the target id and agent key before starting."
+if [[ ! -f /etc/acornops/agentv.env ]]; then
+  install -o root -g acornops-agent -m 0640 packaging/systemd/agentv.env.example /etc/acornops/agentv.env
+  echo "Edit /etc/acornops/agentv.env with the target id and agent key before starting."
 fi
 
-install -o root -g root -m 0644 packaging/systemd/acornops-vm-agent.service /etc/systemd/system/acornops-vm-agent.service
+install -o root -g root -m 0644 packaging/systemd/acornops-agentv.service /etc/systemd/system/acornops-agentv.service
 systemctl daemon-reload
-echo "Installed acornops-vm-agent.service. Start with: systemctl enable --now acornops-vm-agent"
+echo "Installed acornops-agentv.service. Start with: systemctl enable --now acornops-agentv"

@@ -10,7 +10,7 @@ permissions:
 
 env:
   REGISTRY: ghcr.io
-  IMAGE_NAME: acornops/vm-agent
+  IMAGE_NAME: acornops/agentv
 
 jobs:
   validate:

@@ -70,14 +70,14 @@ expectIncludes(agents, '.agents/skills/shared', 'AGENTS shared skills guidance')
 expectIncludes(agents, '.agents/skills/local', 'AGENTS local skills guidance');
 expectIncludes(agents, 'docs/AGENT_HANDOFF.md', 'AGENTS handoff guidance');
 expectIncludes(agents, 'Docs impact: none', 'AGENTS docs impact guidance');
-expect(packageJson.name === '@acornops/vm-agent', 'package.json name should identify the VM agent package');
+expect(packageJson.name === '@acornops/agentv', 'package.json name should identify the AgentV package');
 expect(packageJson.version === '0.0.1-experimental.1', 'package.json version should match the first-release component version');
 expect(Boolean(packageJson.scripts?.validate), 'package.json should expose a canonical validate script');
 expectIncludes(packageJson.scripts.validate, 'npm test', 'Canonical validate script');
 expectIncludes(packageJson.scripts.validate, 'npm run contracts:check', 'Canonical validate script');
 expectIncludes(packageJson.scripts.validate, 'npm run harness:check', 'Canonical validate script');
 expectIncludes(ciWorkflow, 'npm run validate:ci', 'CI should run canonical CI validation');
-expectIncludes(releaseWorkflow, 'IMAGE_NAME: acornops/vm-agent', 'Release workflow image name');
+expectIncludes(releaseWorkflow, 'IMAGE_NAME: acornops/agentv', 'Release workflow image name');
 expectIncludes(releaseWorkflow, 'provenance: true', 'Release workflow provenance');
 expectIncludes(releaseWorkflow, 'sbom: true', 'Release workflow SBOM');
 expect(!releaseWorkflow.includes(':latest'), 'Release workflow must not publish mutable latest tags');

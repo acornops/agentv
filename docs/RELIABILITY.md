@@ -33,4 +33,4 @@ The agent emits structured logs for:
 
 ## Recovery And Rollback
 
-The agent keeps no required local durable state. Restarting the process reconnects and re-handshakes. For systemd installs, rollback by restoring the previous release under `/opt/acornops/vm-agent` and restarting `acornops-vm-agent`.
+The agent keeps no required local durable state. Restarting the process reconnects and re-handshakes. For systemd installs, rollback by restoring the previous release under `/opt/acornops/agentv` and restarting `acornops-agentv`.
