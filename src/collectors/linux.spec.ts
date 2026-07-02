@@ -121,6 +121,8 @@ describe('Linux/systemd collector hygiene', () => {
       osFamily: 'linux',
       serviceManager: 'systemd'
     });
+    expect(snapshot.metrics.loadAverage).toEqual([0.1, 0.2, 0.3]);
+    expect(snapshot.metrics.cpuUsagePercent).toBeNull();
     expect(snapshot.metrics.memory).toEqual({
       totalBytes: 8_388_608_000,
       freeBytes: 4_194_304_000,
