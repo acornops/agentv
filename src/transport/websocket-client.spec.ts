@@ -263,6 +263,17 @@ describe('VmAgentClient', () => {
     expect(socketInstances).toHaveLength(2);
   });
 
+  it('keeps the reconnect timer refed after unexpected close so the agent process stays alive', () => {
+    const setTimeoutSpy = vi.spyOn(global, 'setTimeout');
+    const client = new VmAgentClient(baseConfig(), testCollector(), testLogger());
+
+    client.start();
+    socketInstances[0]!.emit('close');
+
+    const reconnectTimer = setTimeoutSpy.mock.results.at(-1)?.value as NodeJS.Timeout | undefined;
+    expect(reconnectTimer?.hasRef()).toBe(true);
+  });
+
   it('suppresses reconnects after stop and closes the socket with a shutdown reason', () => {
     const client = new VmAgentClient(baseConfig(), testCollector(), testLogger());
 

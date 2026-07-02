@@ -88,11 +88,11 @@ export class VmAgentClient {
 
   private scheduleReconnect(): void {
     if (this.stopped || this.reconnectTimer) return;
+    this.logger.info({ targetId: this.config.targetId, delayMs: 5000 }, 'Scheduling control-plane reconnect');
     this.reconnectTimer = setTimeout(() => {
       this.reconnectTimer = null;
       this.connect();
     }, 5000);
-    this.reconnectTimer.unref();
   }
 
   private async handleMessage(text: string): Promise<void> {
