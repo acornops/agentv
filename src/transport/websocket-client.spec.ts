@@ -1,4 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { mkdtempSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import type { AgentConfig } from '../config.js';
 import type { HostCollector } from '../collectors/types.js';
 import { mockSnapshot } from '../collectors/mock.js';
@@ -141,6 +144,23 @@ describe('AgentVClient', () => {
         serviceManager: 'systemd',
         supportedCapabilities: ['read', 'logs', 'mcp', 'chat', 'systemd', 'linux']
       }
+    });
+  });
+
+  it('extends WebSocket trust with the configured CA bundle', () => {
+    const dir = mkdtempSync(join(tmpdir(), 'agentv-ws-ca-'));
+    const caFile = join(dir, 'additional-ca.pem');
+    writeFileSync(caFile, 'test additional ca');
+    const client = new AgentVClient(
+      baseConfig({ additionalCaBundleFile: caFile }),
+      testCollector(),
+      testLogger()
+    );
+
+    client.start();
+
+    expect(socketInstances[0]?.options).toMatchObject({
+      ca: expect.arrayContaining([expect.any(String), Buffer.from('test additional ca')])
     });
   });
 

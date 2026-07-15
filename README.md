@@ -67,6 +67,7 @@ The agent is configured with environment variables:
 | Variable | Description | Default |
 | --- | --- | --- |
 | `ACORNOPS_AGENT_PLATFORM_URL` | Control-plane HTTPS base URL. The agent appends `/api/v1/agent/connect`. | Required |
+| `ACORNOPS_AGENT_ADDITIONAL_CA_BUNDLE_FILE` | Optional readable PEM bundle added to normal public CA trust for the control-plane WebSocket. | Empty |
 | `ACORNOPS_AGENT_ALLOW_INSECURE_TRANSPORT` | Allows `http://` only for local development. Do not set in production. | `false` |
 | `ACORNOPS_TARGET_ID` | Control-plane VM target id this agent key is bound to. | Required |
 | `ACORNOPS_AGENT_KEY` | Agent authentication token. | Required |

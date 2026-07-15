@@ -1,3 +1,5 @@
+import { accessSync, constants } from 'node:fs';
+
 export type CollectorMode = 'live' | 'mock';
 export type OsFamily = 'linux';
 export type ServiceManager = 'systemd';
@@ -15,6 +17,7 @@ export interface AgentConfig {
   allowedLogSources: string[];
   collectorMode: CollectorMode;
   allowInsecureTransport: boolean;
+  additionalCaBundleFile?: string;
 }
 
 /** Read a required environment value with an optional fallback. */
@@ -91,6 +94,14 @@ export function loadConfig(): AgentConfig {
   if (collectorMode !== 'live' && collectorMode !== 'mock') {
     throw new Error('ACORNOPS_VM_COLLECTOR_MODE must be live or mock');
   }
+  const additionalCaBundleFile = process.env.ACORNOPS_AGENT_ADDITIONAL_CA_BUNDLE_FILE?.trim() || undefined;
+  if (additionalCaBundleFile) {
+    try {
+      accessSync(additionalCaBundleFile, constants.R_OK);
+    } catch {
+      throw new Error('ACORNOPS_AGENT_ADDITIONAL_CA_BUNDLE_FILE must point to a readable file');
+    }
+  }
 
   return {
     platformUrl: platformUrlEnv(allowInsecureTransport),
@@ -104,6 +115,7 @@ export function loadConfig(): AgentConfig {
     serviceManager,
     allowedLogSources: csvEnv('ACORNOPS_VM_ALLOWED_LOG_SOURCES', 'journald,syslog'),
     collectorMode,
-    allowInsecureTransport
+    allowInsecureTransport,
+    additionalCaBundleFile
   };
 }

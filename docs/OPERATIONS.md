@@ -9,6 +9,11 @@ Linux/systemd installs use `packaging/systemd/acornops-agentv.service` and
 `/etc/acornops/agentv.env`. Keep the env file owned by `root:acornops-agent`
 with mode `0640`.
 
+For a control plane signed by a private CA, place the PEM bundle in a
+root-managed readable path and set `ACORNOPS_AGENT_ADDITIONAL_CA_BUNDLE_FILE`.
+AgentV adds it to Node.js's normal public roots and keeps certificate and
+hostname verification enabled.
+
 ## Runtime Requirements
 
 - Node.js 22 or a container image built from this repository.

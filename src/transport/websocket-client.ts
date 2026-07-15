@@ -1,3 +1,5 @@
+import { readFileSync } from 'node:fs';
+import { rootCertificates } from 'node:tls';
 import WebSocket from 'ws';
 import type { AgentConfig } from '../config.js';
 import type { Logger } from '../logger.js';
@@ -41,7 +43,10 @@ export class AgentVClient {
       headers: {
         'x-agent-key': this.config.agentKey,
         'x-agent-version': 'agentv/0.0.1-experimental.1'
-      }
+      },
+      ...(this.config.additionalCaBundleFile
+        ? { ca: [...rootCertificates, readFileSync(this.config.additionalCaBundleFile)] }
+        : {})
     });
     this.ws.on('open', () => this.handshake());
     this.ws.on('message', (raw) => this.handleMessage(raw.toString()).catch((err) => {

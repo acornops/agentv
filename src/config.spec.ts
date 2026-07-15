@@ -1,4 +1,7 @@
 import { afterEach, describe, expect, it } from 'vitest';
+import { mkdtempSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import { loadConfig, redact } from './config.js';
 
 const originalEnv = { ...process.env };
@@ -25,6 +28,20 @@ describe('loadConfig', () => {
 
     expect(config.platformUrl).toBe('https://api.acornops.dev');
     expect(config.allowInsecureTransport).toBe(false);
+    expect(config.additionalCaBundleFile).toBeUndefined();
+  });
+
+  it('accepts only a readable additional CA bundle', () => {
+    setBaseEnv({ ACORNOPS_AGENT_ADDITIONAL_CA_BUNDLE_FILE: '/missing/agentv-ca.pem' });
+    expect(() => loadConfig()).toThrow(
+      'ACORNOPS_AGENT_ADDITIONAL_CA_BUNDLE_FILE must point to a readable file'
+    );
+
+    const dir = mkdtempSync(join(tmpdir(), 'agentv-ca-'));
+    const caFile = join(dir, 'additional-ca.pem');
+    writeFileSync(caFile, 'test ca');
+    setBaseEnv({ ACORNOPS_AGENT_ADDITIONAL_CA_BUNDLE_FILE: caFile });
+    expect(loadConfig().additionalCaBundleFile).toBe(caFile);
   });
 
   it('rejects plaintext control-plane URLs by default', () => {
