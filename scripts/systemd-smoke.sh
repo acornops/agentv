@@ -19,6 +19,7 @@ version="$(/usr/bin/node -p "require('${repo_root}/package.json').version")"
 work="$(mktemp -d)"
 marker="${work}/authenticated"
 server_pid=""
+action_smoke=""
 
 cleanup() {
   systemctl disable --now acornops-agentv-smoke-worker.service >/dev/null 2>&1 || true
@@ -26,6 +27,7 @@ cleanup() {
   rm -f /etc/systemd/system/acornops-agentv-smoke-worker.service
   systemctl daemon-reload >/dev/null 2>&1 || true
   if [[ -n "${server_pid}" ]]; then kill "${server_pid}" >/dev/null 2>&1 || true; fi
+  if [[ -n "${action_smoke}" ]]; then rm -f -- "${action_smoke}"; fi
   rm -rf -- "${work}"
 }
 trap cleanup EXIT
@@ -85,7 +87,9 @@ done
 systemctl is-active --quiet acornops-agentv.service
 [[ "$(systemctl show acornops-agentv.service --property=User --value)" == "acornops-agent" ]]
 acornops-agentv-doctor
-/usr/sbin/runuser --user acornops-agent -- /usr/bin/node "${repo_root}/scripts/systemd-action-smoke.mjs"
+action_smoke="$(mktemp /tmp/acornops-agentv-action-smoke.XXXXXX.mjs)"
+install -o acornops-agent -g acornops-agent -m 0400 "${repo_root}/scripts/systemd-action-smoke.mjs" "${action_smoke}"
+/usr/sbin/runuser --user acornops-agent -- /usr/bin/node "${action_smoke}"
 
 upgrade_root="${work}/agentv-${version}-smoke-upgrade"
 cp -a "${archive_root}" "${upgrade_root}"
