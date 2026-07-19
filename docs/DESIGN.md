@@ -2,7 +2,7 @@
 
 ## Product Principles
 
-The AgentV should be boring to operate on production hosts: outbound-only, stateless, read-only by default, and explicit about every host boundary it crosses.
+The AgentV should be boring to operate on production hosts: outbound-only, read-only by default, and explicit about every host and privilege boundary it crosses.
 
 ## Interaction Model
 
@@ -12,8 +12,8 @@ The control plane requests diagnostics through JSON-RPC. The AgentV returns boun
 
 ## Runtime Design Rules
 
-- Keep host-specific behavior behind collector adapters.
-- Keep tool handlers read-only and named by user-visible diagnostic intent.
+- Keep host-specific behavior behind narrow adapters.
+- Keep mutation isolated to a root-owned helper, exact allowlist, durable receipt, and post-write verification.
 - Bound snapshots, logs, and process lists before sending them to the control plane.
 - Redact token-like process arguments and never log agent keys.
 - Model OS family and service manager in config, contracts, and snapshots.

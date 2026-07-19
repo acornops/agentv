@@ -51,13 +51,32 @@ npm run typecheck
 npm run lint
 npm run test
 npm run test:coverage
+npm run test:coverage:all
 npm run contracts:check
 npm run harness:check
 npm run build
+npm run smoke:package
 ```
 
 `npm run test:coverage` uses Vitest V8 coverage and writes text, HTML, and lcov
-reports under `coverage/`.
+reports under `coverage/`. `npm run test:coverage:all` also includes the local
+WebSocket E2E suite and enforces the CI non-regression floors.
+
+The release archive smoke verifies its checksum, safe paths, required units and
+entrypoints, production-only dependency tree, executable modes, and ability to
+load the installed helper client from the extracted artifact.
+
+## Live systemd gate
+
+The Ubuntu CI workflow runs `npm run smoke:systemd` on an ephemeral hosted VM.
+It exercises the packaged artifact with real systemd, journald, procfs, and
+sockets, then performs an exact-allowlisted helper restart, replay, upgrade,
+rollback, and uninstall-preservation check.
+
+The command mutates systemd and is deliberately guarded. It refuses to run
+unless it is root on a live systemd host and both `CI=true` and
+`AGENTV_SYSTEMD_SMOKE_ALLOW=true` are set. Do not bypass those guards on a
+workstation or persistent host.
 
 ## Documentation Drift Control
 

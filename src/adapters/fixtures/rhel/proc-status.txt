@@ -1,0 +1,7 @@
+Name:	java
+Umask:	0022
+State:	S (sleeping)
+Pid:	2024
+PPid:	1
+Uid:	998	998	998	998
+VmRSS:	  512000 kB

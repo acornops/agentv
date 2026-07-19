@@ -1,0 +1,3 @@
+sshd.service                loaded active running OpenSSH server daemon
+firewalld.service           loaded active running firewalld - dynamic firewall daemon
+dnf-makecache.service       loaded inactive dead   dnf makecache

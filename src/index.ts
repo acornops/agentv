@@ -1,30 +1,47 @@
+import { SocketActionClient } from './actions/client.js';
+import { LinuxHostAdapter } from './adapters/linux.js';
+import { MockHostAdapter } from './adapters/mock.js';
 import { loadConfig } from './config.js';
-import { LinuxSystemdCollector } from './collectors/linux.js';
-import { MockHostCollector } from './collectors/mock.js';
+import { LifecycleManager } from './core/lifecycle.js';
+import { runDoctor } from './doctor.js';
 import { createLogger } from './logger.js';
-import { AgentVClient } from './transport/websocket-client.js';
+import { McpRouter } from './mcp/router.js';
+import { Observability } from './observability.js';
+import { ToolExecutor } from './tools/executor.js';
+import { registerAllTools } from './tools/index.js';
+import { notifyReady, notifyWatchdog } from './systemd-notify.js';
 
 const config = loadConfig();
 const logger = createLogger(config.logLevel);
-const collector = config.collectorMode === 'mock'
-  ? new MockHostCollector()
-  : new LinuxSystemdCollector(config.allowedLogSources);
+const host = config.collectorMode === 'mock' ? new MockHostAdapter() : new LinuxHostAdapter(config.allowedLogUnits);
+const actions = new SocketActionClient(config.helperSocketPath);
 
-logger.info({
-  targetId: config.targetId,
-  targetType: config.targetType,
-  collectorMode: config.collectorMode,
-  osFamily: config.osFamily,
-  serviceManager: config.serviceManager
-}, 'AgentV starting');
+if (process.argv[2] === 'doctor') {
+  const result = await runDoctor(config, host, actions);
+  process.stdout.write(`${JSON.stringify(result, null, 2)}\n`);
+  process.exitCode = result.ok ? 0 : 1;
+} else {
+  const metrics = new Observability();
+  registerAllTools(host, actions);
+  const executor = new ToolExecutor({ localWriteEnabled: () => config.writeEnabled, metrics });
+  const router = new McpRouter(executor, logger);
+  const lifecycle = new LifecycleManager(config, host, actions, router, logger, metrics);
+  logger.info({ targetId: config.targetId, targetType: config.targetType, collectorMode: config.collectorMode, version: config.agentVersion, writeEnabled: config.writeEnabled }, 'AgentV starting');
+  lifecycle.start();
+  if (process.env.NOTIFY_SOCKET && !await notifyReady()) logger.error({}, 'systemd readiness notification failed');
+  const watchdogUsec = Number(process.env.WATCHDOG_USEC || 0);
+  let watchdogInFlight = false;
+  const sendWatchdog = (): void => {
+    if (watchdogInFlight) return;
+    watchdogInFlight = true;
+    void notifyWatchdog().then((sent) => { if (!sent) logger.error({}, 'systemd watchdog notification failed'); })
+      .finally(() => { watchdogInFlight = false; });
+  };
+  const watchdog = watchdogUsec > 0 ? setInterval(sendWatchdog, Math.max(1000, Math.floor(watchdogUsec / 2000))) : null;
+  if (watchdog) sendWatchdog();
+  watchdog?.unref();
 
-const client = new AgentVClient(config, collector, logger);
-client.start();
-
-for (const signal of ['SIGINT', 'SIGTERM'] as const) {
-  process.on(signal, () => {
-    logger.info({ signal }, 'AgentV stopping');
-    client.stop();
-    setTimeout(() => process.exit(0), 250).unref();
+  for (const signal of ['SIGINT', 'SIGTERM'] as const) process.on(signal, () => {
+    logger.info({ signal }, 'AgentV stopping'); if (watchdog) clearInterval(watchdog); lifecycle.stop(); setTimeout(() => process.exit(0), 250).unref();
   });
 }

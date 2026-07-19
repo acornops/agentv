@@ -1,0 +1,2 @@
+{"__CURSOR":"s=debian-1","__REALTIME_TIMESTAMP":"1752883200000000","PRIORITY":"3","_SYSTEMD_UNIT":"ssh.service","_PID":"412","SYSLOG_IDENTIFIER":"sshd","MESSAGE":"Accepted connection bearer super-secret-token"}
+{"__CURSOR":"s=debian-2","__REALTIME_TIMESTAMP":"1752883201000000","PRIORITY":"6","_SYSTEMD_UNIT":"ssh.service","_PID":"412","SYSLOG_IDENTIFIER":"sshd","MESSAGE":"session closed"}

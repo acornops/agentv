@@ -63,6 +63,9 @@ const readme = read('README.md');
 const packageJson = JSON.parse(read('package.json'));
 const ciWorkflow = read('.github/workflows/ci.yml');
 const releaseWorkflow = read('.github/workflows/release.yml');
+const dockerIgnore = read('.dockerignore');
+const systemdUnit = read('packaging/systemd/acornops-agentv.service');
+const archiveBuilder = read('scripts/build-systemd-archive.sh');
 
 expect(agents.split('\n').length <= 140, 'AGENTS.md should stay short enough to serve as a table of contents');
 expect(!agents.includes('/Users/'), 'AGENTS.md should use portable relative links, not workstation-specific absolute paths');
@@ -71,7 +74,7 @@ expectIncludes(agents, '.agents/skills/local', 'AGENTS local skills guidance');
 expectIncludes(agents, 'docs/AGENT_HANDOFF.md', 'AGENTS handoff guidance');
 expectIncludes(agents, 'Docs impact: none', 'AGENTS docs impact guidance');
 expect(packageJson.name === '@acornops/agentv', 'package.json name should identify the AgentV package');
-expect(packageJson.version === '0.0.1-experimental.1', 'package.json version should match the first-release component version');
+expect(packageJson.version === '0.0.1-experimental.2', 'package.json version should match the AgentV v2 contract release');
 expect(Boolean(packageJson.scripts?.validate), 'package.json should expose a canonical validate script');
 expectIncludes(packageJson.scripts.validate, 'npm test', 'Canonical validate script');
 expectIncludes(packageJson.scripts.validate, 'npm run contracts:check', 'Canonical validate script');
@@ -82,6 +85,12 @@ expectIncludes(releaseWorkflow, 'provenance: true', 'Release workflow provenance
 expectIncludes(releaseWorkflow, 'sbom: true', 'Release workflow SBOM');
 expect(!releaseWorkflow.includes(':latest'), 'Release workflow must not publish mutable latest tags');
 expect(!releaseWorkflow.includes('type=raw'), 'Release workflow must not define raw mutable tags');
+expectIncludes(read('src/systemd-notify.ts'), "execFile('/usr/bin/systemd-notify', args", 'Systemd notifications must use a fixed systemd command');
+expectIncludes(systemdUnit, 'NotifyAccess=all', 'Systemd must accept bounded notifier child processes from the service cgroup');
+expectIncludes(systemdUnit, 'ExecStart=/usr/bin/node ', 'Systemd must track Node as the main process');
+expect(!systemdUnit.includes('--exec'), 'The unit must remain compatible with systemd releases before v254');
+expect(!archiveBuilder.includes('AGENTV_LINUX_NOTIFY_ADDON'), 'Systemd archives must not depend on a host-native addon');
+expectIncludes(dockerIgnore, 'build', 'Docker context must exclude host-native build output');
 
 for (const needle of [
   'ARCHITECTURE.md',

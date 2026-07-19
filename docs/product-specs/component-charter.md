@@ -2,7 +2,7 @@
 
 ## Purpose
 
-The AgentV gives AcornOps read-only operational visibility into Linux/systemd virtual machines through outbound connectivity, bounded host snapshots, and diagnostic JSON-RPC tools.
+The AgentV gives AcornOps operational visibility into Linux/systemd virtual machines through outbound connectivity, bounded host snapshots, strict diagnostic tools, and an optional allowlisted service restart.
 
 ## Users Or Callers
 
@@ -15,7 +15,7 @@ The AgentV gives AcornOps read-only operational visibility into Linux/systemd vi
 - Connect outbound to the control-plane agent WebSocket.
 - Authenticate with the VM target agent key.
 - Send heartbeats and bounded host snapshots.
-- Serve read-only VM diagnostic tools.
+- Serve read-only VM diagnostic tools and one disabled-by-default helper-backed restart tool.
 - Package a Linux/systemd service install path.
 - Document AgentV/control-plane contracts.
 
@@ -31,5 +31,5 @@ The AgentV gives AcornOps read-only operational visibility into Linux/systemd vi
 
 - Agents can be installed on Linux/systemd VMs with protected environment configuration.
 - The control plane can receive VM heartbeats, snapshots, and tool responses.
-- Diagnostic data remains bounded, redacted, and read-only.
+- Diagnostic data remains bounded and redacted; writes remain exact, approved, idempotent, and locally allowlisted.
 - Repository validation catches drift in contracts and harness documentation.

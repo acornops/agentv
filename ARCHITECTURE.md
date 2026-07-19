@@ -2,7 +2,7 @@
 
 ## Purpose
 
-The AgentV runs on Linux/systemd virtual machines, connects outbound to the AcornOps control plane, sends bounded host snapshots, and serves read-only diagnostic tools over the shared JSON-RPC agent bridge.
+The AgentV runs unprivileged on Linux/systemd virtual machines, connects outbound to the AcornOps control plane, sends bounded host snapshots, serves strict diagnostic tools, and can optionally request an exact allowlisted service restart from a separate root-owned helper.
 
 This repository owns the VM-side runtime, host collector adapters, JSON-RPC tool registry, systemd packaging assets, Docker image, and AgentV contract docs. It does not own control-plane target registration, central deployment orchestration, or Kubernetes agent behavior.
 
@@ -10,8 +10,9 @@ This repository owns the VM-side runtime, host collector adapters, JSON-RPC tool
 
 - Inbound interfaces: none from the network; the agent only receives messages on the outbound WebSocket it initiated.
 - Outbound dependencies: AcornOps control-plane WebSocket endpoint, local Linux/systemd commands and files used by collectors.
-- Persistent stores: none in the agent process; systemd installs may use `/var/lib/acornops-agentv` for future local runtime state.
-- Background workers: heartbeat timer, snapshot timer, reconnect timer.
+- Local privileged interface: `/run/acornops-agentv/actions.sock`; absent in the read-only container image.
+- Persistent stores: only the helper action ledger under `/var/lib/acornops-agentv/actions`.
+- Background workers: transport ping/pong, heartbeat, bounded snapshot, and reconnect timers.
 - External services: control plane at `ACORNOPS_AGENT_PLATFORM_URL`.
 
 ## Source Layout
@@ -19,9 +20,11 @@ This repository owns the VM-side runtime, host collector adapters, JSON-RPC tool
 ```text
 src/config.ts                 environment parsing and validation
 src/index.ts                  process entrypoint and shutdown handling
-src/collectors/               live Linux/systemd and mock host collectors
+src/adapters/                 narrow Linux, procfs, systemd, journald, filesystem, and socket adapters
+src/actions/                  helper protocol, client, policy enforcement, and durable ledger
+src/core/                     authenticated lifecycle and snapshot manager
 src/mcp/                      JSON-RPC request router
-src/tools/                    read-only diagnostic tool registry and handlers
+src/tools/                    strict registry, schemas, executor, projection, and tool handlers
 src/transport/                outbound WebSocket client
 packaging/systemd/            Linux systemd install assets
 docs/contracts/               AgentV/control-plane contract docs and manifest
@@ -30,12 +33,13 @@ scripts/                      repository harness and contract checks
 
 ## Data And Control Flow
 
-1. `src/index.ts` loads environment configuration, chooses the live or mock collector, and starts `AgentVClient`.
-2. `AgentVClient` connects to `<ACORNOPS_AGENT_PLATFORM_URL>/api/v1/agent/connect` with agent authentication headers.
+1. `src/index.ts` loads local policy, chooses live or mock adapters, registers tools, and starts the lifecycle.
+2. The transport connects to `<ACORNOPS_AGENT_PLATFORM_URL>/api/v1/agent/connect` with agent authentication headers.
 3. The agent sends `lifecycle/handshake` with target identity, target type, OS family, service manager, and supported capabilities.
-4. After handshake acknowledgement, the agent sends periodic `lifecycle/heartbeat` notifications and bounded `notify/snapshot` payloads.
-5. Control-plane JSON-RPC tool requests are routed through `src/mcp/router.ts` to read-only tool handlers in `src/tools`.
-6. If the WebSocket closes, timers are cleared and the client reconnects after a bounded delay.
+4. Only after the fixed-ID response validates target, workspace, policy, and remote bounds does the agent install a connection generation and begin heartbeats or snapshots.
+5. The executor validates arguments before scope or host access, enforces policy/concurrency/deadlines/byte bounds, redacts output, and returns the standard MCP envelope.
+6. The optional helper independently checks exact policy and service preconditions, persists `in_progress`, performs one restart, verifies post-state, and returns a minimal receipt.
+7. Disconnect revokes queued/future work and stops telemetry before equal-jitter reconnect.
 
 ## Contracts
 
@@ -47,7 +51,7 @@ Contract-sensitive changes include handshake fields, WebSocket paths or headers,
 
 The local development path uses Node.js 22 and `ACORNOPS_VM_COLLECTOR_MODE=mock` so contributors can run and test without a Linux/systemd VM. Production-like installs use the systemd assets in `packaging/systemd` and should keep secrets in `/etc/acornops/agentv.env`.
 
-The agent is intentionally stateless. Restarting the process reconnects, re-handshakes, and resumes heartbeats and snapshots without requiring local recovery.
+The main agent is stateless. The helper intentionally persists bounded operation receipts so reconnect retries are idempotent and crash-surviving in-progress writes remain unknown.
 
 ## High-Risk Areas
 

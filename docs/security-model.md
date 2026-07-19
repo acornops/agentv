@@ -2,9 +2,9 @@
 
 ## Trust Boundaries
 
-The AgentV runs on a host with access to local system telemetry and connects outbound to the AcornOps control plane. Treat the control-plane WebSocket as the only remote command channel and keep all host operations behind explicit read-only tool handlers.
+The unprivileged AgentV runs on a host with access to local system telemetry and connects outbound to the AcornOps control plane. Treat that authenticated WebSocket as the only remote command channel. Optional mutation crosses a separate root-owned local socket with an exact policy.
 
-V1 tools are read-only. The agent never executes arbitrary shell input from the control plane and must not add sudo, package changes, process kills, service restarts, or filesystem mutation without a reviewed contract and security change.
+Read tools never execute arbitrary shell input. `restart_service` is the only write: it is disabled by default, rejects AgentV's own units, requires an exact allowlist plus preconditions, and cannot perform arbitrary commands, package changes, process kills, or filesystem mutation.
 
 ## Secrets
 
@@ -24,11 +24,14 @@ The systemd unit runs as `acornops-agent` with:
 
 - `NoNewPrivileges=true`
 - `PrivateTmp=true`
+- `PrivateDevices=true`
 - `ProtectSystem=strict`
-- `ProtectHome=read-only`
-- `ReadWritePaths=/var/lib/acornops-agentv`
+- `ProtectHome=true`
+- kernel, control-group, namespace, realtime, and address-family restrictions
 
-Keep additional writable paths out of the unit unless the runtime need is documented and reviewed.
+The main unit has no writable host path. Only the separate root helper receives
+`ReadWritePaths=/var/lib/acornops-agentv/actions`, has no network namespace, and
+serves the group-restricted Unix socket.
 
 ## High-Risk Changes
 

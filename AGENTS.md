@@ -32,11 +32,12 @@ validation helpers, and PR coordination workflow.
 
 ## Component Map
 
-- `src/core`: lifecycle, heartbeat, snapshot scheduling
-- `src/transport`: outbound WebSocket control-plane client
-- `src/collectors`: Linux/systemd live and mock host collectors
-- `src/tools`: read-only VM diagnostic tool registry
-- `src/mcp`: JSON-RPC request router
+- `src/core`: authenticated lifecycle, heartbeat, and snapshot scheduling
+- `src/transport`: bounded outbound WebSocket control-plane client
+- `src/adapters`: narrow Linux, procfs, systemd, journald, filesystem, and socket adapters
+- `src/tools`: strict VM tool registry, contracts, model projection, and bounded executor
+- `src/actions`: root-helper client, policy boundary, and idempotency ledger
+- `src/mcp`: JSON-RPC/MCP protocol and request router
 - `packaging/systemd`: Linux systemd install assets
 
 ## Working Rules
@@ -44,8 +45,10 @@ validation helpers, and PR coordination workflow.
 - Treat `docs/` as the system of record for repository knowledge.
 - Keep this file short. Push durable protocol and operational rules into linked docs instead of adding ad hoc instructions here.
 - Keep the AgentV outbound-only.
-- Keep v1 tools read-only. Do not add shell execution, sudo, package changes,
-  process kills, service restarts, or filesystem mutation.
+- Keep AgentV read-only by default. The only supported mutation is the
+  approval-gated `restart_service` tool through the exact-allowlist,
+  root-owned socket helper. Do not add shell execution, sudo, package changes,
+  process kills, arbitrary filesystem mutation, or unrestricted systemctl.
 - Model OS family, service manager, collector mode, and log sources explicitly
   so Windows support can add adapters later.
 - If the agent protocol changes, update `docs/contracts` and the matching

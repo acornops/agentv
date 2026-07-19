@@ -1,138 +1,85 @@
+import { EventEmitter } from 'node:events';
 import { readFileSync } from 'node:fs';
 import { rootCertificates } from 'node:tls';
 import WebSocket from 'ws';
 import type { AgentConfig } from '../config.js';
 import type { Logger } from '../logger.js';
-import type { HostCollector } from '../collectors/types.js';
-import { handleAgentRequest } from '../mcp/router.js';
-import { boundSnapshot } from '../tools/index.js';
+import type { Observability } from '../observability.js';
 
-export class AgentVClient {
-  private ws: WebSocket | null = null;
-  private heartbeatTimer: NodeJS.Timeout | null = null;
-  private snapshotTimer: NodeJS.Timeout | null = null;
+/** Own the raw WebSocket, transport heartbeats, backpressure, and jittered reconnects. */
+export class WebSocketClient extends EventEmitter {
+  private socket: WebSocket | null = null;
   private reconnectTimer: NodeJS.Timeout | null = null;
-  private nextId = 1;
-  private stopped = false;
+  private pingTimer: NodeJS.Timeout | null = null;
+  private pongDeadline: NodeJS.Timeout | null = null;
+  private attempts = 0;
+  private stopped = true;
+  readonly outboundBufferLimit = 2 * 1024 * 1024;
 
-  /** Initialize the outbound AgentV client. */
-  constructor(
-    private readonly config: AgentConfig,
-    private readonly collector: HostCollector,
-    private readonly logger: Logger
-  ) {}
+  constructor(private readonly config: AgentConfig, private readonly logger: Logger, private readonly metrics: Observability) { super(); }
 
-  /** Start the outbound control-plane connection. */
-  start(): void {
-    this.connect();
-  }
-
-  /** Stop timers and close the outbound control-plane connection. */
-  stop(): void {
-    this.stopped = true;
-    if (this.heartbeatTimer) clearInterval(this.heartbeatTimer);
-    if (this.snapshotTimer) clearInterval(this.snapshotTimer);
-    if (this.reconnectTimer) clearTimeout(this.reconnectTimer);
-    this.ws?.close(1000, 'agent shutdown');
-  }
-
-  private connect(): void {
-    const url = this.config.platformUrl.replace(/\/$/, '') + '/api/v1/agent/connect';
-    this.logger.info({ targetId: this.config.targetId, url }, 'Connecting to control plane');
-    this.ws = new WebSocket(url, {
-      headers: {
-        'x-agent-key': this.config.agentKey,
-        'x-agent-version': 'agentv/0.0.1-experimental.1'
-      },
-      ...(this.config.additionalCaBundleFile
-        ? { ca: [...rootCertificates, readFileSync(this.config.additionalCaBundleFile)] }
-        : {})
+  connect(): void {
+    this.stopped = false; this.clearReconnect();
+    if (this.socket && this.socket.readyState !== WebSocket.CLOSED) return;
+    const url = `${this.config.platformUrl.replace(/\/$/, '')}/api/v1/agent/connect`;
+    const socket = new WebSocket(url, {
+      maxPayload: 1024 * 1024,
+      headers: { 'x-agent-key': this.config.agentKey, 'x-agent-version': `agentv/${this.config.agentVersion}` },
+      ...(this.config.additionalCaBundleFile ? { ca: [...rootCertificates, readFileSync(this.config.additionalCaBundleFile)] } : {}),
     });
-    this.ws.on('open', () => this.handshake());
-    this.ws.on('message', (raw) => this.handleMessage(raw.toString()).catch((err) => {
-      this.logger.error({ err: err instanceof Error ? err.message : String(err) }, 'Failed handling control-plane message');
-    }));
-    this.ws.on('close', () => {
-      this.logger.warn({ targetId: this.config.targetId }, 'Control-plane connection closed');
-      this.clearIntervals();
-      this.scheduleReconnect();
-    });
-    this.ws.on('error', (err) => {
-      this.logger.error({ err: err.message }, 'Control-plane websocket error');
+    this.socket = socket;
+    socket.on('open', () => { if (this.socket !== socket || this.stopped) return; this.startPing(socket); this.emit('open'); });
+    socket.on('message', (data) => { if (this.socket === socket && !this.stopped) this.emit('message', data); });
+    socket.on('pong', () => { if (this.pongDeadline) clearTimeout(this.pongDeadline); this.pongDeadline = null; });
+    socket.on('error', (error) => { if (this.socket === socket && !this.stopped) this.emit('error', error); });
+    socket.on('close', (code, reason) => {
+      if (this.socket !== socket) return;
+      this.socket = null; this.clearPing(); this.emit('close', code, reason.toString()); this.scheduleReconnect();
     });
   }
 
-  private send(method: string, params: Record<string, unknown>): void {
-    if (!this.ws || this.ws.readyState !== WebSocket.OPEN) return;
-    this.ws.send(JSON.stringify({ jsonrpc: '2.0', id: this.nextId++, method, params }));
+  send(payload: string | Buffer): boolean {
+    const socket = this.socket;
+    const bytes = Buffer.byteLength(payload);
+    if (this.stopped || !socket || socket.readyState !== WebSocket.OPEN || bytes > this.outboundBufferLimit || socket.bufferedAmount + bytes > this.outboundBufferLimit) return false;
+    socket.send(payload); return true;
   }
 
-  private notify(method: string, params: Record<string, unknown>): void {
-    if (!this.ws || this.ws.readyState !== WebSocket.OPEN) return;
-    this.ws.send(JSON.stringify({ jsonrpc: '2.0', method, params }));
+  markReady(): void { this.attempts = 0; }
+  isOpen(): boolean { return !this.stopped && this.socket?.readyState === WebSocket.OPEN; }
+
+  forceReconnect(): void {
+    if (this.stopped) return;
+    const socket = this.socket; this.socket = null; this.clearPing();
+    if (socket && socket.readyState !== WebSocket.CLOSED) socket.terminate();
+    this.emit('close', 1006, 'forced reconnect'); this.scheduleReconnect();
   }
 
-  private handshake(): void {
-    this.send('lifecycle/handshake', {
-      agentKey: this.config.agentKey,
-      targetId: this.config.targetId,
-      targetType: 'virtual_machine',
-      agentType: 'agentv',
-      osFamily: this.config.osFamily,
-      serviceManager: this.config.serviceManager,
-      supportedCapabilities: ['read', 'logs', 'mcp', 'chat', 'systemd', 'linux']
-    });
+  close(): void {
+    this.stopped = true; this.clearReconnect(); this.clearPing();
+    const socket = this.socket; this.socket = null;
+    if (socket && socket.readyState !== WebSocket.CLOSED) socket.close(1000, 'agent shutdown');
   }
 
-  private clearIntervals(): void {
-    if (this.heartbeatTimer) clearInterval(this.heartbeatTimer);
-    if (this.snapshotTimer) clearInterval(this.snapshotTimer);
-    this.heartbeatTimer = null;
-    this.snapshotTimer = null;
+  private startPing(socket: WebSocket): void {
+    this.clearPing();
+    this.pingTimer = setInterval(() => {
+      if (this.socket !== socket || socket.readyState !== WebSocket.OPEN) return;
+      socket.ping();
+      if (this.pongDeadline) clearTimeout(this.pongDeadline);
+      this.pongDeadline = setTimeout(() => { this.logger.warn({}, 'WebSocket pong deadline exceeded'); this.forceReconnect(); }, 10_000);
+      this.pongDeadline.unref();
+    }, 30_000); this.pingTimer.unref();
   }
 
   private scheduleReconnect(): void {
     if (this.stopped || this.reconnectTimer) return;
-    this.logger.info({ targetId: this.config.targetId, delayMs: 5000 }, 'Scheduling control-plane reconnect');
-    this.reconnectTimer = setTimeout(() => {
-      this.reconnectTimer = null;
-      this.connect();
-    }, 5000);
+    const base = Math.min(1000 * 2 ** this.attempts, 15_000);
+    const delay = Math.round(base / 2 + Math.random() * base / 2); this.attempts++; this.metrics.increment('reconnects');
+    this.logger.info({ delayMs: delay, attempt: this.attempts }, 'Scheduling control-plane reconnect');
+    this.reconnectTimer = setTimeout(() => { this.reconnectTimer = null; if (!this.stopped) this.connect(); }, delay);
   }
 
-  private async handleMessage(text: string): Promise<void> {
-    const payload = JSON.parse(text) as { id?: string | number; result?: unknown; method?: string; params?: Record<string, unknown> };
-    if (payload.result && !this.heartbeatTimer) {
-      this.logger.info({ targetId: this.config.targetId }, 'Handshake acknowledged');
-      this.heartbeatTimer = setInterval(() => this.notify('lifecycle/heartbeat', { timestamp: new Date().toISOString() }), 15000);
-      this.snapshotTimer = setInterval(() => this.sendSnapshot(), this.config.snapshotIntervalMs);
-      this.heartbeatTimer.unref();
-      this.snapshotTimer.unref();
-      await this.sendSnapshot();
-      return;
-    }
-    if (payload.method) {
-      const response = await handleAgentRequest(this.collector, payload);
-      this.ws?.send(JSON.stringify(response));
-    }
-  }
-
-  private async sendSnapshot(): Promise<void> {
-    try {
-      const snapshot = boundSnapshot(await this.collector.collectSnapshot(), this.config.maxSnapshotBytes);
-      this.notify('notify/snapshot', {
-        timestamp: new Date().toISOString(),
-        data: snapshot
-      });
-      this.logger.info({
-        targetId: this.config.targetId,
-        bytes: Buffer.byteLength(JSON.stringify(snapshot)),
-        services: snapshot.services.length,
-        processes: snapshot.processes.length,
-        findings: snapshot.findings.length
-      }, 'Snapshot uploaded');
-    } catch (err) {
-      this.logger.warn({ err: err instanceof Error ? err.message : String(err) }, 'Snapshot collection failed');
-    }
-  }
+  private clearReconnect(): void { if (this.reconnectTimer) clearTimeout(this.reconnectTimer); this.reconnectTimer = null; }
+  private clearPing(): void { if (this.pingTimer) clearInterval(this.pingTimer); if (this.pongDeadline) clearTimeout(this.pongDeadline); this.pingTimer = null; this.pongDeadline = null; }
 }

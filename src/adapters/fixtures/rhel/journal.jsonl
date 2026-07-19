@@ -1,0 +1,3 @@
+{"__CURSOR":"s=rhel-1","__REALTIME_TIMESTAMP":"1752884200000000","PRIORITY":"4","_SYSTEMD_UNIT":"sshd.service","_PID":"710","SYSLOG_IDENTIFIER":"sshd","MESSAGE":"Listening on 0.0.0.0 port 22"}
+not-json-hostile-output
+{"__CURSOR":"s=rhel-2","__REALTIME_TIMESTAMP":"1752884201000000","PRIORITY":"5","_SYSTEMD_UNIT":"sshd.service","_PID":"710","SYSLOG_IDENTIFIER":"sshd","MESSAGE":"AWS_SECRET_ACCESS_KEY=topsecretvalue"}

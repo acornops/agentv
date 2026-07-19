@@ -1,4 +1,4 @@
-name: Release Image
+name: Release AgentV
 
 on:
   push:
@@ -17,43 +17,51 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
+      - uses: actions/setup-node@v4
         with:
           node-version: "22"
-          cache: "npm"
-      - name: Install dependencies
-        run: npm ci
-      - name: Run validation
-        run: npm run validate:ci
+          cache: npm
+      - run: npm ci
+      - name: Require tag and package version equality
+        run: test "${GITHUB_REF_NAME#v}" = "$(node -p "require('./package.json').version")"
+      - run: npm run validate:ci
+      - name: Verify release archive
+        run: npm run smoke:package
+      - name: Expose the selected Node.js runtime at the systemd path
+        run: sudo ln -sf "$(command -v node)" /usr/bin/node
+      - name: Run live systemd release gate
+        env:
+          AGENTV_SYSTEMD_SMOKE_ALLOW: "true"
+        run: npm run smoke:systemd
 
   release:
     needs: validate
     runs-on: ubuntu-latest
     permissions:
-      contents: read
+      contents: write
       packages: write
+      id-token: write
+      attestations: write
     steps:
       - uses: actions/checkout@v4
-
-      - name: Resolve release version
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+      - run: npm ci
+      - name: Resolve immutable release coordinates
         id: version
         run: |
-          VERSION="${GITHUB_REF_NAME#v}"
-          echo "version=${VERSION}" >> "$GITHUB_OUTPUT"
-          echo "image=${REGISTRY}/${IMAGE_NAME}:${VERSION}" >> "$GITHUB_OUTPUT"
-
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
-
-      - name: Log in to GHCR
-        uses: docker/login-action@v3
+          version="$(node -p "require('./package.json').version")"
+          echo "version=${version}" >> "$GITHUB_OUTPUT"
+          echo "image=${REGISTRY}/${IMAGE_NAME}:${version}" >> "$GITHUB_OUTPUT"
+      - uses: docker/setup-buildx-action@v3
+      - uses: docker/login-action@v3
         with:
           registry: ${{ env.REGISTRY }}
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
-
-      - name: Build and push image
+      - name: Build and push read-only container image
         uses: docker/build-push-action@v6
         with:
           context: .
@@ -67,3 +75,22 @@ jobs:
           sbom: true
           cache-from: type=gha
           cache-to: type=gha,mode=max
+      - name: Build checksummed systemd archive
+        run: npm run package:systemd
+      - name: Generate archive SBOM
+        uses: anchore/sbom-action@v0
+        with:
+          path: release
+          format: spdx-json
+          output-file: release/agentv-${{ steps.version.outputs.version }}.spdx.json
+      - name: Attest systemd archive provenance
+        uses: actions/attest-build-provenance@v2
+        with:
+          subject-path: release/agentv-${{ steps.version.outputs.version }}.tar.gz
+      - name: Publish immutable release assets
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            release/agentv-${{ steps.version.outputs.version }}.tar.gz
+            release/agentv-${{ steps.version.outputs.version }}.tar.gz.sha256
+            release/agentv-${{ steps.version.outputs.version }}.spdx.json

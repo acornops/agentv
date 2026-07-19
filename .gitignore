@@ -1,6 +1,8 @@
 node_modules
 dist
 coverage
+release
+build
 .vscode
 *.log
 .env

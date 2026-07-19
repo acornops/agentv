@@ -1,0 +1,4 @@
+Filesystem     Type       1-blocks       Used  Available Capacity Mounted on
+/dev/mapper/rhel-root xfs 21474836480 10737418240 10737418240 50% /
+devtmpfs       devtmpfs    2097152000          0  2097152000  0% /dev
+/dev/vda2      xfs         1073741824  536870912   536870912 50% /boot

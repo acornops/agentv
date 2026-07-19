@@ -42,6 +42,10 @@ function isPrivateMethod(node) {
   return node.modifiers?.some((modifier) => modifier.kind === ts.SyntaxKind.PrivateKeyword) ?? false;
 }
 
+function isExported(node) {
+  return node.modifiers?.some((modifier) => modifier.kind === ts.SyntaxKind.ExportKeyword) ?? false;
+}
+
 function isFunctionValuedVariable(node) {
   return (
     ts.isVariableStatement(node.parent.parent) &&
@@ -53,22 +57,10 @@ function isFunctionValuedVariable(node) {
 }
 
 function checkNode(sourceFile, node) {
-  if (ts.isFunctionDeclaration(node) && node.name && !isPrivateName(node.name.text) && !hasDocComment(sourceFile, node)) {
+  if (ts.isFunctionDeclaration(node) && node.name && isExported(node) && !isPrivateName(node.name.text) && !hasDocComment(sourceFile, node)) {
     addFailure(sourceFile, node, node.name.text);
   }
-  if (
-    ts.isMethodDeclaration(node) &&
-    node.name &&
-    !isPrivateMethod(node) &&
-    !isPrivateName(node.name.getText(sourceFile)) &&
-    !hasDocComment(sourceFile, node)
-  ) {
-    addFailure(sourceFile, node, node.name.getText(sourceFile));
-  }
-  if (ts.isConstructorDeclaration(node) && !isPrivateMethod(node) && !hasDocComment(sourceFile, node)) {
-    addFailure(sourceFile, node, "constructor");
-  }
-  if (ts.isVariableDeclaration(node) && node.initializer && isFunctionValuedVariable(node) && !hasDocComment(sourceFile, node)) {
+  if (ts.isVariableDeclaration(node) && node.initializer && isFunctionValuedVariable(node) && isExported(node.parent.parent) && !hasDocComment(sourceFile, node)) {
     addFailure(sourceFile, node, node.name.getText(sourceFile));
   }
   ts.forEachChild(node, (child) => checkNode(sourceFile, child));

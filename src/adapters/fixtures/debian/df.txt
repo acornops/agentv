@@ -1,0 +1,4 @@
+Filesystem     Type       1-blocks       Used  Available Capacity Mounted on
+/dev/vda1      ext4     10737418240 4294967296 6442450944      40% /
+tmpfs          tmpfs       268435456          0  268435456       0% /run/user/1000
+/dev/vdb1      xfs       5368709120 2684354560 2684354560      50% /srv/data

@@ -16,7 +16,7 @@ const doc = read('docs/contracts/README.md');
 const manifest = JSON.parse(read('docs/contracts/manifest.json'));
 
 expect(manifest.repo === 'agentv', 'Manifest repo must be agentv');
-expect(manifest.version === 1, 'Manifest version must be 1');
+expect(manifest.version === 1, 'Manifest harness schema version must be 1');
 expect(Array.isArray(manifest.runtimeDependencies), 'Manifest runtimeDependencies must be an array');
 expect(doc.includes('## Dependency Matrix'), 'Contract doc missing dependency matrix');
 expect(doc.includes('## Shared Invariants'), 'Contract doc missing shared invariants');
@@ -30,6 +30,10 @@ expect(controlPlane?.websocketPaths?.includes('/api/v1/agent/connect'), 'Manifes
 expect(controlPlane?.rpcMethods?.includes('tools/list'), 'Manifest missing tools/list RPC method');
 expect(controlPlane?.rpcMethods?.includes('tools/call'), 'Manifest missing tools/call RPC method');
 expect(controlPlane?.builtinToolNames?.includes('get_host_summary'), 'Manifest missing built-in VM tool names');
+expect(controlPlane?.builtinToolNames?.includes('restart_service'), 'Manifest missing restart_service');
+expect(controlPlane?.contractVersion === 2, 'Manifest AgentV contract version must be 2');
+expect(controlPlane?.toolDefinitionFields?.includes('outputSchema'), 'Manifest missing complete tool metadata');
+expect(!controlPlane?.builtinToolNames?.includes('get_logs'), 'Manifest must not retain prototype tool aliases');
 
 if (failures.length > 0) {
   console.error('Contract checks failed:\n');

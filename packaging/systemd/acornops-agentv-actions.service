@@ -1,0 +1,32 @@
+[Unit]
+Description=AcornOps AgentV privileged action helper
+Requires=acornops-agentv-actions.socket
+After=acornops-agentv-actions.socket
+
+[Service]
+Type=simple
+User=root
+Group=root
+WorkingDirectory=/opt/acornops/agentv/current
+ExecStart=/usr/bin/node /opt/acornops/agentv/current/dist/helper.js
+StandardOutput=journal
+StandardError=journal
+NoNewPrivileges=true
+PrivateTmp=true
+PrivateDevices=true
+PrivateNetwork=true
+ProtectSystem=strict
+ProtectHome=true
+ProtectControlGroups=true
+ProtectKernelLogs=true
+ProtectKernelModules=true
+ProtectKernelTunables=true
+ProtectClock=true
+ProtectHostname=true
+LockPersonality=true
+RestrictNamespaces=true
+RestrictRealtime=true
+RestrictSUIDSGID=true
+RestrictAddressFamilies=AF_UNIX
+SystemCallArchitectures=native
+ReadWritePaths=/var/lib/acornops-agentv/actions

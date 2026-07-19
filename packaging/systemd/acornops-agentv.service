@@ -4,19 +4,33 @@ After=network-online.target
 Wants=network-online.target
 
 [Service]
-Type=simple
+Type=notify
+NotifyAccess=all
+WatchdogSec=90s
 User=acornops-agent
 Group=acornops-agent
 EnvironmentFile=/etc/acornops/agentv.env
-WorkingDirectory=/opt/acornops/agentv
-ExecStart=/usr/bin/node /opt/acornops/agentv/dist/index.js
+WorkingDirectory=/opt/acornops/agentv/current
+ExecStart=/usr/bin/node /opt/acornops/agentv/current/dist/index.js
 Restart=always
 RestartSec=5
 NoNewPrivileges=true
 PrivateTmp=true
+PrivateDevices=true
 ProtectSystem=strict
-ProtectHome=read-only
-ReadWritePaths=/var/lib/acornops-agentv
+ProtectHome=true
+ProtectControlGroups=true
+ProtectKernelLogs=true
+ProtectKernelModules=true
+ProtectKernelTunables=true
+ProtectClock=true
+ProtectHostname=true
+LockPersonality=true
+RestrictNamespaces=true
+RestrictRealtime=true
+RestrictSUIDSGID=true
+RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6
+SystemCallArchitectures=native
 
 [Install]
 WantedBy=multi-user.target

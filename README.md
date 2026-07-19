@@ -12,7 +12,7 @@
 </p>
 
 <p align="center">
-  Outbound-only Linux/systemd AgentV for host snapshots, read-only diagnostics, and JSON-RPC tool execution.
+  Outbound-only Linux/systemd AgentV for bounded diagnostics and allowlisted service recovery.
 </p>
 
 ## Status
@@ -34,7 +34,8 @@ Run `npm run contracts:check` to mechanically verify the documented AgentV/contr
 
 Coverage is generated in CI with Vitest V8 coverage, uploaded as a workflow
 artifact, and published to Codecov when `CODECOV_TOKEN` is configured for the
-repository. Run `npm run test:coverage` locally to produce text, HTML, and lcov
+repository. Run `npm run test:coverage:all` locally to include transport E2E
+coverage and enforce the release floors. Reports are written as text, HTML, and lcov
 reports under `coverage/`.
 
 ## Documentation
@@ -51,16 +52,17 @@ Primary docs:
 ## Features
 
 - **Outbound-only**: Initiates a secure WebSocket connection to the control plane.
-- **Host snapshots**: Collects bounded Linux/systemd telemetry for host, metrics, services, processes, listeners, logs, and findings.
+- **Host snapshots**: Collects bounded Linux/systemd telemetry for host, filesystems, degraded services, processes, listeners, findings, and collector health. Raw logs are never included.
 - **MCP bridge**: Serves JSON-RPC `tools/list` and `tools/call` requests from the platform.
-- **Read-only by default**: Built-in tools only inspect host state; they do not execute shell commands or mutate files, packages, processes, or services.
-- **Adapter-ready**: OS family, service manager, collector mode, and log sources are explicit so future non-Linux support can be added behind adapters.
+- **Read-only by default**: Eight strict tools inspect host state through fixed Linux/systemd adapters.
+- **Isolated writes**: Optional `restart_service` actions cross privilege only through a root-owned socket helper and exact local allowlist.
+- **Production transport**: Authenticated readiness, session generations, jittered reconnects, ping/pong deadlines, and hard inbound/outbound limits.
 
 ## Tech Stack
 
 - **Runtime**: Node.js 22+
 - **Language**: TypeScript
-- **Core Libraries**: `ws`, Vitest with V8 coverage, TypeScript
+- **Core Libraries**: `ws`, Zod, Vitest, and TypeScript; systemd integration uses the fixed `systemd-notify` binary
 - **Packaging**: Docker image and Linux systemd unit assets
 
 ## Configuration
@@ -75,13 +77,15 @@ The agent is configured with environment variables:
 | `ACORNOPS_TARGET_ID` | Control-plane VM target id this agent key is bound to. | Required |
 | `ACORNOPS_AGENT_KEY` | Agent authentication token. | Required |
 | `ACORNOPS_AGENT_TARGET_TYPE` | Target type advertised during handshake. | `virtual_machine` |
-| `ACORNOPS_AGENT_SNAPSHOT_INTERVAL_MS` | Snapshot cadence after handshake acknowledgement. | `30000` |
+| `ACORNOPS_AGENT_SNAPSHOT_INTERVAL_MS` | Local snapshot cadence used unless the authenticated remote value is within local bounds. | `60000` |
 | `ACORNOPS_AGENT_MAX_SNAPSHOT_BYTES` | Maximum serialized snapshot payload size. | `1048576` |
 | `ACORNOPS_AGENT_LOG_LEVEL` | Logging level (`debug`, `info`, `warn`, `error`). | `info` |
-| `ACORNOPS_VM_OS_FAMILY` | VM operating system family. V1 supports `linux`. | `linux` |
-| `ACORNOPS_VM_SERVICE_MANAGER` | VM service manager. V1 supports `systemd`. | `systemd` |
-| `ACORNOPS_VM_ALLOWED_LOG_SOURCES` | Comma-separated log sources the live collector may read. | `journald,syslog` |
+| `ACORNOPS_VM_OS_FAMILY` | VM operating system family. The current contract supports `linux`. | `linux` |
+| `ACORNOPS_VM_SERVICE_MANAGER` | VM service manager. The current contract supports `systemd`. | `systemd` |
+| `ACORNOPS_VM_ALLOWED_LOG_UNITS` | Comma-separated exact systemd units accepted by `query_logs`. | Empty |
 | `ACORNOPS_VM_COLLECTOR_MODE` | Collector mode: `live` for Linux/systemd hosts, `mock` for local and CI development. | `live` |
+| `ACORNOPS_AGENT_WRITE_ENABLED` | Locally permit helper-backed writes. The helper policy and remote session must also permit them. | `false` |
+| `ACORNOPS_AGENT_ACTIONS_SOCKET` | Root-owned action helper socket. | `/run/acornops-agentv/actions.sock` |
 
 ## Local Development
 
@@ -115,11 +119,21 @@ Use `ACORNOPS_VM_COLLECTOR_MODE=mock` for local Docker and CI. Use `live` on a L
 
 Systemd packaging assets live in [`packaging/systemd`](packaging/systemd):
 
-- `acornops-agentv.service`: service unit for Linux VMs.
+- `acornops-agentv.service`: hardened unprivileged main service.
+- `acornops-agentv-actions.socket` and `.service`: disabled-by-default privileged helper.
 - `agentv.env.example`: environment file template.
+- `agentv-actions.json.example`: empty exact-unit helper policy.
 - `install.sh` and `uninstall.sh`: install helpers for the service assets.
 
 Runtime configuration belongs in `/etc/acornops/agentv.env`. Keep that file owned by `root:acornops-agent` with mode `0640` because it contains the agent key.
+
+Run `acornops-agentv-doctor` after installation. Releases live under
+`/opt/acornops/agentv/releases/<version>` and `current` changes atomically, so
+rollback is a symlink switch followed by a service restart.
+
+The systemd archive bundles its production Node dependencies and uses the
+target host's `/usr/bin/systemd-notify` for watchdog notifications. No
+target-side `npm install`, compiler, or native addon build is required.
 
 ## Validation
 
@@ -134,8 +148,15 @@ Focused checks:
 ```bash
 npm run typecheck
 npm run test
-npm run test:coverage
+npm run test:coverage:all
 npm run contracts:check
 npm run harness:check
 npm run build
+npm run smoke:package
 ```
+
+The hosted Ubuntu workflow additionally runs the guarded `smoke:systemd` gate
+against real systemd, journald, procfs, socket inspection, and the privileged
+helper. It covers install, doctor, allowlisted restart, idempotent replay,
+upgrade, rollback, and uninstall preservation. The script intentionally refuses
+to run unless both `CI=true` and `AGENTV_SYSTEMD_SMOKE_ALLOW=true` are present.

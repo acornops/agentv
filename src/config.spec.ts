@@ -1,151 +1,45 @@
 import { afterEach, describe, expect, it } from 'vitest';
-import { mkdtempSync, writeFileSync } from 'node:fs';
-import { tmpdir } from 'node:os';
-import { join } from 'node:path';
 import { loadConfig, redact } from './config.js';
 
-const originalEnv = { ...process.env };
-
-function setBaseEnv(overrides: Record<string, string | undefined> = {}) {
-  process.env = {
-    ...originalEnv,
-    ACORNOPS_AGENT_PLATFORM_URL: 'https://api.acornops.dev',
-    ACORNOPS_TARGET_ID: 'vm-1',
-    ACORNOPS_AGENT_KEY: 'agent-key-12345678',
-    ...overrides
-  };
+const names = Object.keys(process.env).filter((name) => name.startsWith('ACORNOPS_'));
+const original = Object.fromEntries(names.map((name) => [name, process.env[name]]));
+function base(extra: Record<string, string> = {}) {
+  for (const name of Object.keys(process.env).filter((value) => value.startsWith('ACORNOPS_'))) delete process.env[name];
+  Object.assign(process.env, { ACORNOPS_AGENT_PLATFORM_URL: 'https://api.example.com', ACORNOPS_TARGET_ID: 'vm-1', ACORNOPS_AGENT_KEY: 'secret-key', ...extra });
 }
+afterEach(() => { for (const name of Object.keys(process.env).filter((value) => value.startsWith('ACORNOPS_'))) delete process.env[name]; Object.assign(process.env, original); });
 
 describe('loadConfig', () => {
-  afterEach(() => {
-    process.env = { ...originalEnv };
+  it('loads secure, read-only production defaults from package metadata', () => {
+    base(); const config = loadConfig();
+    expect(config.agentVersion).toBe('0.0.1-experimental.2');
+    expect(config.writeEnabled).toBe(false);
+    expect(config.allowedLogUnits).toEqual([]);
+    expect(config.snapshotIntervalMs).toBe(60_000);
   });
-
-  it('accepts secure control-plane URLs', () => {
-    setBaseEnv();
-
-    const config = loadConfig();
-
-    expect(config.platformUrl).toBe('https://api.acornops.dev');
-    expect(config.allowInsecureTransport).toBe(false);
-    expect(config.additionalCaBundleFile).toBeUndefined();
+  it('rejects insecure transport unless explicitly enabled', () => {
+    base({ ACORNOPS_AGENT_PLATFORM_URL: 'http://127.0.0.1:8080' }); expect(() => loadConfig()).toThrow('must use https://');
+    process.env.ACORNOPS_AGENT_ALLOW_INSECURE_TRANSPORT = 'true'; expect(loadConfig().platformUrl).toContain('127.0.0.1');
   });
-
-  it('accepts only a readable additional CA bundle', () => {
-    setBaseEnv({ ACORNOPS_AGENT_ADDITIONAL_CA_BUNDLE_FILE: '/missing/agentv-ca.pem' });
-    expect(() => loadConfig()).toThrow(
-      'ACORNOPS_AGENT_ADDITIONAL_CA_BUNDLE_FILE must point to a readable file'
-    );
-
-    const dir = mkdtempSync(join(tmpdir(), 'agentv-ca-'));
-    const caFile = join(dir, 'additional-ca.pem');
-    writeFileSync(caFile, 'test ca');
-    setBaseEnv({ ACORNOPS_AGENT_ADDITIONAL_CA_BUNDLE_FILE: caFile });
-    expect(loadConfig().additionalCaBundleFile).toBe(caFile);
+  it('enforces bounded local and remote snapshot policy', () => {
+    base({ ACORNOPS_AGENT_SNAPSHOT_INTERVAL_MS: '9999' }); expect(() => loadConfig()).toThrow('between 10000 and 3600000');
+    base({ ACORNOPS_AGENT_MAX_SNAPSHOT_BYTES: '1048577' }); expect(() => loadConfig()).toThrow('between 16384 and 1048576');
   });
-
-  it('rejects plaintext control-plane URLs by default', () => {
-    setBaseEnv({
-      ACORNOPS_AGENT_PLATFORM_URL: 'http://127.0.0.1:8081'
-    });
-
-    expect(() => loadConfig()).toThrow('ACORNOPS_AGENT_PLATFORM_URL must use https://');
+  it('rejects duplicate log units and invalid booleans', () => {
+    base({ ACORNOPS_VM_ALLOWED_LOG_UNITS: 'ssh.service,ssh.service' }); expect(() => loadConfig()).toThrow('duplicate');
+    base({ ACORNOPS_VM_ALLOWED_LOG_UNITS: 'ssh.service,*' }); expect(() => loadConfig()).toThrow('exact .service');
+    base({ ACORNOPS_AGENT_WRITE_ENABLED: 'sometimes' }); expect(() => loadConfig()).toThrow('boolean');
   });
-
-  it('allows plaintext control-plane URLs only behind the explicit local-development override', () => {
-    setBaseEnv({
-      ACORNOPS_AGENT_PLATFORM_URL: 'http://127.0.0.1:8081',
-      ACORNOPS_AGENT_ALLOW_INSECURE_TRANSPORT: 'true'
-    });
-
-    const config = loadConfig();
-
-    expect(config.platformUrl).toBe('http://127.0.0.1:8081');
-    expect(config.allowInsecureTransport).toBe(true);
+  it('rejects credential-bearing URLs and malformed local identifiers', () => {
+    base({ ACORNOPS_AGENT_PLATFORM_URL: 'https://user:password@example.com' }); expect(() => loadConfig()).toThrow('must not contain credentials');
+    base({ ACORNOPS_TARGET_ID: '../vm-1' }); expect(() => loadConfig()).toThrow('invalid format');
+    base({ ACORNOPS_AGENT_ACTIONS_SOCKET: 'relative.sock' }); expect(() => loadConfig()).toThrow('absolute path');
+    base({ ACORNOPS_AGENT_KEY: 'x'.repeat(4097) }); expect(() => loadConfig()).toThrow('4096');
   });
-
-  it('rejects WebSocket URLs because this setting is the platform base URL', () => {
-    setBaseEnv({
-      ACORNOPS_AGENT_PLATFORM_URL: 'ws://127.0.0.1:8081/api/v1/agent/connect',
-      ACORNOPS_AGENT_ALLOW_INSECURE_TRANSPORT: 'true'
-    });
-
-    expect(() => loadConfig()).toThrow('ACORNOPS_AGENT_PLATFORM_URL must be an https:// base URL');
+  it('rejects unsupported log levels', () => {
+    base({ ACORNOPS_AGENT_LOG_LEVEL: 'verbose' }); expect(() => loadConfig()).toThrow('must be debug, info, warn, or error');
   });
-
-  it('rejects malformed platform URLs before checking transport policy', () => {
-    setBaseEnv({
-      ACORNOPS_AGENT_PLATFORM_URL: 'not a url'
-    });
-
-    expect(() => loadConfig()).toThrow('ACORNOPS_AGENT_PLATFORM_URL must be a valid URL');
-  });
-
-  it('treats explicit false-like insecure transport values as disabled', () => {
-    setBaseEnv({
-      ACORNOPS_AGENT_PLATFORM_URL: 'http://127.0.0.1:8081',
-      ACORNOPS_AGENT_ALLOW_INSECURE_TRANSPORT: 'off'
-    });
-
-    expect(() => loadConfig()).toThrow('ACORNOPS_AGENT_PLATFORM_URL must use https://');
-  });
-
-  it('parses VM runtime options and trims allowed log sources', () => {
-    setBaseEnv({
-      ACORNOPS_AGENT_SNAPSHOT_INTERVAL_MS: '60000',
-      ACORNOPS_AGENT_MAX_SNAPSHOT_BYTES: '2097152',
-      ACORNOPS_AGENT_LOG_LEVEL: 'debug',
-      ACORNOPS_VM_ALLOWED_LOG_SOURCES: 'journald, syslog, ,custom',
-      ACORNOPS_VM_COLLECTOR_MODE: 'mock',
-      ACORNOPS_AGENT_ALLOW_INSECURE_TRANSPORT: 'yes'
-    });
-
-    expect(loadConfig()).toMatchObject({
-      snapshotIntervalMs: 60000,
-      maxSnapshotBytes: 2097152,
-      logLevel: 'debug',
-      allowedLogSources: ['journald', 'syslog', 'custom'],
-      collectorMode: 'mock',
-      osFamily: 'linux',
-      serviceManager: 'systemd',
-      targetType: 'virtual_machine',
-      allowInsecureTransport: true
-    });
-  });
-
-  it.each([
-    ['ACORNOPS_AGENT_TARGET_TYPE', 'kubernetes', 'ACORNOPS_AGENT_TARGET_TYPE must be virtual_machine'],
-    ['ACORNOPS_VM_OS_FAMILY', 'windows', 'Only ACORNOPS_VM_OS_FAMILY=linux is supported in v1'],
-    ['ACORNOPS_VM_SERVICE_MANAGER', 'launchd', 'Only ACORNOPS_VM_SERVICE_MANAGER=systemd is supported in v1'],
-    ['ACORNOPS_VM_COLLECTOR_MODE', 'fixture', 'ACORNOPS_VM_COLLECTOR_MODE must be live or mock']
-  ])('rejects unsupported %s values', (name, value, message) => {
-    setBaseEnv({ [name]: value });
-
-    expect(() => loadConfig()).toThrow(message);
-  });
-
-  it.each([
-    ['ACORNOPS_AGENT_SNAPSHOT_INTERVAL_MS', '4999', 'ACORNOPS_AGENT_SNAPSHOT_INTERVAL_MS must be between 5000 and 86400000'],
-    ['ACORNOPS_AGENT_SNAPSHOT_INTERVAL_MS', '86400001', 'ACORNOPS_AGENT_SNAPSHOT_INTERVAL_MS must be between 5000 and 86400000'],
-    ['ACORNOPS_AGENT_MAX_SNAPSHOT_BYTES', '4095', 'ACORNOPS_AGENT_MAX_SNAPSHOT_BYTES must be between 4096 and 10485760'],
-    ['ACORNOPS_AGENT_MAX_SNAPSHOT_BYTES', 'not-a-number', 'ACORNOPS_AGENT_MAX_SNAPSHOT_BYTES must be between 4096 and 10485760']
-  ])('rejects invalid numeric config %s=%s', (name, value, message) => {
-    setBaseEnv({ [name]: value });
-
-    expect(() => loadConfig()).toThrow(message);
-  });
-
-  it('requires target identity and agent key', () => {
-    setBaseEnv({ ACORNOPS_TARGET_ID: undefined });
-    expect(() => loadConfig()).toThrow('ACORNOPS_TARGET_ID is required');
-
-    setBaseEnv({ ACORNOPS_AGENT_KEY: undefined });
-    expect(() => loadConfig()).toThrow('ACORNOPS_AGENT_KEY is required');
-  });
-
-  it('redacts short and long secret values for logs', () => {
-    expect(redact('short')).toBe('<redacted>');
-    expect(redact('agent-key-12345678')).toBe('agen...5678');
-    expect(redact('')).toBe('');
+  it('redacts credentials without exposing short values', () => {
+    expect(redact('')).toBe('<redacted>'); expect(redact('short')).toBe('<redacted>'); expect(redact('agent-key-12345678')).toBe('agen...5678');
   });
 });

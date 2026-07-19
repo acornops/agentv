@@ -1,0 +1,6 @@
+Name:	worker
+State:	S (sleeping)
+Pid:	1234
+PPid:	1
+Uid:	1000	1000	1000	1000
+VmRSS:	   20480 kB

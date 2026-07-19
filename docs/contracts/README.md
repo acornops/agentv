@@ -1,75 +1,66 @@
-# AgentV Contract
+# AgentV contract
 
-The AgentV talks to the control plane over the existing outbound WebSocket
-agent bridge.
+AgentV uses the outbound control-plane WebSocket bridge. Contract version 2
+intentionally replaces the prototype tool, result, and snapshot contracts.
 
 ## Dependency Matrix
 
 | Producer | Consumer | Surface | Compatibility |
 | --- | --- | --- | --- |
-| `agentv` | `control-plane` | `lifecycle/handshake`, `lifecycle/heartbeat`, `notify/snapshot`, `tools/list`, `tools/call` | Additive fields are preferred; removing or renaming fields requires a coordinated control-plane change. |
-| `control-plane` | `agentv` | WebSocket endpoint, JSON-RPC requests, handshake acknowledgement, session policy | The AgentV expects a JSON-RPC result for handshake acknowledgement before it starts heartbeats and snapshots. |
+| `agentv` | `control-plane` | handshake, heartbeat, compressed snapshot, `tools/list`, `tools/call` | Coordinated breaking contract; no v1 aliases or dual envelopes. |
+| `control-plane` | `agentv` | authenticated session policy and bounded snapshot config | AgentV rejects incomplete, stale, mismatched, or out-of-local-bounds handshake responses. |
 
 ## Handshake
 
-Method: `lifecycle/handshake`
+AgentV sends the fixed-ID `lifecycle/handshake` request with `targetId`,
+`targetType = "virtual_machine"`, `agentType = "agentv"`, package-derived
+version, supported capabilities, and Linux/systemd host features. It exposes no
+tools, snapshots, or heartbeats until the response matches the target and
+contains a non-empty `workspaceId` plus a complete `sessionPolicy`.
 
-Required params:
-
-- `agentKey`
-- `targetId`
-- `targetType = "virtual_machine"`
-- `agentType = "agentv"`
-- `osFamily = "linux"`
-- `serviceManager = "systemd"`
-- `supportedCapabilities[]`
-
-The control plane responds with `workspaceId`, `targetId`, `targetType`,
-`sessionPolicy`, and snapshot config.
+The installed tool policy is the intersection of compiled tools, remote
+`allowedTools`, remote write enablement, local write enablement, and helper
+capabilities. A connection-generation change revokes queued and future work.
 
 ## Snapshot
 
-Method: `notify/snapshot`
-
-Payload:
-
-- `timestamp`
-- `data.host`
-- `data.metrics`
-- `data.services`
-- `data.processes`
-- `data.listeners`
-- `data.logs`
-- `data.findings`
-
-Snapshots are bounded by `ACORNOPS_AGENT_MAX_SNAPSHOT_BYTES`.
+`notify/snapshot` is gzip-compressed and contains `host_summary`, bounded
+`filesystems`, failed/degraded service summaries, top processes, listeners,
+findings, collector health, and explicit truncation counts. It never contains
+raw logs and is dropped rather than sent when the negotiated hard byte limit
+cannot be met.
 
 ## Tools
 
-The agent supports `tools/list` and `tools/call`. All built-in VM tools declare
-`capability = "read"`.
-
-Built-in tool names:
+Read tools:
 
 - `get_host_summary`
+- `list_filesystems`
 - `list_processes`
 - `get_process`
 - `list_services`
-- `get_service_status`
-- `get_logs`
-- `search_logs`
-- `check_port`
-- `list_listening_ports`
+- `get_service`
+- `query_logs`
+- `list_listeners`
+
+The optional `restart_service` write tool is disabled by default and is only
+advertised when the root-owned helper has a valid exact unit allowlist.
+
+`tools/list` uses canonical `inputSchema`, `outputSchema`, `artifactPolicy`,
+`timeout_ms`, `version`, and `deprecated` metadata. `tools/call` returns model
+context in `content`, full data in `structuredContent` under
+`acornops.full-tool-result.v1`, explicit truncation/omission metadata, and
+`isError` for tool-level failures.
 
 ## Shared Invariants
 
-- AgentV instances are outbound-only and authenticate with the agent key assigned by the control plane.
-- `targetType` is `virtual_machine` for this repository.
-- `agentType` is `agentv`.
-- V1 OS support is `linux`; v1 service manager support is `systemd`.
-- Built-in VM tools are read-only and must not mutate packages, files, processes, services, or host configuration.
-- Snapshot and log payloads must remain bounded and redact token-like process arguments.
+- AgentV remains network-outbound-only and unprivileged.
+- Host commands use fixed executables and structured arguments; caller-supplied shell is prohibited.
+- Journald is the only production log backend, and process environments are never collected.
+- Reads and writes are separately bounded; ambiguous writes return `outcome = "unknown"` and are never retryable.
+- `restart_service` crosses privilege only through `/run/acornops-agentv/actions.sock` and an exact root-owned policy.
 
 ## Validation
 
-Run `npm run contracts:check` in this repository after contract documentation changes. For behavior changes that alter the shared agent bridge, also update the matching control-plane contract docs and run the workspace platform contract check from the parent workspace.
+Run `npm run validate`, the packaging smoke, live systemd smoke where available,
+and the parent workspace platform contract validation for every contract change.

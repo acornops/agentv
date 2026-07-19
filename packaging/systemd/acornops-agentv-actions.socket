@@ -1,0 +1,13 @@
+[Unit]
+Description=AcornOps AgentV privileged action socket
+
+[Socket]
+ListenStream=/run/acornops-agentv/actions.sock
+SocketUser=root
+SocketGroup=acornops-agent
+SocketMode=0660
+DirectoryMode=0755
+RemoveOnStop=true
+
+[Install]
+WantedBy=sockets.target

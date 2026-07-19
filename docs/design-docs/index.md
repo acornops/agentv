@@ -4,6 +4,6 @@ Record durable design decisions here. Keep transient task notes in execution pla
 
 | Document | Status | Notes |
 | --- | --- | --- |
-| Core beliefs | Verified | AgentV v1 is outbound-only, stateless, and read-only. |
+| Core beliefs | Verified | AgentV is outbound-only and read-only by default; helper writes are isolated and allowlisted. |
 
 - [Core Beliefs](core-beliefs.md)
