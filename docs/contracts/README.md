@@ -22,6 +22,11 @@ The installed tool policy is the intersection of compiled tools, remote
 `allowedTools`, remote write enablement, local write enablement, and helper
 capabilities. A connection-generation change revokes queued and future work.
 
+`advertisedTools` is derived from AgentV's live tool definitions. Each entry
+identifies the exact registered tool name and its read/write capability; it is
+recomputed for every connection and is not a fallback grant. Write tools are
+advertised only when the local helper is ready.
+
 ## Snapshot
 
 `notify/snapshot` is gzip-compressed and contains `host_summary`, bounded

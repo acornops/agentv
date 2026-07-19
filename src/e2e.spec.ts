@@ -102,6 +102,19 @@ describe('AgentV WebSocket lifecycle', () => {
     await new Promise<void>((resolve) => server.once('listening', resolve));
     const port = (server.address() as { port: number }).port;
     let connections = 0;
+    let capabilityChecks = 0;
+    const advertisedToolNames: string[][] = [];
+    const reconnectActions: ActionClient = {
+      async capabilities() {
+        capabilityChecks++;
+        return {
+          protocol_version: 1,
+          policy_valid: capabilityChecks > 1,
+          restart_services: capabilityChecks > 1 ? ['acornops-agentv.service'] : [],
+        };
+      },
+      async restart() { throw new Error('not exercised'); },
+    };
     const reauthenticated = new Promise<void>((resolve) => server.on('connection', (socket) => {
       connections++;
       const connection = connections;
@@ -109,6 +122,7 @@ describe('AgentV WebSocket lifecycle', () => {
         if (binary) return;
         const message = JSON.parse(raw.toString());
         if (message.method !== 'lifecycle/handshake') return;
+        advertisedToolNames.push(message.params.advertisedTools.map((tool: { name: string }) => tool.name));
         socket.send(JSON.stringify({
           jsonrpc: '2.0', id: message.id,
           result: {
@@ -120,9 +134,9 @@ describe('AgentV WebSocket lifecycle', () => {
         else resolve();
       });
     }));
-    const host = new MockHostAdapter(); registerAllTools(host, actions);
+    const host = new MockHostAdapter(); registerAllTools(host, reconnectActions);
     const lifecycle = new LifecycleManager(
-      config(port), host, actions,
+      { ...config(port), writeEnabled: true }, host, reconnectActions,
       new McpRouter(new ToolExecutor(), createLogger('error')),
       createLogger('error'), new Observability(),
     );
@@ -130,5 +144,7 @@ describe('AgentV WebSocket lifecycle', () => {
     await reauthenticated;
     lifecycle.stop();
     expect(connections).toBe(2);
+    expect(advertisedToolNames[0]).not.toContain('restart_service');
+    expect(advertisedToolNames[1]).toContain('restart_service');
   }, 4_000);
 });

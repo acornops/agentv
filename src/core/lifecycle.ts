@@ -63,9 +63,12 @@ export class LifecycleManager {
     const supportedCapabilities = ['read', 'mcp', 'systemd', 'linux'];
     if (this.config.allowedLogUnits.length > 0) supportedCapabilities.push('logs');
     if (this.helperReady) supportedCapabilities.push('write', 'restart_service');
+    const advertisedTools = toolRegistry.getAll()
+      .filter((tool) => tool.capability === 'read' || this.helperReady)
+      .map((tool) => ({ name: tool.name, capability: tool.capability }));
     const handshake = createRequest('lifecycle/handshake', {
       targetId: this.config.targetId, targetType: 'virtual_machine', agentType: 'agentv', agentKey: this.config.agentKey,
-      version: this.config.agentVersion, agentVersion: this.config.agentVersion, supportedCapabilities,
+      version: this.config.agentVersion, agentVersion: this.config.agentVersion, supportedCapabilities, advertisedTools,
       hostFeatures: { osFamily: 'linux', serviceManager: 'systemd', helperReachable: this.helperReady, restartServices: helperServices },
     }, HANDSHAKE_ID);
     if (!this.transport.send(JSON.stringify(handshake))) { this.transport.forceReconnect(); return; }

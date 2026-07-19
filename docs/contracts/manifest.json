@@ -10,7 +10,8 @@
       "handshakeRequestFields": [
         "agentKey", "agentVersion", "targetId", "targetType", "agentType",
         "supportedCapabilities", "hostFeatures.osFamily", "hostFeatures.serviceManager",
-        "hostFeatures.helperReachable", "hostFeatures.restartServices"
+        "hostFeatures.helperReachable", "hostFeatures.restartServices",
+        "advertisedTools[].name", "advertisedTools[].capability"
       ],
       "handshakeResponseFields": [
         "workspaceId", "targetId", "targetType", "sessionPolicy.allowedTools",
