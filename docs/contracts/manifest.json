@@ -5,7 +5,6 @@
   "counterparts": {
     "control-plane": {
       "contractVersion": 2,
-      "websocketPaths": ["/api/v1/agent/connect"],
       "agentHeaders": ["x-agent-key", "x-agent-version"],
       "handshakeRequestFields": [
         "agentKey", "agentVersion", "targetId", "targetType", "agentType",

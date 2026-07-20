@@ -14,6 +14,7 @@ function read(relativePath) {
 
 const doc = read('docs/contracts/README.md');
 const manifest = JSON.parse(read('docs/contracts/manifest.json'));
+const websocketClient = read('src/transport/websocket-client.ts');
 
 expect(manifest.repo === 'agentv', 'Manifest repo must be agentv');
 expect(manifest.version === 1, 'Manifest harness schema version must be 1');
@@ -26,7 +27,7 @@ expect(doc.includes('agentType = "agentv"'), 'Contract doc missing AgentV type')
 
 const controlPlane = manifest.counterparts?.['control-plane'];
 expect(Boolean(controlPlane), 'Manifest must include control-plane counterpart');
-expect(controlPlane?.websocketPaths?.includes('/api/v1/agent/connect'), 'Manifest missing primary agent WebSocket path');
+expect(websocketClient.includes('/api/v1/agent/connect'), 'WebSocket client missing primary control-plane path');
 expect(controlPlane?.rpcMethods?.includes('tools/list'), 'Manifest missing tools/list RPC method');
 expect(controlPlane?.rpcMethods?.includes('tools/call'), 'Manifest missing tools/call RPC method');
 expect(controlPlane?.builtinToolNames?.includes('get_host_summary'), 'Manifest missing built-in VM tool names');
