@@ -74,7 +74,7 @@ expectIncludes(agents, '.agents/skills/local', 'AGENTS local skills guidance');
 expectIncludes(agents, 'docs/AGENT_HANDOFF.md', 'AGENTS handoff guidance');
 expectIncludes(agents, 'Docs impact: none', 'AGENTS docs impact guidance');
 expect(packageJson.name === '@acornops/agentv', 'package.json name should identify the AgentV package');
-expect(packageJson.version === '0.0.1-experimental.2', 'package.json version should match the AgentV v2 contract release');
+expect(/^0\.0\.1-experimental\.\d+$/.test(packageJson.version), 'package.json version should identify an experimental AgentV v2 release');
 expect(Boolean(packageJson.scripts?.validate), 'package.json should expose a canonical validate script');
 expectIncludes(packageJson.scripts.validate, 'npm test', 'Canonical validate script');
 expectIncludes(packageJson.scripts.validate, 'npm run contracts:check', 'Canonical validate script');

@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { MockHostAdapter } from '../adapters/mock.js';
 import { createLogger } from '../logger.js';
 import { Observability } from '../observability.js';
@@ -24,10 +24,9 @@ describe('SnapshotManager', () => {
     await Promise.resolve();
     manager.trigger(); manager.trigger();
     release();
-    await new Promise((resolve) => setTimeout(resolve, 20));
+    await vi.waitFor(() => expect(sent).toHaveLength(2));
     manager.stop();
     expect(host.calls).toBe(2);
-    expect(sent).toHaveLength(2);
     expect(metrics.snapshot().skipped_snapshots).toBe(2);
   });
 });
