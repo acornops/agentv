@@ -1,3 +1,4 @@
+import { gunzipSync } from 'node:zlib';
 import { describe, expect, it, vi } from 'vitest';
 import { MockHostAdapter } from '../adapters/mock.js';
 import { createLogger } from '../logger.js';
@@ -5,6 +6,29 @@ import { Observability } from '../observability.js';
 import { SnapshotManager } from './snapshot-manager.js';
 
 describe('SnapshotManager', () => {
+  it('describes failed services with concise operator-facing copy', async () => {
+    const sent: Buffer[] = [];
+    const manager = new SnapshotManager(
+      new MockHostAdapter(),
+      (payload) => { sent.push(payload); return true; },
+      createLogger('error'),
+      new Observability(),
+    );
+
+    manager.start(60_000, 64 * 1024);
+    await vi.waitFor(() => expect(sent).toHaveLength(1));
+    manager.stop();
+
+    const notification = JSON.parse(gunzipSync(sent[0]).toString('utf8')) as {
+      params: { data: { findings: Array<Record<string, unknown>> } };
+    };
+    expect(notification.params.data.findings).toContainEqual(expect.objectContaining({
+      code: 'SERVICE_FAILED',
+      summary: 'Service ssh.service failed',
+      unit: 'ssh.service',
+    }));
+  });
+
   it('coalesces manual requests while collection is active', async () => {
     let release!: () => void;
     const blocked = new Promise<void>((resolve) => { release = resolve; });

@@ -67,7 +67,7 @@ export class SnapshotManager {
       const findings: Array<Record<string, unknown>> = [];
       if (hostSummary && hostSummary.memory.used_percent >= 90) findings.push({ severity: 'critical', code: 'MEMORY_PRESSURE', summary: `Memory use is ${hostSummary.memory.used_percent}%` });
       for (const item of filesystems?.items || []) if (item.used_percent >= 90) findings.push({ severity: 'critical', code: 'FILESYSTEM_PRESSURE', mount: item.mount, summary: `Filesystem ${item.mount} is ${item.used_percent}% used` });
-      for (const item of services?.items || []) findings.push({ severity: 'critical', code: 'SERVICE_FAILED', unit: item.unit, summary: `${item.unit} is failed` });
+      for (const item of services?.items || []) findings.push({ severity: 'critical', code: 'SERVICE_FAILED', unit: item.unit, summary: `Service ${item.unit} failed` });
       const snapshot: Record<string, any> = {
         schema_version: 'acornops.agentv-snapshot.v2', host_summary: hostSummary,
         filesystems: filesystems?.items || [], degraded_services: services?.items || [], top_processes: processes?.items || [],
