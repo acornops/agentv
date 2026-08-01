@@ -24,7 +24,7 @@ export class WebSocketClient extends EventEmitter {
     const url = `${this.config.platformUrl.replace(/\/$/, '')}/api/v1/agent/connect`;
     const socket = new WebSocket(url, {
       maxPayload: 1024 * 1024,
-      headers: { 'x-agent-key': this.config.agentKey, 'x-agent-version': `agentv/${this.config.agentVersion}` },
+      headers: { 'x-agent-key': this.config.agentKey, 'x-connector-version': `agentv/${this.config.connectorVersion}` },
       ...(this.config.additionalCaBundleFile ? { ca: [...rootCertificates, readFileSync(this.config.additionalCaBundleFile)] } : {}),
     });
     this.socket = socket;

@@ -68,7 +68,7 @@ export class LifecycleManager {
       .map((tool) => ({ name: tool.name, capability: tool.capability }));
     const handshake = createRequest('lifecycle/handshake', {
       targetId: this.config.targetId, targetType: 'virtual_machine', agentType: 'agentv', agentKey: this.config.agentKey,
-      version: this.config.agentVersion, agentVersion: this.config.agentVersion, supportedCapabilities, advertisedTools,
+      supportedCapabilities, advertisedTools,
       hostFeatures: { osFamily: 'linux', serviceManager: 'systemd', helperReachable: this.helperReady, restartServices: helperServices },
     }, HANDSHAKE_ID);
     if (!this.transport.send(JSON.stringify(handshake))) { this.transport.forceReconnect(); return; }

@@ -26,7 +26,7 @@ if (process.argv[2] === 'doctor') {
   const executor = new ToolExecutor({ localWriteEnabled: () => config.writeEnabled, metrics });
   const router = new McpRouter(executor, logger);
   const lifecycle = new LifecycleManager(config, host, actions, router, logger, metrics);
-  logger.info({ targetId: config.targetId, targetType: config.targetType, collectorMode: config.collectorMode, version: config.agentVersion, writeEnabled: config.writeEnabled }, 'AgentV starting');
+  logger.info({ targetId: config.targetId, targetType: config.targetType, collectorMode: config.collectorMode, connectorVersion: config.connectorVersion, writeEnabled: config.writeEnabled }, 'AgentV starting');
   lifecycle.start();
   if (process.env.NOTIFY_SOCKET && !await notifyReady()) logger.error({}, 'systemd readiness notification failed');
   const watchdogUsec = Number(process.env.WATCHDOG_USEC || 0);

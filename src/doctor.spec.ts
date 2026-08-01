@@ -7,7 +7,7 @@ import { runDoctor } from './doctor.js';
 
 const config: AgentConfig = {
   platformUrl: 'https://api.example.com', targetId: 'vm-1', agentKey: 'test', targetType: 'virtual_machine',
-  agentVersion: 'test', snapshotIntervalMs: 60_000, minSnapshotIntervalMs: 10_000, maxSnapshotIntervalMs: 3_600_000,
+  connectorVersion: 'test', snapshotIntervalMs: 60_000, minSnapshotIntervalMs: 10_000, maxSnapshotIntervalMs: 3_600_000,
   maxSnapshotBytes: 65_536, minSnapshotBytes: 16_384, maxRemoteSnapshotBytes: 1_048_576,
   logLevel: 'error', collectorMode: 'mock', allowedLogUnits: ['agentv-smoke.service'], writeEnabled: true,
   helperSocketPath: '/run/acornops-agentv/actions.sock', allowInsecureTransport: false,

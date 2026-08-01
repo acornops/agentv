@@ -5,7 +5,7 @@ const SERVICE_UNIT = /^[A-Za-z0-9][A-Za-z0-9_.@:-]{0,254}\.service$/;
 export type CollectorMode = 'live' | 'mock';
 
 export interface AgentConfig {
-  platformUrl: string; targetId: string; agentKey: string; targetType: 'virtual_machine'; agentVersion: string;
+  platformUrl: string; targetId: string; agentKey: string; targetType: 'virtual_machine'; connectorVersion: string;
   snapshotIntervalMs: number; minSnapshotIntervalMs: number; maxSnapshotIntervalMs: number;
   maxSnapshotBytes: number; minSnapshotBytes: number; maxRemoteSnapshotBytes: number;
   logLevel: 'debug' | 'info' | 'warn' | 'error'; collectorMode: CollectorMode;
@@ -92,7 +92,7 @@ export function loadConfig(): AgentConfig {
   if (agentKey.length > 4096) throw new Error('ACORNOPS_AGENT_KEY exceeds 4096 characters');
   if (!helperSocketPath.startsWith('/') || helperSocketPath.length > 4096) throw new Error('ACORNOPS_AGENT_ACTIONS_SOCKET must be an absolute path');
   return {
-    platformUrl: platformUrl(allowInsecureTransport), targetId, agentKey, targetType, agentVersion: packageVersion(),
+    platformUrl: platformUrl(allowInsecureTransport), targetId, agentKey, targetType, connectorVersion: packageVersion(),
     snapshotIntervalMs: intEnv('ACORNOPS_AGENT_SNAPSHOT_INTERVAL_MS', 60_000, minSnapshotIntervalMs, maxSnapshotIntervalMs), minSnapshotIntervalMs, maxSnapshotIntervalMs,
     maxSnapshotBytes: intEnv('ACORNOPS_AGENT_MAX_SNAPSHOT_BYTES', 1024 * 1024, minSnapshotBytes, maxRemoteSnapshotBytes), minSnapshotBytes, maxRemoteSnapshotBytes,
     logLevel: logLevelEnv(), collectorMode,

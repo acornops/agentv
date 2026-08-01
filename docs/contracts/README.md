@@ -12,9 +12,10 @@ intentionally replaces the prototype tool, result, and snapshot contracts.
 
 ## Handshake
 
-AgentV sends the fixed-ID `lifecycle/handshake` request with `targetId`,
-`targetType = "virtual_machine"`, `agentType = "agentv"`, package-derived
-version, supported capabilities, and Linux/systemd host features. It exposes no
+AgentV connects with `x-connector-version: agentv/<package-version>` and sends
+the fixed-ID `lifecycle/handshake` request with `targetId`,
+`targetType = "virtual_machine"`, `agentType = "agentv"`, supported
+capabilities, and Linux/systemd host features. It exposes no
 tools, snapshots, or heartbeats until the response matches the target and
 contains a non-empty `workspaceId` plus a complete `sessionPolicy`.
 
