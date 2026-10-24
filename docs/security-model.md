@@ -32,6 +32,16 @@ Collectors should model OS family, service manager, log source, and collector mo
 
 ## Systemd Hardening
 
+The installer discovers Node only at `/usr/bin/node` and `/usr/local/bin/node`.
+It checks root ownership, non-writable group/world permissions, and every
+symlink traversal before executing a version probe. Home-directory runtimes
+are rejected. The selected canonical path is root-owned data, not a sourced
+environment file, under `/opt/acornops/agentv/node-path`. The launcher repeats
+trust/version checks at startup and execs Node, preserving the systemd main PID.
+The root helper uses the same selection as the agent and doctor. Node preloads
+from `NODE_OPTIONS` and `NODE_PATH` are cleared; no user PATH discovery is used.
+Runtime selection participates in installer rollback and boot recovery.
+
 The systemd unit runs as `acornops-agent` with:
 
 - `NoNewPrivileges=true`

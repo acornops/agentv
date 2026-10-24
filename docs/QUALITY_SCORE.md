@@ -12,3 +12,11 @@ Assessment date: July 19, 2026.
 | Documentation | 5/5 | Indexed architecture, operations, security, reliability, contracts, public VM/tool/deployment docs | Keep install examples pinned to published release coordinates |
 
 Re-score this file when a major architectural or operational change lands.
+
+Release follow-up (2026-10-24): the production dependency audit reports
+[GHSA-mrhx-c7xc-m3w5](https://github.com/advisories/GHSA-mrhx-c7xc-m3w5)
+against the existing Zod 3 dependency. The Node runtime-path change does not
+modify dependencies or resolve this advisory. Track remediation and its schema
+compatibility checks in the [tech debt tracker](exec-plans/tech-debt-tracker.md)
+before production promotion; the historical scores above are not a release
+approval.

@@ -1,6 +1,6 @@
 {
   "name": "@acornops/agentv",
-  "version": "0.0.1-experimental.6",
+  "version": "0.0.1-experimental.7",
   "private": true,
   "type": "module",
   "description": "Outbound-only AcornOps Linux/systemd AgentV",

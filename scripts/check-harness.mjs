@@ -91,7 +91,7 @@ expect(!releaseWorkflow.includes(':latest'), 'Release workflow must not publish 
 expect(!releaseWorkflow.includes('type=raw'), 'Release workflow must not define raw mutable tags');
 expectIncludes(read('src/systemd-notify.ts'), "execFile('/usr/bin/systemd-notify', args", 'Systemd notifications must use a fixed systemd command');
 expectIncludes(systemdUnit, 'NotifyAccess=all', 'Systemd must accept bounded notifier child processes from the service cgroup');
-expectIncludes(systemdUnit, 'ExecStart=/usr/bin/node ', 'Systemd must track Node as the main process');
+expectIncludes(systemdUnit, 'ExecStart=/usr/local/libexec/acornops-agentv-node ', 'Systemd must use the validated runtime launcher');
 expect(!systemdUnit.includes('--exec'), 'The unit must remain compatible with systemd releases before v254');
 expect(!archiveBuilder.includes('AGENTV_LINUX_NOTIFY_ADDON'), 'Systemd archives must not depend on a host-native addon');
 expectIncludes(dockerIgnore, 'build', 'Docker context must exclude host-native build output');

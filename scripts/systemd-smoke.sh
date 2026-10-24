@@ -15,7 +15,8 @@ if [[ ! -d /run/systemd/system ]]; then
 fi
 
 repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-version="$(/usr/bin/node -p "require('${repo_root}/package.json').version")"
+test_node=/usr/local/bin/node
+version="$("${test_node}" -p "require('${repo_root}/package.json').version")"
 work="$(mktemp -d)"
 marker="${work}/authenticated"
 release_assets="${work}/release-assets"
@@ -50,7 +51,7 @@ cp "${repo_root}/release/install-agentv.sh" \
   "${repo_root}/release/agentv-${version}.tar.gz.sha256" \
   "${release_assets}/v${version}/"
 
-/usr/bin/node "${repo_root}/scripts/systemd-smoke-server.mjs" "${marker}" "${release_assets}" "${version}" &
+"${test_node}" "${repo_root}/scripts/systemd-smoke-server.mjs" "${marker}" "${release_assets}" "${version}" &
 server_pid="$!"
 
 wait_for_authentication() {
@@ -82,6 +83,7 @@ assert_action_socket_disabled() {
 snapshot_action_state() {
   local transaction_directory="$1"
   local state_name="$2"
+  cp /opt/acornops/agentv/node-path "${transaction_directory}/${state_name}-node-path"
   cp -p /etc/acornops/agentv-actions.json "${transaction_directory}/${state_name}-actions.json"
   chmod 0600 "${transaction_directory}/${state_name}-actions.json"
   if systemctl is-enabled --quiet acornops-agentv-actions.socket 2>/dev/null; then
@@ -139,6 +141,7 @@ fi
 [[ ! -e /etc/systemd/system/acornops-agentv-install-recovery.service ]]
 [[ ! -e "/opt/acornops/agentv/releases/${version}" ]]
 [[ ! -e /etc/acornops/agentv-actions.json ]]
+[[ ! -e /opt/acornops/agentv/node-path && ! -e /usr/local/libexec/acornops-agentv-node ]]
 assert_action_socket_disabled
 
 CI=true AGENTV_BOOTSTRAP_ALLOW_INSECURE_TEST=true bash "${repo_root}/release/install-agentv.sh" \
@@ -147,6 +150,8 @@ CI=true AGENTV_BOOTSTRAP_ALLOW_INSECURE_TEST=true bash "${repo_root}/release/ins
   --target-id agentv-systemd-smoke \
   --enrollment-token aev_11111111-1111-4111-8111-111111111111_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
 same_command_pid="$(systemctl show acornops-agentv.service --property=MainPID --value)"
+[[ "$(< /opt/acornops/agentv/node-path)" == /usr/local/bin/node ]]
+[[ "$(readlink -f "/proc/${same_command_pid}/exe")" == /usr/local/bin/node ]]
 CI=true AGENTV_BOOTSTRAP_ALLOW_INSECURE_TEST=true bash "${repo_root}/release/install-agentv.sh" \
   --release-base-url http://127.0.0.1:18082/releases/download \
   --platform-url http://127.0.0.1:18081 \
@@ -172,7 +177,9 @@ systemctl is-active --quiet acornops-agentv.service
 acornops-agentv-doctor
 action_smoke="$(mktemp /tmp/acornops-agentv-action-smoke.XXXXXX.mjs)"
 install -o acornops-agent -g acornops-agent -m 0400 "${repo_root}/scripts/systemd-action-smoke.mjs" "${action_smoke}"
-/usr/sbin/runuser --user acornops-agent -- /usr/bin/node "${action_smoke}"
+/usr/sbin/runuser --user acornops-agent -- /usr/local/libexec/acornops-agentv-node "${action_smoke}"
+helper_pid="$(systemctl show acornops-agentv-actions.service --property=MainPID --value)"
+[[ "$(readlink -f "/proc/${helper_pid}/exe")" == /usr/local/bin/node ]]
 original_pid="$(systemctl show acornops-agentv.service --property=MainPID --value)"
 rm -f "${marker}"
 if CI=true AGENTV_BOOTSTRAP_ALLOW_INSECURE_TEST=true bash "${repo_root}/release/install-agentv.sh" \
@@ -204,6 +211,7 @@ assert_action_socket_disabled
 recovery_root=/var/lib/acornops-agentv/install-transactions
 committed_recovery="${recovery_root}/smoke-committed-$$"
 mkdir -m 0700 "${committed_recovery}"
+cp /opt/acornops/agentv/node-path "${committed_recovery}/candidate-node-path"
 printf '%s' '22222222-2222-4222-8222-222222222222' > "${committed_recovery}/transaction-id"
 printf '%s' 'http://127.0.0.1:18081' > "${committed_recovery}/platform-url"
 printf '%s\n' 'header = "x-agentv-transaction-secret: avt_22222222-2222-4222-8222-222222222222_22222222222242228222222222222222"' > "${committed_recovery}/curl.conf"
@@ -217,6 +225,7 @@ curl -fsS -H 'content-type: application/json' --data-binary \
   http://127.0.0.1:18081/api/v1/agentv/enrollments/exchange >/dev/null
 uncommitted_recovery="${recovery_root}/smoke-uncommitted-$$"
 mkdir -m 0700 "${uncommitted_recovery}"
+cp /opt/acornops/agentv/node-path "${uncommitted_recovery}/candidate-node-path"
 readlink -f /opt/acornops/agentv/current > "${uncommitted_recovery}/previous-current"
 cp -p /etc/acornops/agentv.env "${uncommitted_recovery}/previous.env"
 snapshot_action_state "${uncommitted_recovery}" previous
@@ -237,6 +246,7 @@ acornops-agentv-install-recover
 
 unreachable_recovery="${recovery_root}/smoke-unreachable-$$"
 mkdir -m 0700 "${unreachable_recovery}"
+cp /opt/acornops/agentv/node-path "${unreachable_recovery}/candidate-node-path"
 printf '%s' '44444444-4444-4444-8444-444444444444' > "${unreachable_recovery}/transaction-id"
 printf '%s' 'http://127.0.0.1:9' > "${unreachable_recovery}/platform-url"
 printf '%s\n' 'header = "x-agentv-transaction-secret: unreachable"' > "${unreachable_recovery}/curl.conf"
@@ -289,7 +299,7 @@ printf '%s' 'http://127.0.0.1:18081' > "${closed_grace_initial_recovery}/platfor
 printf '%s\n' 'header = "x-agentv-transaction-secret: avt_55555555-5555-4555-8555-555555555555_55555555555545558555555555555555"' > "${closed_grace_initial_recovery}/curl.conf"
 printf '%s\n' recovery_pending > "${closed_grace_initial_recovery}/phase"
 systemctl disable --now acornops-agentv.service >/dev/null
-rm -f -- /opt/acornops/agentv/current /etc/acornops/agentv.env /run/acornops-agentv/authenticated "${marker}"
+rm -f -- /opt/acornops/agentv/current /opt/acornops/agentv/node-path /etc/acornops/agentv.env /run/acornops-agentv/authenticated "${marker}"
 ln -sfn "${closed_grace_initial_recovery}" "${recovery_root}/active"
 if acornops-agentv-install-recover; then echo 'Initial closed-grace recovery unexpectedly completed before candidate authentication.' >&2; exit 1; fi
 [[ -L "${recovery_root}/active" && ! -e "${closed_grace_initial_recovery}/previous-selected" ]]
@@ -304,7 +314,7 @@ archive_root="${work}/agentv-${version}"
 upgrade_root="${work}/agentv-${version}-smoke-upgrade"
 upgrade_version="${version}-smoke-upgrade"
 cp -a "${archive_root}" "${upgrade_root}"
-/usr/bin/node --input-type=module --eval \
+"${test_node}" --input-type=module --eval \
   "import fs from 'node:fs'; const file=process.argv[1]; const value=JSON.parse(fs.readFileSync(file)); value.version += '-smoke-upgrade'; fs.writeFileSync(file, JSON.stringify(value, null, 2)+'\\n');" \
   "${upgrade_root}/runtime/package.json"
 mkdir -p "${release_assets}/v${upgrade_version}"
@@ -324,11 +334,17 @@ systemctl is-active --quiet acornops-agentv.service
 wait_for_authentication
 systemctl stop acornops-agentv-actions.service >/dev/null 2>&1 || true
 
+# A newly supported system Node must not change the already pinned local Node.
+install -o root -g root -m 0755 "${test_node}" /usr/bin/node
+[[ "$(/usr/local/libexec/acornops-agentv-node -p 'process.execPath')" == /usr/local/bin/node ]]
+
 recovery_transaction="/var/lib/acornops-agentv/install-transactions/smoke-recovery-$$"
 mkdir -m 0700 "${recovery_transaction}"
 printf '%s\n' "/opt/acornops/agentv/releases/${version}" > "${recovery_transaction}/previous-current"
 cp -p /etc/acornops/agentv.env "${recovery_transaction}/previous.env"
 snapshot_action_state "${recovery_transaction}" previous
+printf '%s\n' /usr/bin/node > "${recovery_transaction}/previous-node-path"
+cp /opt/acornops/agentv/node-path "${recovery_transaction}/candidate-node-path"
 touch "${recovery_transaction}/previous-installation" "${recovery_transaction}/previous-active"
 printf '%s\n' cutover > "${recovery_transaction}/phase"
 ln -sfn "${recovery_transaction}" /var/lib/acornops-agentv/install-transactions/active
@@ -338,14 +354,36 @@ wait_for_authentication
 acornops-agentv-install-recover
 [[ ! -e /var/lib/acornops-agentv/install-transactions/active ]]
 [[ "$(readlink /opt/acornops/agentv/current)" == "/opt/acornops/agentv/releases/${version}" ]]
+[[ "$(< /opt/acornops/agentv/node-path)" == /usr/bin/node ]]
+[[ "$(readlink -f "/proc/$(systemctl show acornops-agentv.service --property=MainPID --value)/exe")" == /usr/bin/node ]]
 rm -rf -- "${recovery_transaction}"
 systemctl restart acornops-agentv.service
 systemctl stop acornops-agentv-actions.service >/dev/null 2>&1 || true
 [[ "$(readlink /opt/acornops/agentv/current)" == "/opt/acornops/agentv/releases/${version}" ]]
 
+# Old transactions have no runtime snapshots. Their original system Node must
+# remain usable through the new recovery helper and launcher, without discovery.
+# An unrelated invalid newer pin must not prevent restoring that legacy state.
+printf '%s\n' /missing-agentv-legacy-node > /opt/acornops/agentv/node-path
+mkdir -m 0700 "${recovery_transaction}"
+readlink -f /opt/acornops/agentv/current > "${recovery_transaction}/previous-current"
+cp -p /etc/acornops/agentv.env "${recovery_transaction}/previous.env"
+snapshot_action_state "${recovery_transaction}" previous
+rm "${recovery_transaction}/previous-node-path"
+touch "${recovery_transaction}/previous-installation" "${recovery_transaction}/previous-active"
+printf '%s\n' cutover > "${recovery_transaction}/phase"
+ln -sfn "${recovery_transaction}" /var/lib/acornops-agentv/install-transactions/active
+if acornops-agentv-install-recover; then echo 'Legacy recovery did not await restored authentication.' >&2; exit 1; fi
+[[ ! -e /opt/acornops/agentv/node-path ]]
+wait_for_authentication
+acornops-agentv-install-recover
+[[ ! -e /opt/acornops/agentv/node-path ]]
+[[ "$(/usr/local/libexec/acornops-agentv-node -p 'process.execPath')" == /usr/bin/node ]]
+
 bash "${archive_root}/packaging/systemd/uninstall.sh"
 [[ ! -e /etc/systemd/system/acornops-agentv.service ]]
 [[ ! -e /etc/systemd/system/acornops-agentv-actions.socket ]]
+[[ ! -e /usr/local/libexec/acornops-agentv-node ]]
 [[ -f /etc/acornops/agentv.env ]]
 [[ -f /etc/acornops/agentv-actions.json ]]
 [[ -d "/opt/acornops/agentv/releases/${version}" ]]

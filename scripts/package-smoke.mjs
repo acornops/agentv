@@ -35,6 +35,7 @@ for (const required of [
   `${prefix}runtime/node_modules/zod/package.json`,
   `${prefix}packaging/systemd/install.sh`,
   `${prefix}packaging/systemd/install-worker.sh`,
+  `${prefix}packaging/systemd/acornops-agentv-node`,
   `${prefix}packaging/systemd/uninstall.sh`,
   `${prefix}packaging/systemd/acornops-agentv.service`,
   `${prefix}packaging/systemd/acornops-agentv-actions.socket`,
@@ -61,6 +62,7 @@ try {
     'packaging/systemd/install-worker.sh',
     'packaging/systemd/uninstall.sh',
     'packaging/systemd/acornops-agentv-doctor',
+    'packaging/systemd/acornops-agentv-node',
     'packaging/systemd/acornops-agentv-install-recover',
   ]) {
     const mode = (await stat(path.join(extracted, executable))).mode;

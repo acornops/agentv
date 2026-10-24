@@ -160,8 +160,13 @@ rollback is a symlink switch followed by a service restart.
 The systemd archive bundles its production Node dependencies and uses the
 target host's `/usr/bin/systemd-notify` for watchdog notifications. No
 target-side `npm install`, compiler, or native addon build is required.
-Node.js 22 or newer must already be installed at `/usr/bin/node`; the bootstrap
-does not add package repositories or modify host packages.
+Node.js 22 or newer must already be installed system-wide at `/usr/bin/node` or
+`/usr/local/bin/node`. AgentV validates root ownership and permissions, then
+retains the selected absolute path for its services and maintenance commands.
+An older `/usr/bin/node` does not prevent use of a supported local installation.
+The bootstrap does not install Node, add package repositories, or modify host
+packages. Per-user runtimes (such as a home-directory `nvm` installation) are not
+supported by the hardened systemd services.
 
 ## Validation
 

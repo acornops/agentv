@@ -16,6 +16,7 @@ done
 [[ "${config_dir}" == "${work_dir}/installer-input" && -d "${config_dir}" ]] || fail "invalid installer input directory"
 read -r config_uid config_mode < <(stat -c '%u %a' "${config_dir}")
 [[ "${config_uid}" == 0 && $((8#${config_mode} & 0077)) -eq 0 ]] || fail "installer input directory is not root-only"
+trap 'rm -rf -- "${work_dir}"' EXIT
 
 read_input() { [[ -f "${config_dir}/$1" ]] || fail "installer input is incomplete"; REPLY="$(<"${config_dir}/$1")"; }
 read_input release-version; release_version="${REPLY}"
@@ -31,12 +32,18 @@ rm -f -- "${config_dir}/enrollment-token"
 archive_root="agentv-${release_version}"
 archive_path="${work_dir}/${archive_root}"
 [[ -x "${archive_path}/packaging/systemd/install.sh" ]] || fail "verified archive installer is unavailable"
-runtime_version="$(/usr/bin/node -p "require('${archive_path}/runtime/package.json').version")"
+# The selector comes from the checksummed archive, not the host PATH. This
+# preflight precedes both enrollment exchange and any persistent host changes.
+# shellcheck source=packaging/systemd/acornops-agentv-node
+source "${archive_path}/packaging/systemd/acornops-agentv-node"
+unset NODE_OPTIONS NODE_PATH
+node_binary="$(agentv_node_select)" || fail 'install a trusted system-wide Node.js 22+ runtime before retrying'
+runtime_version="$("${node_binary}" -p "require('${archive_path}/runtime/package.json').version")"
 [[ "${runtime_version}" == "${release_version}" ]] || fail "verified archive version does not match the bootstrap"
 
 validate_action_policy() {
   local policy_file="$1"
-  /usr/bin/node -e '
+  "${node_binary}" -e '
     const fs=require("fs"),p=JSON.parse(fs.readFileSync(process.argv[1],"utf8"));
     const unit=/^[A-Za-z0-9][A-Za-z0-9_.@:-]{0,254}\.service$/;
     const protectedUnit=(value)=>value==="acornops-agentv.service"||value.startsWith("acornops-agentv-");
@@ -59,6 +66,7 @@ managed_host_assets=(
   /etc/systemd/system/acornops-agentv-install-recovery.service
   /usr/local/bin/acornops-agentv-doctor
   /usr/local/sbin/acornops-agentv-install-recover
+  /usr/local/libexec/acornops-agentv-node
 )
 
 transaction_root=/var/lib/acornops-agentv/install-transactions
@@ -88,7 +96,7 @@ wait_for_restored_connection() {
       if curl --config "${transaction_dir}/curl.conf" -fsS --connect-timeout 10 --max-time 30 --max-filesize 65536 \
         "${platform_url%/}/api/v1/agentv/installations/$(<"${transaction_dir}/transaction-id")/status" \
         -o "${work_dir}/rollback-status.json" \
-        && /usr/bin/node -e 'const p=require(process.argv[1]);process.exit(p.status==="cancelled"&&p.activeConnected===true?0:1)' \
+        && "${node_binary}" -e 'const p=require(process.argv[1]);process.exit(p.status==="cancelled"&&p.activeConnected===true?0:1)' \
           "${work_dir}/rollback-status.json"; then return 0; fi
     fi
     sleep 1
@@ -129,6 +137,11 @@ restore_previous_actions() {
 restore_previous() {
   [[ "${cutover}" == true && -n "${transaction_dir}" ]] || return 0
   echo "AgentV cutover failed; restoring the previous installation." >&2
+  if [[ -f "${transaction_dir}/previous-node-path" ]]; then
+    agentv_node_save "$(<"${transaction_dir}/previous-node-path")" || return 1
+  else
+    rm -f -- /opt/acornops/agentv/node-path
+  fi
   if [[ -f "${transaction_dir}/previous-current" ]]; then
     previous_current="$(<"${transaction_dir}/previous-current")"
     temporary_link="/opt/acornops/agentv/.rollback-current-$$"
@@ -250,7 +263,7 @@ if [[ "${has_existing_env}" == true ]]; then
   else
     [[ "${existing_restart_service_count}" -eq 0 ]] || fail "read-only AgentV must have an empty restart-service policy"
   fi
-  /usr/bin/node -e '
+  "${node_binary}" -e '
     const fs=require("fs"),p=JSON.parse(fs.readFileSync(process.argv[1],"utf8"));
     fs.writeFileSync(process.argv[2],JSON.stringify({schemaVersion:1,restartServices:p.restartServices})+"\n",{mode:0o600});
   ' /etc/acornops/agentv-actions.json "${candidate_policy_file}"
@@ -286,7 +299,7 @@ candidate_env=(
   'ACORNOPS_AGENT_ACTIONS_SOCKET=/run/acornops-agentv/actions.sock'
 )
 [[ "${allow_insecure_test}" == true ]] && candidate_env+=('ACORNOPS_AGENT_ALLOW_INSECURE_TRANSPORT=true')
-env "${candidate_env[@]}" /usr/bin/node "${archive_path}/runtime/dist/index.js" doctor > "${candidate_doctor_output}" \
+env "${candidate_env[@]}" "${node_binary}" "${archive_path}/runtime/dist/index.js" doctor > "${candidate_doctor_output}" \
   || fail "verified AgentV candidate did not pass local readiness checks"
 
 # Validate a same-version immutable release collision without creating users,
@@ -304,6 +317,12 @@ printf '%s\n' prepared > "${transaction_dir}/phase"
 # Boot recovery must never observe a transaction that it could mistake for a
 # first install while a working installation already exists.
 [[ "${had_previous_installation}" == true ]] && touch "${transaction_dir}/previous-installation"
+if [[ -f /opt/acornops/agentv/node-path ]]; then
+  cp /opt/acornops/agentv/node-path "${transaction_dir}/previous-node-path"
+fi
+# Keep this even if a first-install rollback removes the local selection:
+# recovery still needs a usable runtime to query the remote commit outcome.
+printf '%s\n' "${node_binary}" > "${transaction_dir}/candidate-node-path"
 [[ -e "/opt/acornops/agentv/releases/${release_version}" ]] && touch "${transaction_dir}/previous-release-directory"
 if [[ -e /etc/acornops/agentv-actions.json ]]; then
   touch "${transaction_dir}/previous-action-policy"
@@ -341,7 +360,7 @@ if [[ "${existing_install}" != true || "${replace_credential}" == true ]]; then
   # The JavaScript program is intentionally literal; installer values are
   # passed as separate argv entries rather than interpolated into source.
   # shellcheck disable=SC2016
-  /usr/bin/node -e '
+  "${node_binary}" -e '
     const fs=require("fs"),p=JSON.parse(fs.readFileSync(process.argv[1],"utf8"));
     const target=process.argv[8],enrollment=process.argv[9],purpose=process.argv[10];
     const uuid=/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
@@ -435,7 +454,7 @@ if [[ "${access_mode}" == read_write ]]; then
 else
   systemctl disable --now acornops-agentv-actions.socket >/dev/null 2>&1 || true
 fi
-acornops-agentv-doctor
+/usr/local/bin/acornops-agentv-doctor
 systemctl enable acornops-agentv.service
 rm -f -- /run/acornops-agentv/authenticated
 systemctl restart acornops-agentv.service
@@ -453,7 +472,7 @@ if [[ -n "${transaction_id}" ]]; then
   for _ in {1..60}; do
     if curl --config "${transaction_dir}/curl.conf" -fsS --connect-timeout 10 --max-time 30 --max-filesize 65536 \
       "${platform_url%/}/api/v1/agentv/installations/${transaction_id}/status" -o "${work_dir}/status.json"; then
-      if /usr/bin/node -e 'const p=require(process.argv[1]);process.exit(p.status==="verified"||p.status==="completed"?0:1)' "${work_dir}/status.json"; then verified=true; break; fi
+      if "${node_binary}" -e 'const p=require(process.argv[1]);process.exit(p.status==="verified"||p.status==="completed"?0:1)' "${work_dir}/status.json"; then verified=true; break; fi
     fi
     sleep 1
   done
@@ -470,7 +489,7 @@ if [[ -n "${transaction_id}" ]]; then
     if systemctl is-active --quiet acornops-agentv.service && [[ -f /run/acornops-agentv/authenticated ]] \
       && curl --config "${transaction_dir}/curl.conf" -fsS --connect-timeout 10 --max-time 30 --max-filesize 65536 \
         "${platform_url%/}/api/v1/agentv/installations/${transaction_id}/status" -o "${work_dir}/status.json" \
-      && /usr/bin/node -e 'const p=require(process.argv[1]);process.exit(p.status==="completed"&&p.credentialState==="active"&&p.activeConnected===true?0:1)' "${work_dir}/status.json"; then
+      && "${node_binary}" -e 'const p=require(process.argv[1]);process.exit(p.status==="completed"&&p.credentialState==="active"&&p.activeConnected===true?0:1)' "${work_dir}/status.json"; then
       connected=true; break
     fi
     sleep 1

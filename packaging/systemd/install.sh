@@ -5,18 +5,12 @@ if [[ "$(id -u)" -ne 0 ]]; then
   echo "Run as root to install AgentV." >&2
   exit 1
 fi
-if [[ ! -x /usr/bin/node ]]; then
-  echo "AgentV requires Node.js 22 or newer at /usr/bin/node." >&2
-  exit 1
-fi
-node_major="$(/usr/bin/node -p "Number(process.versions.node.split('.')[0])")"
-if [[ "${node_major}" -lt 22 ]]; then
-  echo "AgentV requires Node.js 22 or newer at /usr/bin/node; found $(/usr/bin/node --version)." >&2
-  exit 1
-fi
-
 archive_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
-version="$(/usr/bin/node -p "require('${archive_root}/runtime/package.json').version")"
+# shellcheck source=packaging/systemd/acornops-agentv-node
+source "${archive_root}/packaging/systemd/acornops-agentv-node"
+unset NODE_OPTIONS NODE_PATH
+node_binary="$(agentv_node_select)"
+version="$("${node_binary}" -p "require('${archive_root}/runtime/package.json').version")"
 if [[ ! "${version}" =~ ^(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)(-[0-9A-Za-z-]+(\.[0-9A-Za-z-]+)*)?(\+[0-9A-Za-z-]+(\.[0-9A-Za-z-]+)*)?$ \
   || "$(basename "${archive_root}")" != "agentv-${version}" ]]; then
   echo "AgentV archive root and runtime version do not match an exact release." >&2
@@ -35,7 +29,7 @@ if [[ -e "${release_root}" || -L "${release_root}" ]]; then
     echo "AgentV ${version} has an incomplete or unsafe existing release directory; refusing to reuse it." >&2
     exit 1
   fi
-  installed_version="$(/usr/bin/node -p "require('${release_root}/package.json').version")"
+  installed_version="$("${node_binary}" -p "require('${release_root}/package.json').version")"
   if [[ "${installed_version}" != "${version}" ]]; then
     echo "AgentV release directory version mismatch: expected ${version}, found ${installed_version}." >&2
     exit 1
@@ -51,9 +45,13 @@ if [[ -e "${release_root}" || -L "${release_root}" ]]; then
   existing_release=true
 fi
 
-if [[ "${AGENTV_INSTALL_VERIFY_ONLY:-false}" == true ]]; then
-  exit 0
-fi
+for runtime_directory in /opt /opt/acornops /opt/acornops/agentv /usr/local /usr/local/libexec; do
+  if [[ -e "${runtime_directory}" || -L "${runtime_directory}" ]]; then
+    agentv_node_secure_path "${runtime_directory}" >/dev/null
+  fi
+done
+if [[ "${AGENTV_INSTALL_VERIFY_ONLY:-false}" == true ]]; then exit 0; fi
+if [[ ! -e /usr/local/libexec ]]; then install -d -o root -g root -m 0755 /usr/local/libexec; fi
 
 if ! getent group acornops-agent >/dev/null; then
   groupadd --system acornops-agent
@@ -71,6 +69,7 @@ install -d -o root -g root -m 0700 /var/lib/acornops-agentv/actions
 install -d -o root -g root -m 0700 /var/lib/acornops-agentv/install-transactions
 install -d -o root -g root -m 0755 /opt/acornops/agentv/releases
 install -d -o root -g root -m 0750 /etc/acornops
+agentv_node_save "${node_binary}"
 if [[ "${existing_release}" != true ]]; then
   install_stage="$(mktemp -d "/opt/acornops/agentv/releases/.install-${version}.XXXXXX")"
   cleanup_stage() { rm -rf -- "${install_stage}"; }
@@ -88,6 +87,8 @@ if [[ ! -f /etc/acornops/agentv-actions.json ]]; then
   install -o root -g root -m 0600 "${archive_root}/packaging/systemd/agentv-actions.json.example" /etc/acornops/agentv-actions.json
 fi
 
+install -o root -g root -m 0755 "${archive_root}/packaging/systemd/acornops-agentv-node" /usr/local/libexec/.acornops-agentv-node.install
+mv -Tf /usr/local/libexec/.acornops-agentv-node.install /usr/local/libexec/acornops-agentv-node
 install -o root -g root -m 0644 "${archive_root}/packaging/systemd/acornops-agentv.service" /etc/systemd/system/acornops-agentv.service
 install -o root -g root -m 0644 "${archive_root}/packaging/systemd/acornops-agentv-install-recovery.service" /etc/systemd/system/acornops-agentv-install-recovery.service
 install -o root -g root -m 0755 "${archive_root}/packaging/systemd/acornops-agentv-install-recover" /usr/local/sbin/acornops-agentv-install-recover

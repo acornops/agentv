@@ -126,21 +126,26 @@ jobs:
           fail_ci_if_error: false
 
   systemd-smoke:
-    name: Ubuntu 24.04 live systemd gate
+    name: Ubuntu 24.04 live systemd gate (Node ${{ matrix.node }})
     runs-on: ubuntu-24.04
     needs: [changes, validate]
     if: needs.changes.outputs.run_full == 'true'
+    strategy:
+      matrix:
+        node: [22, 24]
     steps:
       - uses: actions/checkout@v4
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: "22"
+          node-version: ${{ matrix.node }}
           cache: "npm"
       - name: Install dependencies
         run: npm ci
-      - name: Expose the selected Node.js runtime at the systemd path
-        run: sudo ln -sf "$(command -v node)" /usr/bin/node
+      - name: Prepare old system Node with a trusted supported local runtime
+        run: sudo env CI=true AGENTV_SYSTEMD_SMOKE_ALLOW=true PATH="$PATH" bash scripts/prepare-node-runtime-smoke.sh
+      - name: Verify runtime selection and trust boundaries
+        run: sudo env CI=true AGENTV_NODE_SMOKE_ALLOW=true bash scripts/node-runtime-smoke.sh
       - name: Run live systemd and helper smoke
         env:
           AGENTV_SYSTEMD_SMOKE_ALLOW: "true"

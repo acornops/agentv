@@ -91,10 +91,7 @@ try {
   await writeFile(sha256sum, `#!${process.execPath}\nconst fs=require('node:fs');const crypto=require('node:crypto');for(const file of process.argv.slice(2)){const digest=crypto.createHash('sha256').update(fs.readFileSync(file)).digest('hex');process.stdout.write(digest+'  '+file+'\\n');}\n`);
   await chmod(sha256sum, 0o755);
 
-  async function makeHarness(name, nodeMajor, requiredCommands) {
-    const fakeNode = path.join(directory, `node-${name}`);
-    await writeFile(fakeNode, `#!/bin/sh\nif [ "$1" = "--version" ]; then echo v${nodeMajor}.0.0; else echo ${nodeMajor}; fi\n`);
-    await chmod(fakeNode, 0o755);
+  async function makeHarness(name, requiredCommands) {
     const harness = path.join(directory, `install-${name}.sh`);
     const harnessSource = source
       .replace('[[ "$(id -u)" -eq 0 ]] || fail "run the generated command with sudo"', ':')
@@ -103,8 +100,7 @@ try {
       .replace(/for command_name in curl tar sha256sum[^;]+; do/, `for command_name in ${requiredCommands}; do`)
       .replace('[[ -x /usr/sbin/runuser ]] || fail "required command is missing: /usr/sbin/runuser"', ':')
       .replace('/run/lock/acornops-agentv-install.lock', path.join(directory, `install-${name}.lock`))
-      .replace('flock -n 9 || fail "another AgentV installation is already running"', ':')
-      .replaceAll('/usr/bin/node', fakeNode);
+      .replace('flock -n 9 || fail "another AgentV installation is already running"', ':');
     await writeFile(harness, harnessSource);
     await chmod(harness, 0o755);
     return harness;
@@ -122,11 +118,11 @@ try {
     PATH: `${fakeBin}:${process.env.PATH || ''}`,
   };
 
-  const missingToolHarness = await makeHarness('missing-tool', 22, 'agentv-required-test-command');
+  const missingToolHarness = await makeHarness('missing-tool', 'agentv-required-test-command');
   await expectFailure(missingToolHarness, baseArgs('https://artifacts.example.test'), /required command is missing: agentv-required-test-command/, secret, testEnv);
-  const oldNodeHarness = await makeHarness('old-node', 20, 'curl tar sha256sum');
-  await expectFailure(oldNodeHarness, baseArgs('https://artifacts.example.test'), /Node\.js 22 or newer is required/, secret, testEnv);
-  const downloadHarness = await makeHarness('download', 22, 'curl tar sha256sum');
+  // Runtime validation now lives in the verified archive worker and is covered
+  // by node-runtime-smoke.sh and the real systemd install gate.
+  const downloadHarness = await makeHarness('download', 'curl tar sha256sum');
 
   async function withAssetServer(assets, callback) {
     const server = createServer((request, response) => {

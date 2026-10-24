@@ -74,6 +74,15 @@ journald, procfs, and sockets, then performs
 transactional credential replacement and recovery, an exact-allowlisted helper
 restart, replay, upgrade, rollback, and uninstall-preservation checks.
 
+The live gate runs on Node 22 and 24. Before running it, CI uses
+`scripts/prepare-node-runtime-smoke.sh` to place the selected Node binary at a
+root-owned `/usr/local/bin/node` and an unsupported-version fixture at
+`/usr/bin/node`. This setup is destructive to those paths and is only for fresh,
+disposable CI hosts. `scripts/node-runtime-smoke.sh` separately exercises path
+selection, ownership/permission and symlink checks, pinning, preload suppression,
+and service-user access. It requires root, `CI=true`, and
+`AGENTV_NODE_SMOKE_ALLOW=true`; its temporary fixtures are removed on exit.
+
 Ubuntu 24.04 LTS is the only qualified first-release host. Qualify another
 distribution with the same live bootstrap and recovery gate before documenting
 it as supported.

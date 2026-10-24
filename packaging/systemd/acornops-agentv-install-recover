@@ -21,6 +21,17 @@ if [[ "${phase}" == committed ]]; then
   exit 0
 fi
 
+# shellcheck source=packaging/systemd/acornops-agentv-node
+source /usr/local/libexec/acornops-agentv-node
+unset NODE_OPTIONS NODE_PATH
+if [[ -f "${transaction_dir}/candidate-node-path" ]]; then
+  node_binary="$(agentv_node_validate "$(<"${transaction_dir}/candidate-node-path")")"
+else
+  # A legacy transaction predates node-path; newer installation state must not
+  # override the runtime it used, even if that newer pin is now unusable.
+  node_binary="$(agentv_node_validate /usr/bin/node)"
+fi
+
 retain_authenticated_candidate() {
   printf '%s\n' committed > "${transaction_dir}/phase"
   rm -f -- "${active_link}"
@@ -33,7 +44,7 @@ require_restored_connection() {
   [[ -f "${transaction_dir}/previous-active" ]] || return 0
   if [[ ! -f /run/acornops-agentv/authenticated ]] \
     || { [[ -n "${1:-}" ]] \
-      && ! /usr/bin/node -e 'const p=require(process.argv[1]);process.exit(p.activeConnected===true?0:1)' "$1"; }; then
+      && ! "${node_binary}" -e 'const p=require(process.argv[1]);process.exit(p.activeConnected===true?0:1)' "$1"; }; then
     printf '%s\n' recovery_pending > "${transaction_dir}/phase"
     echo "Restored the previous AgentV installation; waiting for its authenticated connection." >&2
     exit 75
@@ -60,6 +71,15 @@ restore_previous_actions() {
 
 restore_local() {
   local_changed=false
+  if [[ -f "${transaction_dir}/previous-node-path" ]]; then
+    if [[ ! -f /opt/acornops/agentv/node-path ]] || ! diff -q "${transaction_dir}/previous-node-path" /opt/acornops/agentv/node-path >/dev/null; then
+      agentv_node_save "$(<"${transaction_dir}/previous-node-path")"
+      local_changed=true
+    fi
+  elif [[ -e /opt/acornops/agentv/node-path ]]; then
+    rm -f -- /opt/acornops/agentv/node-path
+    local_changed=true
+  fi
   if [[ -f "${transaction_dir}/candidate-current" ]]; then
     candidate_release="$(<"${transaction_dir}/candidate-current")"
   else
@@ -105,7 +125,8 @@ restore_local() {
       /etc/systemd/system/acornops-agentv-actions.socket \
       /etc/systemd/system/acornops-agentv-install-recovery.service \
       /usr/local/bin/acornops-agentv-doctor \
-      /usr/local/sbin/acornops-agentv-install-recover
+      /usr/local/sbin/acornops-agentv-install-recover \
+      /usr/local/libexec/acornops-agentv-node
     [[ -f "${transaction_dir}/previous-action-policy" ]] || rm -f -- /etc/acornops/agentv-actions.json
     if [[ ! -f "${transaction_dir}/previous-release-directory" ]]; then
       [[ "${candidate_release}" == /opt/acornops/agentv/releases/* ]] && rm -rf -- "${candidate_release}"
@@ -125,6 +146,12 @@ restore_candidate() {
     echo "AgentV recovery candidate state is incomplete." >&2
     return 1
   }
+  if [[ -f "${transaction_dir}/candidate-node-path" ]]; then
+    agentv_node_save "$(<"${transaction_dir}/candidate-node-path")"
+  else
+    # A legacy transaction's candidate was installed with /usr/bin/node.
+    rm -f -- /opt/acornops/agentv/node-path
+  fi
   candidate_current="$(<"${transaction_dir}/candidate-current")"
   [[ "${candidate_current}" == /opt/acornops/agentv/releases/* && -d "${candidate_current}" ]] || {
     echo "AgentV recovery candidate release is invalid." >&2
@@ -166,7 +193,7 @@ if [[ "${has_control_transaction}" == true ]]; then
     echo "AgentV recovery could not reach or authenticate with the control plane; preserving the candidate for retry." >&2
     exit 75
   fi
-  remote_status="$(/usr/bin/node -e 'const p=require(process.argv[1]);if(typeof p.status!=="string")process.exit(1);process.stdout.write(p.status)' "${status_file}")" || {
+  remote_status="$("${node_binary}" -e 'const p=require(process.argv[1]);if(typeof p.status!=="string")process.exit(1);process.stdout.write(p.status)' "${status_file}")" || {
     echo "AgentV recovery received an invalid transaction status; preserving the candidate for retry." >&2
     exit 75
   }
@@ -208,7 +235,7 @@ if [[ "${has_control_transaction}" == true ]]; then
         echo "Committed AgentV candidate has not authenticated locally yet; preserving recovery state for retry." >&2
         exit 75
       fi
-      if ! /usr/bin/node -e 'const p=require(process.argv[1]);process.exit(p.activeConnected===true?0:1)' "${status_file}"; then
+      if ! "${node_binary}" -e 'const p=require(process.argv[1]);process.exit(p.activeConnected===true?0:1)' "${status_file}"; then
         echo "Committed AgentV candidate has not reconnected yet; preserving recovery state for retry." >&2
         exit 75
       fi

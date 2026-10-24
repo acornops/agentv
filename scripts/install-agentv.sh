@@ -51,10 +51,7 @@ done
 for command_name in curl tar sha256sum install getent groupadd useradd usermod systemctl mktemp rm mv ln cp chown diff basename find stat readlink sed date sleep chmod mkdir touch env flock; do
   command -v "${command_name}" >/dev/null 2>&1 || fail "required command is missing: ${command_name}"
 done
-[[ -x /usr/bin/node ]] || fail "Node.js 22 or newer is required at /usr/bin/node"
 [[ -x /usr/sbin/runuser ]] || fail "required command is missing: /usr/sbin/runuser"
-node_major="$(/usr/bin/node -p "Number(process.versions.node.split('.')[0])")"
-[[ "${node_major}" -ge 22 ]] || fail "Node.js 22 or newer is required at /usr/bin/node"
 
 exec 9>/run/lock/acornops-agentv-install.lock
 flock -n 9 || fail "another AgentV installation is already running"

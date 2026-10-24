@@ -10,8 +10,8 @@ Linux/systemd installs use `packaging/systemd/acornops-agentv.service` and
 `/etc/acornops/agentv.env`. Keep the env file owned by `root:acornops-agent`
 with mode `0640`.
 
-For the initial bootstrap, both host `curl` and `/usr/bin/node` must already
-trust the control-plane certificate. Install a private root in the host trust
+For the initial bootstrap, both host `curl` and the selected Node runtime must
+already trust the control-plane certificate. Install a private root in the host trust
 store before onboarding. After installation, a root-managed PEM path in
 `ACORNOPS_AGENT_ADDITIONAL_CA_BUNDLE_FILE` adds runtime trust without replacing
 public roots or disabling certificate and hostname verification. Repair,
@@ -19,8 +19,11 @@ upgrade, and credential replacement preserve this setting.
 
 ## Runtime Requirements
 
-- Node.js 22 or newer at `/usr/bin/node`, or a container image built from this
-  repository. The installer validates the systemd runtime path and major version.
+- Node.js 22 or newer at `/usr/bin/node` or `/usr/local/bin/node`, or a container
+  image built from this repository. The executable, its ancestors, and every
+  symlink traversal must be root-owned and not group/world writable, and the
+  runtime must be readable/executable by the service user. Per-user/home-directory
+  runtimes are not supported.
 - Linux with systemd for `ACORNOPS_VM_COLLECTOR_MODE=live`.
 - Network egress from the VM to the AcornOps control-plane WebSocket endpoint.
 - A one-use enrollment command for initial installation, or an existing
@@ -29,6 +32,22 @@ upgrade, and credential replacement preserve this setting.
   explicit local-development override and must not be used in production.
 
 ## Systemd Model
+
+On first installation the installer checks `/usr/bin/node` followed by
+`/usr/local/bin/node` and chooses the first trusted, supported runtime. This
+supports a system-wide `sudo n` installation alongside an older OS Node. It does
+not search the caller's `PATH`. The canonical absolute path is saved as data in
+`/opt/acornops/agentv/node-path` (`root:root`, `0644`). Repair and upgrades retain
+that selection. Existing installations without this file keep their original
+`/usr/bin/node` meaning until installation selects and records a runtime.
+
+The agent, root helper, and doctor use
+`/usr/local/libexec/acornops-agentv-node`, which validates the stored path and
+execs Node. `NODE_OPTIONS` and `NODE_PATH` are not inherited by installer Node
+commands or the launcher. A missing, unsupported, or unsafe pinned runtime fails
+explicitly; starting a service does not discover a replacement. Restore a
+supported, trusted Node at the recorded path before retrying. Do not replace the
+OS's `/usr/bin/node` merely to satisfy AgentV.
 
 The main service runs as `acornops-agent` with readiness/watchdog notification,
 `NoNewPrivileges`, private devices, kernel protections, restricted namespaces,
@@ -59,8 +78,8 @@ copied command may remain in shell history, but its enrollment token is useless
 after a successful exchange; clear the entry when host policy requires it.
 Repair and upgrade commands reuse the matching root-owned environment. The
 bootstrap verifies the archive checksum, records rollback state, and restores
-the prior release and configuration when cutover fails. The token-bearing
-bootstrap process is replaced by a worker whose arguments contain no
+the prior release, runtime selection, and configuration when cutover fails. The
+token-bearing bootstrap process is replaced by a worker whose arguments contain no
 credentials. A successful normal handshake writes
 `/run/acornops-agentv/authenticated`, which
 the installer uses together with the protected control-plane transaction to
@@ -82,6 +101,12 @@ which lets a host recover after a longer outage without reopening mutation. If
 the 30-minute credential rollback grace has closed, recovery restores the
 already-committed candidate because it is the only credential the control plane
 still accepts.
+
+The transaction also retains the candidate runtime path so recovery can query
+remote status after a failed first installation removes the local selection.
+Legacy transactions without runtime snapshots continue to mean `/usr/bin/node`.
+Uninstall removes the launcher with the units but preserves the selected-path
+file with the rest of the installation data for a subsequent reinstall.
 
 If an installer reports that an incomplete transaction exists, run
 `sudo systemctl start acornops-agentv-install-recovery.service` and inspect that

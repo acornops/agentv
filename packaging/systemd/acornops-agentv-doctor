@@ -12,10 +12,10 @@ set -a
 source /etc/acornops/agentv.env
 set +a
 if [[ "$(id -u)" -eq 0 ]]; then
-  exec /usr/sbin/runuser --preserve-environment --user acornops-agent -- /usr/bin/node /opt/acornops/agentv/current/dist/index.js doctor "$@"
+  exec /usr/sbin/runuser --preserve-environment --user acornops-agent -- /usr/local/libexec/acornops-agentv-node /opt/acornops/agentv/current/dist/index.js doctor "$@"
 fi
 if [[ "$(id -un)" != "acornops-agent" ]]; then
   echo "Run with sudo so checks execute as the acornops-agent service user." >&2
   exit 1
 fi
-exec /usr/bin/node /opt/acornops/agentv/current/dist/index.js doctor "$@"
+exec /usr/local/libexec/acornops-agentv-node /opt/acornops/agentv/current/dist/index.js doctor "$@"
