@@ -179,3 +179,31 @@ Main CI run `40117633377` then exposed group-writable fixture subdirectories.
 The runtime smoke now gives those directories explicit root-owned `0755`
 permissions instead of inheriting the runner umask. Reproduced with `umask 0002`
 before the correction; keep `.8` untagged until full hosted CI succeeds.
+
+## Published experimental release — 2026-10-25
+
+Source: `00ed9e5f8ff4f4f2497356afa5d06f19d0afcf71`.
+[Main CI](https://github.com/acornops/agentv/actions/runs/40118014186) and
+[release CI](https://github.com/acornops/agentv/actions/runs/40118243943) passed,
+including real hosted Ubuntu 24.04 systemd with Node 22.23.3 and 24.21.0.
+[Release v0.0.1-experimental.8](https://github.com/acornops/agentv/releases/tag/v0.0.1-experimental.8)
+contains the bootstrap, archive, checksum files, SBOM and signed provenance.
+
+`shasum -a 256 -c` passed for both downloaded assets. `gh attestation verify`
+passed for each with the exact source digest, tag, repository and release
+workflow, denying self-hosted runners. The downloaded bootstrap matched the
+locally tested generated bootstrap, and the archive's launcher matched source.
+
+- Installer SHA-256: `926ea9b16cb89b78efa0fc0f46297dffcbcca143d15bb29a74e2f9e7c307cb05`
+- Archive SHA-256: `31c991cb60e9a3bb92bec0ed436d07e9f211d4ffa6b2891cf495e2161eed8c59`
+- Published image index: `sha256:e5f2832618b28d5c5acd535d802d411db1a39888b05c30fe537f779ddd354c04`
+
+The writable-parent/`umask 0002` regression and an additional complete live
+systemd lifecycle run passed in a disposable Ubuntu 24.04 container. Its first
+attempt used a `noexec` temporary mount; correcting only that container mount
+allowed the existing packaged-installer executable preflight to pass. The
+container was removed after validation.
+
+Production promotion still requires the recorded Zod remediation and a real
+staging VM power-cycle during incomplete transaction recovery. No user VM was
+modified or enrolled as part of this release.

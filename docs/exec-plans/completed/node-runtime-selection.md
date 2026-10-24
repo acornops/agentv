@@ -1,9 +1,10 @@
 # AgentV system-wide Node runtime selection
 
-Status: implemented and locally validated on 2026-10-24. Integration and
-experimental release authorized on 2026-10-25. Candidate `.7` failed the hosted
-fixture preflight; replacement `0.0.1-experimental.8` preserves that tag. Publication
-requires the hosted release gates.
+Status: published as `0.0.1-experimental.8` on 2026-10-25 after both hosted
+Ubuntu 24.04 Node 22/24 release gates passed. Installer/archive checksums and
+signed provenance verified against source `00ed9e5`. The unpublished `.7` tag
+is unchanged; its hosted-fixture failures were corrected without relaxing
+production trust checks.
 
 ## Goal
 
