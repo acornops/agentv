@@ -56,6 +56,7 @@ npm run contracts:check
 npm run harness:check
 npm run build
 npm run smoke:package
+npm run smoke:curl-compat
 ```
 
 `npm run test:coverage` uses Vitest V8 coverage and writes text, HTML, and lcov
@@ -65,6 +66,14 @@ WebSocket E2E suite and enforces the CI non-regression floors.
 The release archive smoke verifies its checksum, safe paths, required units and
 entrypoints, production-only dependency tree, executable modes, and ability to
 load the installed helper client from the extracted artifact.
+
+After `npm run smoke:package`, `npm run smoke:curl-compat` requires Docker and
+runs the bootstrap failure-path smoke with Ubuntu 20.04's real curl 7.68. The
+test container mounts the checkout read-only, uses loopback-only fixture
+downloads, and performs no enrollment or systemd installation. CI and release
+gates cover missing assets, transient HTTP 503 retries for both downloads,
+checksum rejection, and unsafe archives. This is curl compatibility coverage,
+not live-systemd qualification for Ubuntu 20.04.
 
 ## Live systemd gate
 

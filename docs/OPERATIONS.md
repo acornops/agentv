@@ -25,6 +25,12 @@ upgrade, and credential replacement preserve this setting.
   runtime must be readable/executable by the service user. Per-user/home-directory
   runtimes are not supported.
 - Linux with systemd for `ACORNOPS_VM_COLLECTOR_MODE=live`.
+- curl with HTTPS support and a current trusted CA store for release downloads.
+  Bootstrap downloads are tested with curl 7.68 and the qualified host's curl.
+  They use `--retry 3` for curl's standard transient failures, not the newer
+  `--retry-all-errors` option. HTTPS-only redirects, certificate validation,
+  download timeouts, and archive checksum verification remain required; the
+  installer does not install or upgrade curl.
 - Network egress from the VM to the AcornOps control-plane WebSocket endpoint.
 - A one-use enrollment command for initial installation, or an existing
   root-owned AgentV environment for repair and upgrade.

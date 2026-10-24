@@ -31,6 +31,9 @@ jobs:
       - run: npm run validate:ci
       - name: Verify release archive
         run: npm run smoke:package
+      - name: Verify bootstrap with curl 7.68
+        if: matrix.node == 22
+        run: npm run smoke:curl-compat
       - name: Prepare old system Node with a trusted supported local runtime
         run: sudo env CI=true AGENTV_SYSTEMD_SMOKE_ALLOW=true PATH="$PATH" bash scripts/prepare-node-runtime-smoke.sh
       - name: Verify runtime selection and trust boundaries

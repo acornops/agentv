@@ -96,6 +96,8 @@ jobs:
         run: npm run validate:ci
       - name: Verify systemd release archive
         run: npm run smoke:package
+      - name: Verify bootstrap with curl 7.68
+        run: npm run smoke:curl-compat
 
   unit-tests:
     runs-on: ubuntu-latest

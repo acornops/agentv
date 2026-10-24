@@ -124,16 +124,20 @@ try {
   // by node-runtime-smoke.sh and the real systemd install gate.
   const downloadHarness = await makeHarness('download', 'curl tar sha256sum');
 
-  async function withAssetServer(assets, callback) {
+  async function withAssetServer(assets, callback, transientFailures = new Set()) {
+    const requests = new Map();
     const server = createServer((request, response) => {
-      const body = assets.get(new URL(request.url || '/', 'http://127.0.0.1').pathname);
+      const pathname = new URL(request.url || '/', 'http://127.0.0.1').pathname;
+      requests.set(pathname, (requests.get(pathname) || 0) + 1);
+      if (transientFailures.delete(pathname)) return void response.writeHead(503).end('temporarily unavailable');
+      const body = assets.get(pathname);
       if (body === undefined) return void response.writeHead(404).end('not found');
       response.writeHead(200, { 'content-length': body.length }).end(body);
     });
     await new Promise((resolve) => server.listen(0, '127.0.0.1', resolve));
     const address = server.address();
     try {
-      await callback(`http://127.0.0.1:${address.port}/releases/download`);
+      await callback(`http://127.0.0.1:${address.port}/releases/download`, requests);
     } finally {
       await new Promise((resolve, reject) => server.close((error) => error ? reject(error) : resolve()));
     }
@@ -146,6 +150,21 @@ try {
   const archiveName = `agentv-${pkg.version}.tar.gz`;
   const assetPath = (name) => `/releases/download/v${pkg.version}/${name}`;
   const invalidArchive = Buffer.from('not the expected archive');
+  await withAssetServer(new Map([[assetPath(archiveName), invalidArchive]]), async (releaseBaseUrl) => {
+    await expectFailure(downloadHarness, baseArgs(releaseBaseUrl), /could not download the AgentV release checksum/, secret, testEnv);
+  });
+
+  // A transient failure of either asset must recover and reach verification.
+  for (const retryAsset of [archiveName, `${archiveName}.sha256`]) {
+    await withAssetServer(new Map([
+      [assetPath(archiveName), invalidArchive],
+      [assetPath(`${archiveName}.sha256`), Buffer.from(`${'0'.repeat(64)}  ${archiveName}\n`)],
+    ]), async (releaseBaseUrl, requests) => {
+      await expectFailure(downloadHarness, baseArgs(releaseBaseUrl), /checksum did not match/, secret, testEnv);
+      assert.equal(requests.get(assetPath(retryAsset)), 2, `${retryAsset} must be retried after HTTP 503`);
+    }, new Set([assetPath(retryAsset)]));
+  }
+
   await withAssetServer(new Map([
     [assetPath(archiveName), invalidArchive],
     [assetPath(`${archiveName}.sha256`), Buffer.from(`${'0'.repeat(64)}  ${archiveName}\n`)],

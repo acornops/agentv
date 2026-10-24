@@ -66,9 +66,9 @@ trap cleanup EXIT
 trap 'exit 130' INT
 trap 'exit 143' TERM
 
-curl "${release_transport[@]}" -fsSL --retry 3 --retry-all-errors --connect-timeout 10 --max-time 300 "${release_url}/${archive_name}" -o "${work_dir}/${archive_name}" \
+curl "${release_transport[@]}" -fsSL --retry 3 --connect-timeout 10 --max-time 300 "${release_url}/${archive_name}" -o "${work_dir}/${archive_name}" \
   || fail "could not download the AgentV release archive"
-curl "${release_transport[@]}" -fsSL --retry 3 --retry-all-errors --connect-timeout 10 --max-time 60 "${release_url}/${archive_name}.sha256" -o "${work_dir}/${archive_name}.sha256" \
+curl "${release_transport[@]}" -fsSL --retry 3 --connect-timeout 10 --max-time 60 "${release_url}/${archive_name}.sha256" -o "${work_dir}/${archive_name}.sha256" \
   || fail "could not download the AgentV release checksum"
 mapfile -t checksum_lines < "${work_dir}/${archive_name}.sha256"
 [[ ${#checksum_lines[@]} -eq 1 ]] || fail "release checksum must contain exactly one entry"
