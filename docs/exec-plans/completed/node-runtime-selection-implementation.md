@@ -174,3 +174,8 @@ leave `.7` unchanged. Re-run the regression, full validation and package checks,
 and require both hosted systemd gates before updating the demo pin. The corrected
 writable-`/opt` regression, full validation, 78-test coverage, package/bootstrap
 smoke, shellcheck and shell syntax checks passed locally for `.8`.
+
+Main CI run `40117633377` then exposed group-writable fixture subdirectories.
+The runtime smoke now gives those directories explicit root-owned `0755`
+permissions instead of inheriting the runner umask. Reproduced with `umask 0002`
+before the correction; keep `.8` untagged until full hosted CI succeeds.

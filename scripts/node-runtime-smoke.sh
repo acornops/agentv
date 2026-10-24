@@ -11,7 +11,7 @@ fail() { echo "Node runtime regression failed: $*" >&2; exit 1; }
 work="$(mktemp -d /opt/agentv-node-smoke.XXXXXX)"
 trap 'rm -rf -- "${work}"' EXIT
 chmod 0755 "${work}"
-mkdir -p "${work}/system" "${work}/local" "${work}/state" "${work}/unsafe" "${work}/bin"
+install -d -o root -g root -m 0755 "${work}/system" "${work}/local" "${work}/state" "${work}/unsafe" "${work}/bin"
 real_node="$(command -v node)"
 cp "${real_node}" "${work}/local/node"
 chmod 0755 "${work}/local/node"
