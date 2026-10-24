@@ -158,3 +158,19 @@ The demo can select the new installer through the existing chart's
 API, database migration, VM runtime installation, or demo reset is required.
 The Zod advisory and physical reboot acceptance remain production-promotion
 work, not waived by this experimental release.
+
+### Hosted fixture correction
+
+Release run `40117138830` at `4749ede` passed unit and package/bootstrap checks,
+then stopped because the hosted runner's `/opt` did not meet the root-owned,
+non-writable ancestor requirement. No `.7` installer or image was published.
+The same failure was reproduced in a disposable Linux container by making its
+`/opt` world-writable. The explicitly opted-in CI preparation now creates that
+root with root ownership and mode `0755`, matching a normal Ubuntu install
+host. No production validation is weakened and shipped runtime logic is unchanged.
+
+Use a new immutable `.8` tag with matching package, lockfile and test versions;
+leave `.7` unchanged. Re-run the regression, full validation and package checks,
+and require both hosted systemd gates before updating the demo pin. The corrected
+writable-`/opt` regression, full validation, 78-test coverage, package/bootstrap
+smoke, shellcheck and shell syntax checks passed locally for `.8`.

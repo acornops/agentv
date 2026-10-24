@@ -1,7 +1,8 @@
 # AgentV system-wide Node runtime selection
 
 Status: implemented and locally validated on 2026-10-24. Integration and
-experimental release `0.0.1-experimental.7` authorized on 2026-10-25; publication
+experimental release authorized on 2026-10-25. Candidate `.7` failed the hosted
+fixture preflight; replacement `0.0.1-experimental.8` preserves that tag. Publication
 requires the hosted release gates.
 
 ## Goal

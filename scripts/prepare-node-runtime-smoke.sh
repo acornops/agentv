@@ -7,6 +7,9 @@ set -euo pipefail
 }
 selected_node="$(readlink -f "$(command -v node)")"
 [[ "$("${selected_node}" -p 'Number(process.versions.node.split(".")[0])')" -ge 22 ]]
+# Hosted runner images may leave /opt runner-writable. Match the trusted
+# installation root of a normal Ubuntu host without relaxing production checks.
+install -d -o root -g root -m 0755 /opt
 install -d -o root -g root -m 0755 /usr/local/bin
 if [[ "${selected_node}" != /usr/local/bin/node ]]; then
   install -o root -g root -m 0755 "${selected_node}" /usr/local/bin/node
