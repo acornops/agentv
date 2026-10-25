@@ -1,5 +1,14 @@
 # Filesystem findings before inventory limits
 
+Completed and released for demo on 2026-10-26 as `0.0.1-experimental.11`, source
+`634b226e24bf367efa63c098bbadc41ae25267ca`.
+[PR #4](https://github.com/acornops/agentv/pull/4), PR/main CI, and
+[release](https://github.com/acornops/agentv/actions/runs/40220630750) passed,
+including live Ubuntu 24.04 systemd on Node 22/24. Archive/installer checksums
+and signed hosted-workflow attestations match this source/tag; image provenance
+also matches. Installed hosts still require an operator upgrade. Zod, bundled
+npm and OS findings remain separate production security gates.
+
 ## Goal and scope
 
 Preserve capacity findings for filesystems beyond the 50-row snapshot inventory
@@ -41,8 +50,8 @@ failures remain explicit and cannot imply healthy empty storage.
 
 ## Completion summary
 
-Implemented and validated locally on `fix/production-readiness`; landing and
-release remain pending. The follow-up request on 2026-10-26 authorizes publication
+Implemented and validated locally on `fix/production-readiness`. The follow-up
+request on 2026-10-26 authorized publication
 as `.11` and an in-place demo upgrade. Existing user VM installations still
 require a separate operator upgrade; no dependency change or host mutation.
 
