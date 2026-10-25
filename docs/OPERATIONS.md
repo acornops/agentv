@@ -161,6 +161,27 @@ journalctl -u acornops-agentv -f
 
 The agent logs startup configuration without secrets, WebSocket connection status, handshake acknowledgement, snapshot upload summaries, snapshot collection failures, and WebSocket errors.
 
+## Filesystem Capacity Findings
+
+AgentV emits `FILESYSTEM_PRESSURE` at 90% used capacity, except for the known
+immutable image formats `squashfs`, `erofs`, `cramfs`, `romfs`, and `iso9660`.
+These images can report 100% usage by design, including Snap packages mounted
+under `/snap`. Their filesystem facts remain available through `list_filesystems`
+and snapshots, subject to the existing collection and snapshot limits.
+
+Exclusions use filesystem type, not mount paths, loop-device names, or
+`read_only`. The latter describes AgentV's mount namespace: `ProtectSystem=strict`
+can make ordinary host disks appear read-only to the agent. Other types,
+including unknown types, network filesystems, tmpfs, and writable overlays,
+remain eligible for capacity findings. Memory and service findings are unchanged.
+
+Existing hosts must upgrade AgentV to a release containing this behavior; a
+console or control-plane redeploy alone does not change agent-generated findings.
+After new snapshots stop reporting an image-capacity finding, its existing issue
+recovers and resolves through normal control-plane reconciliation. The matching
+control-plane fix derives inventory pressure badges from these findings, too.
+Do not delete Snap packages or issue records just to clear these false positives.
+
 ## Failure Modes
 
 - Control plane unavailable: the agent reconnects with capped equal-jitter exponential backoff.

@@ -1,13 +1,21 @@
 import { promisify } from 'node:util';
 import { gzip } from 'node:zlib';
-import type { HostAdapter, CollectorHealth } from '../adapters/types.js';
+import type { HostAdapter, CollectorHealth, FilesystemSummary } from '../adapters/types.js';
 import type { Logger } from '../logger.js';
 import { createNotification } from '../mcp/protocol.js';
 import type { Observability } from '../observability.js';
 import { ToolExecutionError } from '../tools/errors.js';
 
 const gzipAsync = promisify(gzip);
+const IMMUTABLE_FILESYSTEM_TYPES = new Set(['squashfs', 'erofs', 'cramfs', 'romfs', 'iso9660']);
 type Trigger = 'startup' | 'manual' | 'interval';
+
+/** Detect capacity pressure without treating immutable images as writable storage. */
+function hasFilesystemPressure(filesystem: FilesystemSummary): boolean {
+  // Do not use read_only: ProtectSystem=strict makes real disks read-only to AgentV.
+  // Unknown types remain monitored; paths and loop devices do not imply immutability.
+  return !IMMUTABLE_FILESYSTEM_TYPES.has(filesystem.type) && filesystem.used_percent >= 90;
+}
 
 /** Build bounded telemetry directly from adapters and send compressed snapshots. */
 export class SnapshotManager {
@@ -66,7 +74,7 @@ export class SnapshotManager {
       for (const section of [filesystems, services, processes, listeners]) if (section) health.push(section.health);
       const findings: Array<Record<string, unknown>> = [];
       if (hostSummary && hostSummary.memory.used_percent >= 90) findings.push({ severity: 'critical', code: 'MEMORY_PRESSURE', summary: `Memory use is ${hostSummary.memory.used_percent}%` });
-      for (const item of filesystems?.items || []) if (item.used_percent >= 90) findings.push({ severity: 'critical', code: 'FILESYSTEM_PRESSURE', mount: item.mount, summary: `Filesystem ${item.mount} is ${item.used_percent}% used` });
+      for (const item of filesystems?.items || []) if (hasFilesystemPressure(item)) findings.push({ severity: 'critical', code: 'FILESYSTEM_PRESSURE', mount: item.mount, summary: `Filesystem ${item.mount} is ${item.used_percent}% used` });
       for (const item of services?.items || []) findings.push({ severity: 'critical', code: 'SERVICE_FAILED', unit: item.unit, summary: `Service ${item.unit} failed` });
       const snapshot: Record<string, any> = {
         schema_version: 'acornops.agentv-snapshot.v2', host_summary: hostSummary,
