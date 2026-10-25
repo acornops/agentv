@@ -169,6 +169,23 @@ These images can report 100% usage by design, including Snap packages mounted
 under `/snap`. Their filesystem facts remain available through `list_filesystems`
 and snapshots, subject to the existing collection and snapshot limits.
 
+Snapshot capacity findings are derived from the complete filesystem result
+within the adapter's existing 5-second, 1 MiB-per-command `df` bounds, before
+retaining at most 50 raw filesystem inventory rows in mount order. Thus a
+finding can name a filesystem absent from `filesystems`; the snapshot's
+`truncation.filesystems` counts raw rows omitted by both the inventory limit and
+later byte-budget trimming. `finding_coverage.filesystems: complete` separately
+confirms that all collected mounts were evaluated, allowing the control plane to
+recover an old issue even when its mount is outside the retained inventory.
+The independent `finding_coverage.services` follows the same rule before byte
+trimming, but remains `incomplete` when the failed-service collector omits rows
+beyond its 50-service limit. Failed or incomplete collection reports `incomplete`.
+The public `list_filesystems` tool still applies
+its requested limit normally. Findings are not trimmed to fit: if required
+sections exceed the snapshot byte budget after optional facts are removed, the
+whole snapshot is dropped. A failed filesystem command is reported through
+`collector_health`, not as a healthy empty collection.
+
 Exclusions use filesystem type, not mount paths, loop-device names, or
 `read_only`. The latter describes AgentV's mount namespace: `ProtectSystem=strict`
 can make ordinary host disks appear read-only to the agent. Other types,

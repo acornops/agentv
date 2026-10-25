@@ -53,6 +53,15 @@ findings, collector health, and explicit truncation counts. It never contains
 raw logs and is dropped rather than sent when the negotiated hard byte limit
 cannot be met.
 
+The optional `finding_coverage.filesystems` and `finding_coverage.services` are
+independently `complete` only after successful, untruncated enumeration and
+finding evaluation, otherwise `incomplete`.
+Raw inventory trimming does not change it: findings and coverage are retained
+together or the entire snapshot is dropped. Older receivers ignore this additive
+field. New receivers still require healthy collector status before recovering an
+issue from absent findings; without the marker they use retained inventory and
+truncation counts conservatively. No snapshot schema version bump is required.
+
 ## Tools
 
 Read tools:

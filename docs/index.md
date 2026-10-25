@@ -28,6 +28,7 @@ This `docs/` tree is the repository-local system of record for agent-readable de
 - [Active Plans](/docs/exec-plans/active/README.md)
 - [Completed Plans](/docs/exec-plans/completed/README.md)
 - [Filesystem Capacity Alerts](/docs/exec-plans/completed/filesystem-capacity-alerts.md)
+- [Filesystem Findings Before Inventory Limits](/docs/exec-plans/active/filesystem-findings-before-inventory-limits.md)
 - [Tech Debt Tracker](/docs/exec-plans/tech-debt-tracker.md)
 
 ## Operational Standards

@@ -30,7 +30,8 @@
       ],
       "snapshotFields": [
         "schema_version", "host_summary", "filesystems[]", "degraded_services[]",
-        "top_processes[]", "listeners[]", "findings[]", "collector_health[]", "truncation"
+        "top_processes[]", "listeners[]", "findings[]", "collector_health[]", "truncation",
+        "finding_coverage.filesystems?", "finding_coverage.services?"
       ],
       "rpcMethods": ["tools/list", "tools/call"],
       "toolDefinitionFields": ["inputSchema", "outputSchema", "artifactPolicy", "timeout_ms", "version", "deprecated"],

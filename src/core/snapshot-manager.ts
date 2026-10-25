@@ -64,7 +64,9 @@ export class SnapshotManager {
       };
       const [hostSummary, filesystems, services, processes, listeners] = await Promise.all([
         safe('host_facts', () => this.host.getHostSummary(), null),
-        safe('filesystems', () => this.host.listFilesystems({ include_pseudo: false, limit: 50 }), null),
+        // df output and runtime are bounded by the adapter. Inventory row limits
+        // must not hide capacity findings for later mounts in that result.
+        safe('filesystems', () => this.host.listFilesystems({ include_pseudo: false, limit: Number.POSITIVE_INFINITY }), null),
         safe('systemd', () => this.host.listServices({ state: 'failed', limit: 50 }), null),
         safe('procfs', () => this.host.listProcesses({ sort_by: 'cpu', order: 'desc', limit: 20 }), null),
         safe('sockets', () => this.host.listListeners({ limit: 50 }), null),
@@ -72,15 +74,21 @@ export class SnapshotManager {
       if (!this.active || generation !== this.generation) return;
       if (hostSummary) health.push(...hostSummary.collector_health);
       for (const section of [filesystems, services, processes, listeners]) if (section) health.push(section.health);
+      const filesystemItems = filesystems?.items || [];
+      const retainedFilesystems = filesystemItems.slice(0, 50);
       const findings: Array<Record<string, unknown>> = [];
       if (hostSummary && hostSummary.memory.used_percent >= 90) findings.push({ severity: 'critical', code: 'MEMORY_PRESSURE', summary: `Memory use is ${hostSummary.memory.used_percent}%` });
-      for (const item of filesystems?.items || []) if (hasFilesystemPressure(item)) findings.push({ severity: 'critical', code: 'FILESYSTEM_PRESSURE', mount: item.mount, summary: `Filesystem ${item.mount} is ${item.used_percent}% used` });
+      for (const item of filesystemItems) if (hasFilesystemPressure(item)) findings.push({ severity: 'critical', code: 'FILESYSTEM_PRESSURE', mount: item.mount, summary: `Filesystem ${item.mount} is ${item.used_percent}% used` });
       for (const item of services?.items || []) findings.push({ severity: 'critical', code: 'SERVICE_FAILED', unit: item.unit, summary: `Service ${item.unit} failed` });
       const snapshot: Record<string, any> = {
         schema_version: 'acornops.agentv-snapshot.v2', host_summary: hostSummary,
-        filesystems: filesystems?.items || [], degraded_services: services?.items || [], top_processes: processes?.items || [],
+        filesystems: retainedFilesystems, degraded_services: services?.items || [], top_processes: processes?.items || [],
         listeners: listeners?.items || [], findings, collector_health: health,
-        truncation: { filesystems: filesystems?.omitted_count || 0, services: services?.omitted_count || 0, processes: processes?.omitted_count || 0, listeners: listeners?.omitted_count || 0 },
+        finding_coverage: {
+          filesystems: filesystems?.health.status === 'ok' && filesystems.omitted_count === 0 ? 'complete' : 'incomplete',
+          services: services?.health.status === 'ok' && services.omitted_count === 0 ? 'complete' : 'incomplete',
+        },
+        truncation: { filesystems: (filesystems?.omitted_count || 0) + filesystemItems.length - retainedFilesystems.length, services: services?.omitted_count || 0, processes: processes?.omitted_count || 0, listeners: listeners?.omitted_count || 0 },
       };
       const dataBudget = Math.max(0, this.maxBytes - 1024);
       const optional = ['top_processes', 'listeners', 'filesystems', 'degraded_services'];
