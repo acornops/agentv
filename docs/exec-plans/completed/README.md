@@ -1,5 +1,7 @@
 # Completed Execution Plans
 
+- [Restart precondition guidance](restart-precondition-guidance.md) — Exact-input descriptions with unchanged runtime safety checks.
+
 - [Runtime validation security](runtime-validation-security.md) — Source qualification complete; release acceptance is tracked separately.
 
 Completed plans live here for durable handoff and audit history.
