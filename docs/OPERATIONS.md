@@ -151,6 +151,28 @@ and `ACORNOPS_AGENT_MOCK_ACTIONS_ENABLED=true` to simulate a restart of its
 single fixture service, `ssh.service`. This path never contacts systemd or a
 host helper and is rejected outside mock collector mode.
 
+### Restart precondition failures
+
+Before requesting a restart, call `get_service` for the exact unit and copy
+`restart_preconditions.active_state`, `sub_state`, and (when present)
+`invocation_id` into the matching `expected_*` arguments. Use `active`, not the
+display label `active (running)`; the invocation ID identifies the observed
+service instance, not the tool call or a retry attempt.
+
+`PRECONDITION_FAILED` with `outcome: not_started` means the helper refused the
+request before restarting. Compare the supplied arguments with the preceding
+read: the state may have changed, or the arguments may not match that read.
+Read the service again before proposing a new restart; retain approval and
+allowlist checks. Do not drop an observed invocation ID to bypass the guard.
+An `unknown` outcome is different: inspect the service before deciding what to
+do, and do not blindly retry a possibly completed restart.
+
+AgentV `v0.0.1-experimental.13` added explicit read-before-restart tool guidance.
+For older hosts, generate **Upgrade or repair AgentV** from VM Settings and run
+that command on the VM. A platform redeployment does not upgrade installed
+agents. Confirm the connected version after it reconnects, then start a new run
+with a fresh service read rather than retrying old arguments or approvals.
+
 ## Logs And Diagnostics
 
 Use journalctl for systemd installs:
