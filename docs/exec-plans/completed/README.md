@@ -1,5 +1,7 @@
 # Completed Execution Plans
 
+- [Runtime validation security](runtime-validation-security.md) — Source qualification complete; release acceptance is tracked separately.
+
 Completed plans live here for durable handoff and audit history.
 
 - [Filesystem findings before inventory limits](filesystem-findings-before-inventory-limits.md)

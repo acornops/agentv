@@ -21,6 +21,12 @@ compatibility checks in the [tech debt tracker](exec-plans/tech-debt-tracker.md)
 before production promotion; the historical scores above are not a release
 approval.
 
+Security qualification (2026-10-26): [Zod 4 qualification](exec-plans/completed/runtime-validation-security.md)
+uses 4.6.7 with helper-limit, tool input-schema, protocol, and package checks.
+The local runtime audit reports zero advisories, and independent review found no
+remaining migration issues. Publication and real-host acceptance remain pending;
+installed hosts are not automatically updated.
+
 Experimental `.8` release evidence (2026-10-25): both hosted Node 22/24 systemd
 gates, published checksums and signed provenance passed. See the
 [runtime-selection completion record](exec-plans/completed/node-runtime-selection-implementation.md#published-experimental-release--2026-10-25).

@@ -84,6 +84,11 @@ context in `content`, full data in `structuredContent` under
 `acornops.full-tool-result.v1`, explicit truncation/omission metadata, and
 `isError` for tool-level failures.
 
+Input schemas use JSON Schema draft 2020-12 and describe inputs before defaults.
+Defaulted fields remain optional. Refined objects such as `query_logs` advertise
+their fields and limits; cross-field rules such as log time ordering remain
+enforced by the agent. `get_process` requires a positive integer PID, not zero.
+
 ## Shared Invariants
 
 - AgentV remains network-outbound-only and unprivileged.

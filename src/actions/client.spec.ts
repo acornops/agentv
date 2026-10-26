@@ -74,6 +74,15 @@ describe('SocketActionClient', () => {
     await expect(client.restart(restartRequest)).rejects.toMatchObject<ToolExecutionError>({ toolCode: 'HOST_UNAVAILABLE', data: { outcome: 'unknown' } });
   });
 
+  it('rejects helper capability collections over the policy limit', async () => {
+    mockSocket(() => ({ ok: true, result: {
+      protocol_version: 1, policy_valid: true,
+      restart_services: Array.from({ length: 33 }, (_, index) => `worker-${index}.service`),
+    } }));
+    await expect(new SocketActionClient('/actions.sock').capabilities())
+      .rejects.toMatchObject<ToolExecutionError>({ toolCode: 'HOST_UNAVAILABLE', data: { outcome: 'not_started' } });
+  });
+
   it('maps bounded helper failures without trusting helper-provided error codes', async () => {
     mockSocket(() => ({ ok: false, error: { code: 'PERMISSION_DENIED', message: 'denied', outcome: 'not_started' } }));
     await expect(new SocketActionClient('/actions.sock').capabilities()).rejects.toMatchObject<ToolExecutionError>({ toolCode: 'PERMISSION_DENIED' });
