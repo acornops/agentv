@@ -114,6 +114,17 @@ describe('action helper boundary validation', () => {
     expect(restart).not.toHaveBeenCalled();
   });
 
+  it.each([
+    { expected_active_state: 'active (running)' },
+    { expected_invocation_id: 'CronRestart-01' },
+  ])('rejects formatted or invented preconditions without a restart: %j', async (overrides) => {
+    const { helper, ledger, restart } = harness();
+    await expect(helper.handleRequest(JSON.stringify({ ...request, ...overrides })))
+      .rejects.toMatchObject({ code: 'PRECONDITION_FAILED' });
+    expect(ledger.put).not.toHaveBeenCalled();
+    expect(restart).not.toHaveBeenCalled();
+  });
+
   it('serializes restarts and rejects a concurrent operation before mutation', async () => {
     let releaseRestart!: () => void;
     const restart = vi.fn(() => new Promise<void>((resolve) => { releaseRestart = resolve; }));

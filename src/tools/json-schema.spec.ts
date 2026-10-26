@@ -34,6 +34,21 @@ describe('advertised input contracts', () => {
     expect(schema.additionalProperties).toBe(false);
   });
 
+  it('advertises exact read-before-restart guidance to the model', () => {
+    registerAllTools(new MockHostAdapter(), actions);
+    const tool = toolRegistry.get('restart_service')!;
+    const schema = zodToJsonSchema(tool.schema);
+    expect(tool.description).toMatch(/get_service.*same unit/);
+    expect(tool.description).toMatch(/PRECONDITION_FAILED.*get_service/);
+    expect(schema).toMatchObject({ properties: {
+      expected_active_state: { description: expect.stringContaining('restart_preconditions.active_state') },
+      expected_sub_state: { description: expect.stringContaining('restart_preconditions.sub_state') },
+      expected_invocation_id: { description: expect.stringContaining('restart_preconditions.invocation_id') },
+    } });
+    expect(JSON.stringify(schema)).toMatch(/Never invent/);
+    expect(JSON.stringify(schema)).toMatch(/Omit only when.*absent/);
+  });
+
   it('preserves omitted JSON-RPC payloads and explicit null results', () => {
     expect(JsonRpcRequestSchema.parse({ jsonrpc: '2.0', id: 1, method: 'tools/list' })).not.toHaveProperty('params');
     expect(JsonRpcResponseSchema.parse({ jsonrpc: '2.0', id: 1, result: null }).result).toBeNull();
