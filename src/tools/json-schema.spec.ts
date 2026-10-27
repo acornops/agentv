@@ -49,6 +49,38 @@ describe('advertised input contracts', () => {
     expect(JSON.stringify(schema)).toMatch(/Omit only when.*absent/);
   });
 
+  it.each([
+    ['active', 'running', 'active'],
+    ['active (running)', 'running', 'active'],
+    ['inactive (dead)', 'dead', 'inactive'],
+    ['activating (start-pre)', 'start-pre', 'activating'],
+  ])('canonicalizes only the active state representation: %s / %s', (active, sub, expected) => {
+    registerAllTools(new MockHostAdapter(), actions);
+    const input = { unit: 'worker.service', reason: 'Approved restart', expected_active_state: active,
+      expected_sub_state: sub, expected_invocation_id: 'observed-instance' };
+    expect(toolRegistry.get('restart_service')!.schema.parse(input)).toEqual({ ...input, expected_active_state: expected });
+    expect(input.expected_active_state).toBe(active);
+  });
+
+  it.each([
+    ['active (dead)', 'running'],
+    ['active(running)', 'running'],
+    ['active (running) extra', 'running'],
+    [' active', 'running'],
+    ['active\n', 'running'],
+    ['active (running)\n', 'running'],
+    ['active', 'running\n'],
+    ['active', 'running (active)'],
+    ['ACTIVE', 'running'],
+    ['active ((running))', 'running'],
+  ])('rejects malformed or contradictory restart states: %j / %j', (active, sub) => {
+    registerAllTools(new MockHostAdapter(), actions);
+    const parsed = toolRegistry.get('restart_service')!.schema.safeParse({
+      unit: 'worker.service', reason: 'Approved restart', expected_active_state: active, expected_sub_state: sub,
+    });
+    expect(parsed.success).toBe(false);
+  });
+
   it('preserves omitted JSON-RPC payloads and explicit null results', () => {
     expect(JsonRpcRequestSchema.parse({ jsonrpc: '2.0', id: 1, method: 'tools/list' })).not.toHaveProperty('params');
     expect(JsonRpcResponseSchema.parse({ jsonrpc: '2.0', id: 1, result: null }).result).toBeNull();

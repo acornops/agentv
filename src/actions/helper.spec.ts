@@ -115,6 +115,21 @@ describe('action helper boundary validation', () => {
   });
 
   it.each([
+    ['active_state', 'inactive', 'running', request.expected_invocation_id],
+    ['sub_state', 'active', 'exited', request.expected_invocation_id],
+    ['invocation_id', 'active', 'running', 'different-instance'],
+  ])('identifies a mismatched %s without claiming the service changed', async (field, active, sub, invocation) => {
+    const { helper, ledger, restart } = harness({ get: vi.fn(async () => service(invocation, active, sub)) });
+    const result = helper.handleRequest(JSON.stringify(request));
+    await expect(result).rejects.toMatchObject({
+      code: 'PRECONDITION_FAILED', message: expect.stringContaining(field),
+    });
+    await expect(result).rejects.not.toThrow('Service state changed');
+    expect(ledger.put).not.toHaveBeenCalled();
+    expect(restart).not.toHaveBeenCalled();
+  });
+
+  it.each([
     { expected_active_state: 'active (running)' },
     { expected_invocation_id: 'CronRestart-01' },
   ])('rejects formatted or invented preconditions without a restart: %j', async (overrides) => {

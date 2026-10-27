@@ -1,5 +1,6 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { MockHostAdapter } from '../adapters/mock.js';
+import { MockActionClient } from '../actions/mock.js';
 import type { ActionClient } from '../actions/types.js';
 import { createLogger } from '../logger.js';
 import { McpRouter } from '../mcp/router.js';
@@ -55,5 +56,49 @@ describe('AgentV tool contracts', () => {
     const called = await router.handleRequest({ jsonrpc: '2.0', id: 'stable-call', method: 'tools/call', params: { name: 'restart_service', arguments: { unit: 'ssh.service', reason: 'Approved recovery', expected_active_state: 'active', expected_sub_state: 'running' } } }) as any;
     expect(called.result.isError).toBe(true);
     expect(called.result.structuredContent.data).toMatchObject({ outcome: 'failed', retryable: false, receipt: { outcome: 'failed', systemd_job_result: 'failed' } });
+  });
+
+  it('restarts and replays a display-form MCP request through the real executor', async () => {
+    registerAllTools(new MockHostAdapter(), new MockActionClient());
+    const router = new McpRouter(new ToolExecutor({ localWriteEnabled: () => true }), createLogger('error'));
+    router.setSessionPolicy({ allowedTools: new Set(['restart_service']), writeEnabled: true, generation: 1, targetId: 'vm-1' });
+    const request = { jsonrpc: '2.0' as const, id: 'display-restart', method: 'tools/call', params: {
+      name: 'restart_service', arguments: { unit: 'ssh.service', reason: 'Approved restart',
+        expected_active_state: 'active (running)', expected_sub_state: 'running', expected_invocation_id: 'mock-invocation' },
+    } };
+    const result = await router.handleRequest(request) as any;
+    expect(result.result.isError).toBe(false);
+    expect(result.result.structuredContent.data).toMatchObject({ outcome: 'success', before: { active_state: 'active', invocation_id: 'mock-invocation' } });
+    expect(await router.handleRequest(request)).toEqual(result);
+    expect(request.params.arguments.expected_active_state).toBe('active (running)');
+  });
+
+  it('rejects contradictory display states before contacting the action client', async () => {
+    const restart = vi.fn(actions.restart);
+    registerAllTools(new MockHostAdapter(), { ...actions, restart });
+    const router = new McpRouter(new ToolExecutor({ localWriteEnabled: () => true }), createLogger('error'));
+    router.setSessionPolicy({ allowedTools: new Set(['restart_service']), writeEnabled: true, generation: 1, targetId: 'vm-1' });
+    const result = await router.handleRequest({ jsonrpc: '2.0', id: 'conflicting-restart', method: 'tools/call', params: {
+      name: 'restart_service', arguments: { unit: 'ssh.service', reason: 'Approved restart', expected_active_state: 'active (dead)', expected_sub_state: 'running' },
+    } }) as any;
+    expect(result.result.structuredContent.data).toMatchObject({ code: 'INVALID_ARGUMENTS', retryable: false });
+    expect(restart).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    ['active_state', { expected_active_state: 'inactive (dead)', expected_sub_state: 'dead' }],
+    ['sub_state', { expected_active_state: 'active (exited)', expected_sub_state: 'exited' }],
+    ['invocation_id', { expected_invocation_id: 'stale-instance' }],
+  ])('does not refresh a mismatched %s when normalizing display input', async (field, overrides) => {
+    registerAllTools(new MockHostAdapter(), new MockActionClient());
+    const router = new McpRouter(new ToolExecutor({ localWriteEnabled: () => true }), createLogger('error'));
+    router.setSessionPolicy({ allowedTools: new Set(['restart_service']), writeEnabled: true, generation: 1, targetId: 'vm-1' });
+    const result = await router.handleRequest({ jsonrpc: '2.0', id: 'stale-restart', method: 'tools/call', params: {
+      name: 'restart_service', arguments: { unit: 'ssh.service', reason: 'Approved restart',
+        expected_active_state: 'active (running)', expected_sub_state: 'running', expected_invocation_id: 'mock-invocation', ...overrides },
+    } }) as any;
+    expect(result.result.structuredContent.data).toMatchObject({
+      code: 'PRECONDITION_FAILED', outcome: 'not_started', retryable: false, message: expect.stringContaining(field),
+    });
   });
 });

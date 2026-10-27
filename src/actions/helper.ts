@@ -129,8 +129,10 @@ export class ActionHelper {
     let mutationMayHaveStarted = false;
     try {
       const beforeDetail = await this.dependencies.systemd.get(restart.unit); const before = state(beforeDetail);
-      if (before.active_state !== restart.expected_active_state || before.sub_state !== restart.expected_sub_state
-        || (restart.expected_invocation_id && before.invocation_id !== restart.expected_invocation_id)) throw Object.assign(new Error('Service state changed before restart'), { code: 'PRECONDITION_FAILED' });
+      const mismatch = before.active_state !== restart.expected_active_state ? 'active_state'
+        : before.sub_state !== restart.expected_sub_state ? 'sub_state'
+          : restart.expected_invocation_id && before.invocation_id !== restart.expected_invocation_id ? 'invocation_id' : null;
+      if (mismatch) throw Object.assign(new Error(`Restart precondition ${mismatch} does not match the current service. Read get_service again before requesting another restart.`), { code: 'PRECONDITION_FAILED' });
       const inProgress: RestartReceipt = { operation_id: restart.operation_id, unit: restart.unit, outcome: 'unknown', before, after: null, started_at: startedAt, completed_at: null, systemd_job_result: null };
       await this.dependencies.ledger.put({ request_hash: hash, request: restart, receipt: inProgress, updated_at: startedAt });
       mutationMayHaveStarted = true;

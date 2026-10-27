@@ -155,23 +155,34 @@ host helper and is rejected outside mock collector mode.
 
 Before requesting a restart, call `get_service` for the exact unit and copy
 `restart_preconditions.active_state`, `sub_state`, and (when present)
-`invocation_id` into the matching `expected_*` arguments. Use `active`, not the
-display label `active (running)`; the invocation ID identifies the observed
-service instance, not the tool call or a retry attempt.
+`invocation_id` into the matching `expected_*` arguments. Prefer separate
+machine tokens such as `active` and `running`; the invocation ID identifies the
+observed service instance, not the tool call or a retry attempt.
+
+The tool also accepts the exact display form `state (substate)`, such as
+`active (running)`, only when the embedded substate agrees with
+`expected_sub_state`. It converts the active-state representation before the
+action client, preserving the caller's arguments and every other expectation.
+Malformed or contradictory states return `INVALID_ARGUMENTS` before helper
+access. This does not fetch replacement expectations or relax the helper's
+exact live-state and invocation-ID checks.
 
 `PRECONDITION_FAILED` with `outcome: not_started` means the helper refused the
-request before restarting. Compare the supplied arguments with the preceding
-read: the state may have changed, or the arguments may not match that read.
+request before restarting. State/instance mismatch errors identify the first
+mismatched field. Compare the supplied arguments with the preceding read: the
+state may have changed, or the arguments may not match that read.
 Read the service again before proposing a new restart; retain approval and
 allowlist checks. Do not drop an observed invocation ID to bypass the guard.
 An `unknown` outcome is different: inspect the service before deciding what to
 do, and do not blindly retry a possibly completed restart.
 
-AgentV `v0.0.1-experimental.13` added explicit read-before-restart tool guidance.
-For older hosts, generate **Upgrade or repair AgentV** from VM Settings and run
-that command on the VM. A platform redeployment does not upgrade installed
-agents. Confirm the connected version after it reconnects, then start a new run
-with a fresh service read rather than retrying old arguments or approvals.
+AgentV `v0.0.1-experimental.13` added read-before-restart guidance but did not
+normalize display-form inputs. The correction is included in
+`v0.0.1-experimental.14`. Generate **Upgrade or repair AgentV** from VM Settings once that
+release is selected by the platform, and run the command on the VM. A platform
+redeployment does not upgrade installed agents. Confirm the connected version
+after it reconnects, then start a new run with a fresh service read rather than
+retrying old arguments or approvals.
 
 ## Logs And Diagnostics
 

@@ -1,5 +1,7 @@
 # Completed Execution Plans
 
+- [Restart state input](restart-state-input.md) — Focused normalization and accurate mismatch errors; local qualification complete, live-systemd release gate pending.
+
 - [Restart precondition guidance](restart-precondition-guidance.md) — Exact-input descriptions with unchanged runtime safety checks.
 
 - [Runtime validation security](runtime-validation-security.md) — Source qualification complete; release acceptance is tracked separately.

@@ -48,10 +48,11 @@ export class MockActionClient implements ActionClient {
     }
 
     const startedAt = new Date().toISOString();
-    if (request.expected_active_state !== MOCK_STATE.active_state
-      || request.expected_sub_state !== MOCK_STATE.sub_state
-      || (request.expected_invocation_id !== undefined && request.expected_invocation_id !== MOCK_STATE.invocation_id)) {
-      throw new ToolExecutionError('PRECONDITION_FAILED', 'Service state changed before restart', { outcome: 'not_started' });
+    const mismatch = request.expected_active_state !== MOCK_STATE.active_state ? 'active_state'
+      : request.expected_sub_state !== MOCK_STATE.sub_state ? 'sub_state'
+        : request.expected_invocation_id !== undefined && request.expected_invocation_id !== MOCK_STATE.invocation_id ? 'invocation_id' : null;
+    if (mismatch) {
+      throw new ToolExecutionError('PRECONDITION_FAILED', `Restart precondition ${mismatch} does not match the current service. Read get_service again before requesting another restart.`, { outcome: 'not_started' });
     }
     const receipt: RestartReceipt = {
       operation_id: request.operation_id,

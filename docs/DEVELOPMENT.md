@@ -80,8 +80,10 @@ not live-systemd qualification for Ubuntu 20.04.
 Release CI runs the live systemd smoke on a fresh GitHub-hosted Ubuntu 24.04
 VM. It exercises the packaged bootstrap and artifact with real systemd,
 journald, procfs, and sockets, then performs
-transactional credential replacement and recovery, an exact-allowlisted helper
-restart, replay, upgrade, rollback, and uninstall-preservation checks.
+transactional credential replacement and recovery, an exact-allowlisted restart
+through the tool executor and helper, display-state normalization, canonical
+replay, stale/contradictory precondition rejection, upgrade, rollback, and
+uninstall-preservation checks.
 
 The live gate runs on Node 22 and 24. Before running it, CI uses
 `scripts/prepare-node-runtime-smoke.sh` to place the selected Node binary at a

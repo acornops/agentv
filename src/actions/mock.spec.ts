@@ -31,6 +31,16 @@ describe('MockActionClient', () => {
       .rejects.toMatchObject({ toolCode: 'PRECONDITION_FAILED', data: { outcome: 'not_started' } });
   });
 
+  it.each([
+    ['active_state', { expected_active_state: 'inactive' }],
+    ['sub_state', { expected_sub_state: 'dead' }],
+    ['invocation_id', { expected_invocation_id: 'different-instance' }],
+  ])('names the mismatched %s in the mock failure', async (field, overrides) => {
+    await expect(new MockActionClient().restart({ ...request, ...overrides })).rejects.toMatchObject({
+      toolCode: 'PRECONDITION_FAILED', message: expect.stringContaining(field), data: { outcome: 'not_started' },
+    });
+  });
+
   it('replays an identical operation without simulating a second restart', async () => {
     const actions = new MockActionClient();
     const first = await actions.restart(request);

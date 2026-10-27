@@ -81,12 +81,18 @@ advertised when the root-owned helper has a valid exact unit allowlist.
 Before each restart request, read `get_service` for the same unit and copy
 `restart_preconditions.active_state`, `.sub_state` and, when present,
 `.invocation_id` exactly into the corresponding `expected_*` inputs. Active and
-sub states are separate values (`active` and `running`, not `active (running)`).
+sub states are separate machine values (`active` and `running`). As a compatible
+input convenience, the tool accepts the exact display form `state (substate)`
+only if its embedded substate matches `expected_sub_state`. It normalizes a
+parsed copy before the action client, leaving all other inputs unchanged;
+malformed/conflicting state inputs return `INVALID_ARGUMENTS` before helper access.
 An invocation ID is observed systemd state, never a generated tool-call ID.
 After `PRECONDITION_FAILED`, read the service again before requesting another
-restart. Input descriptions advertise this guidance; the helper still rejects
-mismatched preconditions before any mutation. This metadata-only clarification
-does not change required fields or bypass approval, allowlists or write policy.
+restart. The helper still rejects mismatched preconditions before any mutation
+and identifies the first mismatched field without assuming the service changed.
+No expected value is refreshed from the live service after approval. Required
+fields, helper protocol, result envelopes, approval, allowlists and write policy
+are unchanged; canonicalized helper requests retain idempotent replay semantics.
 
 `tools/list` uses canonical `inputSchema`, `outputSchema`, `artifactPolicy`,
 `timeout_ms`, `version`, and `deprecated` metadata. `tools/call` returns model

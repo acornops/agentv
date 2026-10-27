@@ -59,10 +59,27 @@ const listenersInput = z.object({ protocol: z.enum(['tcp', 'udp']).optional(), p
 const restartInput = z.object({
   unit: exactUnit,
   reason: z.string().min(1).max(512).refine((value) => value.trim().length > 0, 'reason must not be blank'),
-  expected_active_state: z.string().min(1).max(64).describe('Copy restart_preconditions.active_state exactly from the latest get_service response for this unit, e.g. "active", not "active (running)".'),
+  expected_active_state: z.string().min(1).max(64).describe('Copy restart_preconditions.active_state exactly from the latest get_service response for this unit, e.g. "active". A display value such as "active (running)" is accepted only when its substate matches expected_sub_state.'),
   expected_sub_state: z.string().min(1).max(64).describe('Copy restart_preconditions.sub_state exactly from the same get_service response, e.g. "running".'),
   expected_invocation_id: z.string().min(1).max(128).optional().describe('Copy restart_preconditions.invocation_id exactly from the same get_service response. Never invent an ID or use the tool call ID. Omit only when invocation_id is absent from restart_preconditions.'),
-}).strict();
+}).strict().transform((input, context) => {
+  const active = /^([a-z][a-z0-9-]*)(?: \(([a-z][a-z0-9-]*)\))?$/.exec(input.expected_active_state);
+  const sub = /^[a-z][a-z0-9-]*$/.exec(input.expected_sub_state);
+  // Check the full match as JavaScript's $ can also match before a final newline.
+  if (!active || active[0] !== input.expected_active_state) {
+    context.addIssue({ code: 'custom', path: ['expected_active_state'], message: 'Use the active_state token from get_service, optionally followed by " (sub_state)".' });
+    return z.NEVER;
+  }
+  if (!sub || sub[0] !== input.expected_sub_state) {
+    context.addIssue({ code: 'custom', path: ['expected_sub_state'], message: 'Copy the sub_state token exactly from get_service.' });
+    return z.NEVER;
+  }
+  if (active[2] !== undefined && active[2] !== input.expected_sub_state) {
+    context.addIssue({ code: 'custom', path: ['expected_active_state'], message: 'The display substate must match expected_sub_state; copy both values from the same get_service response.' });
+    return z.NEVER;
+  }
+  return { ...input, expected_active_state: active[1] };
+});
 type FilesystemInput = z.infer<typeof filesystemInput>;
 type ProcessesInput = z.infer<typeof processesInput>;
 type ServicesInput = z.infer<typeof servicesInput>;
