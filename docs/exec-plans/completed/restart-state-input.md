@@ -54,16 +54,17 @@ existing helper result/error envelopes remain unchanged.
 
 ## Rollout and completion
 
-A future AgentV release and host upgrade are required. No deployment or host
-mutation is authorized by this implementation step. Release acceptance includes
-the existing disposable live-systemd CI gate; local macOS cannot run that gate.
-Rollback is the previous AgentV artifact; no data migration is involved.
+Released as `v0.0.1-experimental.14` after the separately authorized release
+follow-up below. Installed hosts still require an explicit upgrade; publishing
+the artifact or redeploying the platform does not upgrade an enrolled VM.
+Rollback is the previous AgentV artifact and restores the display-input failure;
+no data migration is involved.
 
 ## Completion evidence — 2026-10-27
 
-Implementation and local qualification are complete on `fix/restart-state-input`;
-release qualification is not. Only AgentV source, regression tests, the existing
-systemd smoke and related docs changed. No UI, platform or deployment change.
+Implementation and local qualification were completed on `fix/restart-state-input`
+before integration. Only AgentV source, regression tests, the existing systemd
+smoke and related docs changed. No UI or platform runtime change was needed.
 
 - Baseline `npm test`: 107 tests passed. New regression cases failed before
   implementation and passed afterward.
@@ -81,10 +82,35 @@ systemd smoke and related docs changed. No UI, platform or deployment change.
 - Independent review found no actionable correctness or security issue.
 
 Mock mode and simulated helper access were validated locally. Actual live
-Linux/systemd execution (`npm run smoke:systemd`) remains a required disposable
-Ubuntu CI gate before release; it cannot run on this macOS host. The existing
-Node 22/24 CI matrix now exercises display input, canonical replay, mismatched
-operation reuse and stale/contradictory preconditions through the real helper.
-No demo service was restarted, no release published and no host upgraded.
-Installed `experimental.13` agents remain unchanged until a newer release is
-published, selected by the platform and installed on each host.
+Linux/systemd execution cannot run on this macOS host; the disposable hosted
+gate qualified it before publication, as recorded below. No enrolled VM was
+upgraded and no service on that VM was restarted during validation.
+
+## Release qualification — 2026-10-27
+
+The user authorized direct integration to main, a new release and demo
+redeployment. Source `5c96872154b9de536a51dc2b1416721e4722b5c2` was pushed to main
+and tagged as
+[`v0.0.1-experimental.14`](https://github.com/acornops/agentv/releases/tag/v0.0.1-experimental.14).
+The version bump also updated the existing pinned-version configuration test;
+the full suite passed again before commit.
+
+[Main CI](https://github.com/acornops/agentv/actions/runs/40435632806) and the
+[release workflow](https://github.com/acornops/agentv/actions/runs/40435950710)
+both passed live Ubuntu 24.04 systemd gates on Node 22 and 24. They exercised
+display-form restart, canonical replay, mismatched operation reuse,
+stale/contradictory preconditions, installation, credential-preserving repair,
+upgrade, rollback and uninstall preservation. Package and curl 7.68 checks passed.
+
+The downloaded archive/bootstrap checksums and signed attestations match the
+tag, source commit and hosted release workflow. Bootstrap and compiled input
+normalization code match the locally tested artifacts. Image provenance matches
+the same source; OCI index digest:
+`sha256:91a1ea6844f8a366abac429b42380de53a004959905a3f87fd373526826696cb`.
+An equal-database image scan against `.13` found no new HIGH/CRITICAL findings;
+existing image findings remain outside this fix and are not waived for production.
+
+Select `.14` in the platform installer configuration, then use **Upgrade or
+repair AgentV** on each host. Confirm the connected version and start a fresh
+troubleshooting run; do not reuse old arguments or approvals. Hosted systemd
+acceptance does not claim a completed restart on the user's VM.

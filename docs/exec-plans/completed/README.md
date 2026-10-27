@@ -1,6 +1,6 @@
 # Completed Execution Plans
 
-- [Restart state input](restart-state-input.md) — Focused normalization and accurate mismatch errors; local qualification complete, live-systemd release gate pending.
+- [Restart state input](restart-state-input.md) — Released in experimental.14 after local and hosted live-systemd qualification; enrolled hosts require an explicit upgrade.
 
 - [Restart precondition guidance](restart-precondition-guidance.md) — Exact-input descriptions with unchanged runtime safety checks.
 
