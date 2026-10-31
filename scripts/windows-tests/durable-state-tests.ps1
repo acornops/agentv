@@ -16,6 +16,16 @@ try {
     Write-AgentVDurableJson -Path $path -Value @{ version=1; phase='commit-intent'; secret='synthetic-only' }
     Assert ((Read-AgentVJson -Path $path -Secret).phase -eq 'commit-intent') 'Atomic state replacement failed.'
     Assert (@(Get-ChildItem $root -Filter '.pending-*').Count -eq 0) 'Temporary secret state leaked.'
+    # Package manifests include both explicit no-BOM UTF8 and the native PS5.1
+    # Set-Content UTF8 encoding used by the compiled host manifest builder.
+    $manifest=Join-Path $root 'host-manifest.json'
+    '{"schema":"acornops.agentv-windows-host.v1","architecture":"x64"}' | Set-Content -LiteralPath $manifest -Encoding UTF8
+    Set-AgentVAcl -Path $manifest
+    $bom=[IO.File]::ReadAllBytes($manifest)
+    Assert ($bom.Length -gt 3 -and $bom[0] -eq 239 -and $bom[1] -eq 187 -and $bom[2] -eq 191) 'Native PS5 UTF8 fixture did not contain its expected BOM.'
+    Assert ((Read-AgentVJson -Path $manifest).architecture -ceq 'x64') 'BOM-bearing native host manifest could not be read.'
+    [IO.File]::WriteAllText($manifest,'{"schema":"acornops.agentv-windows-host.v1","architecture":"x64"}',[Text.UTF8Encoding]::new($false))
+    Assert ((Read-AgentVJson -Path $manifest).architecture -ceq 'x64') 'BOM-free package manifest could not be read.'
     $lockPath = Join-Path $root 'installation.lock'; $lock = Enter-AgentVLock -Path $lockPath
     $rejected = $false; try { $duplicate = Enter-AgentVLock -Path $lockPath; $duplicate.Dispose() } catch { $rejected = $true }
     Assert $rejected 'Duplicate owner acquired the installation lock.'
