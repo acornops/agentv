@@ -12,6 +12,7 @@ $programParent = Join-Path ([Environment]::GetFolderPath('ProgramFiles')) 'Acorn
 $dataParent = Join-Path ([Environment]::GetFolderPath('CommonApplicationData')) 'AcornOps'
 $probeRoot = Join-Path ([Environment]::GetFolderPath('CommonApplicationData')) 'AcornOpsAgentV-CI-Probe'
 $sc = Join-Path ([Environment]::SystemDirectory) 'sc.exe'
+$sentinel = $null
 $owned = $false; $probeOwned = $false; $userOwned = $false
 $user = 'AgentVCIProbe'
 $evidence = [ordered]@{ sourceRevision = (& git -C $repo rev-parse HEAD); node = (& node --version); os = [Environment]::OSVersion.VersionString; tests = @() }
@@ -48,6 +49,9 @@ try {
     & (Join-Path $PSScriptRoot 'build-windows-host.ps1') -OutputDirectory $release
     $evidence.hostManifest = Get-Content (Join-Path $release 'host-manifest.json') -Raw | ConvertFrom-Json
     $null = New-Item -ItemType Directory -Path (Join-Path $release 'dist'),(Join-Path $root 'state'),(Join-Path $root 'logs')
+    Copy-Item (Join-Path $repo 'dist\*') (Join-Path $release 'dist') -Recurse
+    $null = New-Item -ItemType Directory -Path (Join-Path $release 'node_modules')
+    foreach ($dependency in @('ws','zod')) { Copy-Item (Join-Path $repo ('node_modules\'+$dependency)) (Join-Path $release 'node_modules') -Recurse }
     Copy-Item (Join-Path $PSScriptRoot 'windows-tests\host-child.mjs') (Join-Path $release 'dist\windows-service-entry.js')
     '{"type":"module"}' | Set-Content (Join-Path $release 'package.json') -Encoding ASCII
     $image = '"' + (Join-Path $release 'AgentV.ServiceHost.exe') + '" --node "' + $node + '"'
@@ -100,8 +104,20 @@ try {
     Stop-Service AcornOpsAgentV; Gone $tree
     for ($attempt = 0; $attempt -lt 4; $attempt++) { $tree = Fixture; Stop-Service AcornOpsAgentV; Gone $tree }
     Assert ((Get-Service AcornOpsAgentV).Status -eq 'Stopped') 'Repeated orderly stops observe whole-tree exit'
+    $sentinel = Start-Process -FilePath $node -ArgumentList @('-e','"setInterval(() => {}, 1000)"') -PassThru
     $tree = Fixture 'ignore-stop'; $clock = [Diagnostics.Stopwatch]::StartNew(); Stop-Service AcornOpsAgentV; Gone $tree
     Assert ($clock.Elapsed.TotalSeconds -lt 25) 'Stop deadline kills contained descendants boundedly'
+    Assert (-not $sentinel.HasExited) 'Timeout teardown preserves unrelated process'
+    $sentinel.Kill(); $sentinel.WaitForExit(); $sentinel = $null
+    $tree = Fixture 'collectors'
+    Wait-Until { Test-Path (Join-Path $root 'state\collectors.json') } 100
+    $native = Get-Content (Join-Path $root 'state\collectors.json') -Raw | ConvertFrom-Json
+    Assert ($null -eq $native.PSObject.Properties['failure']) 'Production collectors execute under contained service identity'
+    Assert ($native.host.os -eq 'windows' -and $native.host.productType -in @(2,3)) 'Service identity reads supported Windows Server facts'
+    foreach ($name in @('volumes','processes','services')) { Assert ($native.collections.$name.status -eq 'ok' -and $native.collections.$name.count -gt 0) "Service identity reads $name" }
+    foreach ($name in @('listeners','application','system')) { Assert ($native.collections.$name.status -in @('ok','partial','permission_denied')) "Service identity classifies $name availability" }
+    $evidence.serviceCollectors = $native
+    Stop-Service AcornOpsAgentV; Gone $tree
     $tree = Fixture 'flood'; Wait-Until { Test-Path (Join-Path $root 'logs\stderr.log.3') }; Stop-Service AcornOpsAgentV; Gone $tree
     $logs = @(Get-ChildItem (Join-Path $root 'logs') -File)
     Assert ((@($logs | Where-Object Length -gt 5242880)).Count -eq 0 -and $logs.Count -le 9) 'Oversized stdout/stderr remain bounded with three retained rotations'
@@ -129,6 +145,7 @@ try {
     Assert ((Get-Service AcornOpsAgentV).Status -eq 'Stopped') 'Runtime reparse dependency rejected'
     Remove-Item -LiteralPath $link -Force
 } finally {
+    if ($null -ne $sentinel -and -not $sentinel.HasExited) { $sentinel.Kill(); $sentinel.WaitForExit() }
     if ($probeOwned) { Stop-Service AcornOpsAgentVProbe -ErrorAction SilentlyContinue; & $sc delete AcornOpsAgentVProbe | Out-Null }
     if ($owned) { if (Get-Service AcornOpsAgentV -ErrorAction SilentlyContinue) { & $sc config AcornOpsAgentV start= disabled | Out-Null; Stop-Service AcornOpsAgentV -ErrorAction SilentlyContinue; & $sc delete AcornOpsAgentV | Out-Null }; Remove-Item -LiteralPath $dataParent,$programParent,$probeRoot -Recurse -Force -ErrorAction Continue }
     if ($userOwned) { Remove-LocalUser -Name $user }
