@@ -58,8 +58,13 @@ claim before the package is qualified.
    without reporting SERVICE_STOPPED. Configure SCM restart actions explicitly
    (10s, 30s, 60s delays; reset after one day). Do not rely on a nonzero STOPPED
    status to trigger recovery and do not enable non-crash failure recovery.
-   Serialize the watcher against an atomic stopping flag: deliberate stop marks
-   that flag before sending STOP; the watcher then cannot initiate recovery.
+   Serialize watcher and stop through one teardown owner and shared completion
+   result. Deliberate stop marks its intent before sending STOP. If the watcher
+   already owns teardown, stop waits for that result within the same 20-second
+   total teardown budget, rather than reporting clean STOPPED early. Only the
+   teardown owner disposes the job. An unconfirmed result or wait timeout yields
+   nonzero stopped status. If no deliberate stop claims the outcome, the watcher
+   commits unexpected exit and invokes SCM crash recovery as before.
 
 SCM stop/shutdown sends a private stop command to the child. The entry module
 invokes an explicit idempotent shutdown callback returned by Windows runtime

@@ -203,6 +203,9 @@ namespace AcornOps.AgentV {
     internal sealed class TreeTeardown {
         readonly Action graceful, dispose, unexpectedExit;
         readonly Func<bool> terminate;
+        readonly object completion = new object();
+        bool completed, empty;
+        // 0 running, 1 deliberate stop, 2 watcher teardown, 3 crash committed.
         int stopping;
         internal TreeTeardown(Action gracefulStop, Func<bool> terminateAndObserve, Action disposeJob, Action crash) {
             graceful = gracefulStop; terminate = terminateAndObserve; dispose = disposeJob; unexpectedExit = crash;
@@ -210,13 +213,37 @@ namespace AcornOps.AgentV {
         internal void StartupFailed() { Interlocked.Exchange(ref stopping, 1); }
         internal void ChildExited() {
             if (Interlocked.CompareExchange(ref stopping, 2, 0) != 0) return;
-            terminate(); dispose(); unexpectedExit();
+            Observe(false);
+            // A deliberate stop can take over the outcome while the watcher
+            // owns teardown. Once crash is committed it cannot claim clean stop.
+            if (Interlocked.CompareExchange(ref stopping, 3, 2) == 2) unexpectedExit();
         }
         internal bool Stop() {
-            if (Interlocked.Exchange(ref stopping, 1) != 0) return true;
-            try { graceful(); return terminate(); }
-            catch { return false; }
-            finally { dispose(); }
+            int previous;
+            do {
+                previous = Volatile.Read(ref stopping);
+                if (previous == 3) return false;
+            } while (Interlocked.CompareExchange(ref stopping, 1, previous) != previous);
+            if (previous == 0) return Observe(true);
+            Stopwatch timer = Stopwatch.StartNew();
+            lock (completion) {
+                while (!completed) {
+                    long remaining = 20000 - timer.ElapsedMilliseconds;
+                    if (remaining <= 0) return false;
+                    Monitor.Wait(completion, (int)remaining);
+                }
+                return empty;
+            }
+        }
+        bool Observe(bool requestGraceful) {
+            bool observed = false;
+            try { if (requestGraceful) graceful(); observed = terminate(); }
+            catch { observed = false; }
+            finally {
+                try { dispose(); } catch { observed = false; }
+                lock (completion) { empty = observed; completed = true; Monitor.PulseAll(completion); }
+            }
+            return observed;
         }
     }
 
