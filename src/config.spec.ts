@@ -59,6 +59,20 @@ describe('loadConfig', () => {
     base({ ACORNOPS_VM_OS_FAMILY: 'windows' }); expect(() => loadConfig()).toThrow('OS/service-manager');
     base({ ACORNOPS_VM_OS_FAMILY: 'windows', ACORNOPS_VM_SERVICE_MANAGER: 'scm', ACORNOPS_VM_ALLOWED_LOG_CHANNELS: 'Security' }); expect(() => loadConfig()).toThrow('Application/System');
   });
+  it('ignores Windows-only channels on Linux while retaining Linux unit validation', () => {
+    for (const channels of ['Security', 'System,System', '*']) {
+      base({ ACORNOPS_VM_ALLOWED_LOG_CHANNELS: channels, ACORNOPS_VM_ALLOWED_LOG_UNITS: 'ssh.service' });
+      expect(loadConfig()).toMatchObject({ osFamily: 'linux', allowedLogChannels: [], allowedLogUnits: ['ssh.service'] });
+    }
+    base({ ACORNOPS_VM_ALLOWED_LOG_CHANNELS: 'Security', ACORNOPS_VM_ALLOWED_LOG_UNITS: '*' });
+    expect(() => loadConfig()).toThrow('exact .service');
+  });
+  it('still rejects unsupported and duplicate Windows channels', () => {
+    for (const channels of ['Security', 'System,System']) {
+      base({ ACORNOPS_VM_OS_FAMILY: 'windows', ACORNOPS_VM_SERVICE_MANAGER: 'scm', ACORNOPS_VM_ALLOWED_LOG_CHANNELS: channels });
+      expect(() => loadConfig()).toThrow(channels === 'Security' ? 'Application/System' : 'duplicate');
+    }
+  });
   it('redacts credentials without exposing short values', () => {
     expect(redact('')).toBe('<redacted>'); expect(redact('short')).toBe('<redacted>'); expect(redact('agent-key-12345678')).toBe('agen...5678');
   });

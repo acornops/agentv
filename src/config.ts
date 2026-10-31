@@ -73,7 +73,7 @@ export function loadConfig(): AgentConfig {
   const osFamily = env('ACORNOPS_VM_OS_FAMILY', 'linux');
   const serviceManager = env('ACORNOPS_VM_SERVICE_MANAGER', 'systemd');
   if (!((osFamily === 'linux' && serviceManager === 'systemd') || (osFamily === 'windows' && serviceManager === 'scm'))) throw new Error('Invalid OS/service-manager pair');
-  const channels = csvEnv('ACORNOPS_VM_ALLOWED_LOG_CHANNELS');
+  const channels = osFamily === 'windows' ? csvEnv('ACORNOPS_VM_ALLOWED_LOG_CHANNELS') : [];
   if (channels.some((channel) => channel !== 'Application' && channel !== 'System')) throw new Error('Only Application/System log channels are supported');
   const allowedLogChannels = channels as Array<'Application' | 'System'>;
   const collectorMode = env('ACORNOPS_VM_COLLECTOR_MODE', 'live');
