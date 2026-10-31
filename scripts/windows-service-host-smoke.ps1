@@ -53,6 +53,7 @@ try {
     $null = New-Item -ItemType Directory -Path (Join-Path $release 'node_modules')
     foreach ($dependency in @('ws','zod')) { Copy-Item (Join-Path $repo ('node_modules\'+$dependency)) (Join-Path $release 'node_modules') -Recurse }
     Copy-Item (Join-Path $PSScriptRoot 'windows-tests\host-child.mjs') (Join-Path $release 'dist\windows-service-entry.js')
+    Copy-Item (Join-Path $PSScriptRoot 'windows-tests\collector-evidence.mjs') (Join-Path $release 'dist\collector-evidence.mjs')
     '{"type":"module"}' | Set-Content (Join-Path $release 'package.json') -Encoding ASCII
     $image = '"' + (Join-Path $release 'AgentV.ServiceHost.exe') + '" --node "' + $node + '"'
     Sc -Arguments @('create','AcornOpsAgentV','binPath=', $image,'start=','demand','obj=','NT AUTHORITY\LocalService')
@@ -112,11 +113,12 @@ try {
     $tree = Fixture 'collectors'
     Wait-Until { Test-Path (Join-Path $root 'state\collectors.json') } 100
     $native = Get-Content (Join-Path $root 'state\collectors.json') -Raw | ConvertFrom-Json
+    # Preserve bounded collector evidence before any assertion or owned-path cleanup.
+    $evidence.serviceCollectors = $native
     Assert ($null -eq $native.PSObject.Properties['failure']) 'Production collectors execute under contained service identity'
     Assert ($native.host.os -eq 'windows' -and $native.host.productType -in @(2,3)) 'Service identity reads supported Windows Server facts'
     foreach ($name in @('volumes','processes','services')) { Assert ($native.collections.$name.status -eq 'ok' -and $native.collections.$name.count -gt 0) "Service identity reads $name" }
     foreach ($name in @('listeners','application','system')) { Assert ($native.collections.$name.status -in @('ok','partial','permission_denied')) "Service identity classifies $name availability" }
-    $evidence.serviceCollectors = $native
     Stop-Service AcornOpsAgentV; Gone $tree
     $tree = Fixture 'flood'; Wait-Until { Test-Path (Join-Path $root 'logs\stderr.log.3') }; Stop-Service AcornOpsAgentV; Gone $tree
     $logs = @(Get-ChildItem (Join-Path $root 'logs') -File)
@@ -196,5 +198,5 @@ try {
     if ($owned) { if (Get-Service AcornOpsAgentV -ErrorAction SilentlyContinue) { & $sc config AcornOpsAgentV start= disabled | Out-Null; Stop-Service AcornOpsAgentV -ErrorAction SilentlyContinue; & $sc delete AcornOpsAgentV | Out-Null }; Remove-Item -LiteralPath $dataParent,$programParent,$probeRoot -Recurse -Force -ErrorAction Continue }
     if ($userOwned) { Remove-LocalUser -Name $user }
     $artifact = Join-Path $repo 'artifacts\windows-service-host'; $null = New-Item -ItemType Directory -Path $artifact -Force
-    $evidence | ConvertTo-Json -Depth 6 | Set-Content (Join-Path $artifact 'native-evidence.json') -Encoding UTF8
+    $evidence | ConvertTo-Json -Depth 10 | Set-Content (Join-Path $artifact 'native-evidence.json') -Encoding UTF8
 }

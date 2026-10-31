@@ -3,6 +3,7 @@ import { readFileSync, writeFileSync, renameSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { spawn } from 'node:child_process';
 import { createInterface } from 'node:readline';
+import { collectServiceEvidence } from './collector-evidence.mjs';
 const configPath = process.argv[3];
 let child;
 let mode;
@@ -19,26 +20,16 @@ createInterface({ input: process.stdin }).on('line', async (line) => {
   writeFileSync(join(state, 'fixture.pending'), JSON.stringify({ pid: process.pid, child: child.pid, launch: command.launch, env: process.env }));
   renameSync(join(state, 'fixture.pending'), join(state, 'fixture.json'));
   if (mode === 'collectors') {
-    const evidence = { collections: {} };
-    let host;
+    let evidence;
     try {
-      const [{ WindowsLiveHost }, { WindowsCollectorRunner }] = await Promise.all([import('./windows/live.js'), import('./windows/runner.js')]);
-      host = new WindowsLiveHost(['Application', 'System'], new WindowsCollectorRunner(command.trustedSystemDirectory));
-      const summary = await host.getHostSummary();
-      evidence.host = { os: summary.os_family, productType: summary.product_type, build: summary.build };
-      for (const [name, operation] of [
-        ['volumes', () => host.listFilesystems({ limit: 1000 })],
-        ['processes', () => host.listProcesses({ limit: 1000 })],
-        ['services', () => host.listServices({ limit: 1000 })],
-        ['listeners', () => host.listListeners({ limit: 1000 })],
-        ['application', () => host.queryLogs({ channel: 'Application', limit: 10, byte_limit: 16384 })],
-        ['system', () => host.queryLogs({ channel: 'System', limit: 10, byte_limit: 16384 })],
-      ]) {
-        const result = await operation();
-        evidence.collections[name] = { status: result.health.status, count: (result.items || result.entries).length };
-      }
-    } catch (error) { evidence.failure = { code: error.toolCode || 'FIXTURE_FAILURE' }; }
-    finally { if (host) await host.stop(); }
+      const [{ WindowsLiveHost }, { WindowsCollectorRunner }, { COLLECTOR_STAGES, scripts }] = await Promise.all([
+        import('./windows/live.js'), import('./windows/runner.js'), import('./windows/scripts.js')
+      ]);
+      evidence = await collectServiceEvidence({
+        allowedScripts: Object.keys(scripts), allowedStages: COLLECTOR_STAGES,
+        createHost: (observe) => new WindowsLiveHost(['Application', 'System'], new WindowsCollectorRunner(command.trustedSystemDirectory, observe))
+      });
+    } catch { evidence = { collections: {}, failure: { operation: 'initialization', code: 'FIXTURE_FAILURE' } }; }
     writeFileSync(join(state, 'collectors.pending'), JSON.stringify(evidence));
     renameSync(join(state, 'collectors.pending'), join(state, 'collectors.json'));
   }
