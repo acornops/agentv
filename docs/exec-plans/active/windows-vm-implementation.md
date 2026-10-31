@@ -283,3 +283,18 @@ eight Windows reads. Both released and updated Linux mocks return full service
 details for `list_services`, exceeding their frozen summary schema. The source
 is unchanged from the release; record this pre-existing mock gap separately
 instead of changing Linux behavior or claiming every schema check passed.
+
+At `d7d2f4d`, both short native recovery jobs pass, including missing-journal
+refusal, protected durable-state tests, fixed SCM policy, and generated
+control-plane command parsing/argument binding. The expanded installer matrix
+is still pending; finalized cleanup was previously reproduced as a failing
+native case. The generated download wrapper itself has not been executed end
+to end. Matching [Linux CI](https://github.com/acornops/agentv/actions/runs/41234585924)
+and [native service-host CI](https://github.com/acornops/agentv/actions/runs/41234585870)
+pass.
+
+The [collector matrix at the same checkpoint](https://github.com/acornops/agentv/actions/runs/41234585971)
+again fails both Server 2022 cells. One subsequent diagnostic invocation also
+takes 8.37 seconds, so this is not established as a single first-call delay.
+The unchanged eight-second production limit and failed qualification outcome
+remain in place; a later passing run alone will not resolve this evidence.
