@@ -10,6 +10,10 @@ $source = Join-Path $PSScriptRoot '..\packaging\windows\AgentV.ServiceHost.cs'
 $output = Join-Path $OutputDirectory 'AgentV.ServiceHost.exe'
 & $compiler /nologo /target:exe /platform:x64 /optimize+ /warnaserror+ /reference:System.ServiceProcess.dll /reference:System.Web.Extensions.dll "/out:$output" $source
 if ($LASTEXITCODE -ne 0) { throw 'Windows service host compilation failed.' }
+$installerSource = Join-Path $PSScriptRoot '..\packaging\windows\AgentV.InstallerNative.cs'
+$installerLibrary = Join-Path $OutputDirectory 'AgentV.InstallerNative.dll'
+& $compiler /nologo /target:library /platform:x64 /optimize+ /warnaserror+ "/out:$installerLibrary" $installerSource
+if ($LASTEXITCODE -ne 0) { throw 'Windows installer interop compilation failed.' }
 $revision = git -C (Join-Path $PSScriptRoot '..') rev-parse HEAD
 if ($LASTEXITCODE -ne 0) { throw 'Cannot bind the service host to its source revision.' }
-@{ schema = 'acornops.agentv-windows-host.v1'; sourceRevision = $revision; sourceSha256 = (Get-FileHash -LiteralPath $source -Algorithm SHA256).Hash.ToLowerInvariant(); binarySha256 = (Get-FileHash -LiteralPath $output -Algorithm SHA256).Hash.ToLowerInvariant(); targetFramework = 'net48'; architecture = 'x64' } | ConvertTo-Json | Set-Content -LiteralPath (Join-Path $OutputDirectory 'host-manifest.json') -Encoding UTF8
+@{ schema = 'acornops.agentv-windows-host.v1'; sourceRevision = $revision; sourceSha256 = (Get-FileHash -LiteralPath $source -Algorithm SHA256).Hash.ToLowerInvariant(); binarySha256 = (Get-FileHash -LiteralPath $output -Algorithm SHA256).Hash.ToLowerInvariant(); targetFramework = 'net48'; architecture = 'x64'; installerNative = @{ sourceSha256 = (Get-FileHash -LiteralPath $installerSource -Algorithm SHA256).Hash.ToLowerInvariant(); binarySha256 = (Get-FileHash -LiteralPath $installerLibrary -Algorithm SHA256).Hash.ToLowerInvariant() } } | ConvertTo-Json -Depth 4 | Set-Content -LiteralPath (Join-Path $OutputDirectory 'host-manifest.json') -Encoding UTF8

@@ -22,3 +22,6 @@ jobs:
       - name: Exercise recovery state decisions
         shell: powershell
         run: ./scripts/windows-tests/recovery-decision-tests.ps1
+      - name: Compile and exercise fixed-service SCM policy interop
+        shell: powershell
+        run: ./scripts/windows-tests/installer-policy-tests.ps1 -AllowDisposableCi
