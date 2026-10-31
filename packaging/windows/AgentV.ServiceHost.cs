@@ -29,14 +29,14 @@ namespace AcornOps.AgentV {
     }
 
     internal sealed class TrustFailure : IOException {
-        internal readonly int Reason;
-        internal TrustFailure(int reason) : base("Windows trust validation failed") { Reason = reason; }
+        internal readonly int Reason, Depth, Rights, Propagation, Principal;
+        internal TrustFailure(int reason, int depth = -1, int rights = 0, int propagation = 0, int principal = 0) : base("Windows trust validation failed") { Reason = reason; Depth = depth; Rights = rights; Propagation = propagation; Principal = principal; }
     }
     internal static class TrustedPaths {
         internal static void Check(string path, bool directory) {
             if (!Path.IsPathRooted(path) || Path.GetFullPath(path) != path || path.StartsWith(@"\\")) throw new TrustFailure(1);
             string current = path;
-            bool leaf = true;
+            bool leaf = true; int depth = 0;
             while (current != null) {
                 FileAttributes attributes = File.GetAttributes(current);
                 if ((attributes & FileAttributes.ReparsePoint) != 0) throw new TrustFailure(2);
@@ -48,9 +48,9 @@ namespace AcornOps.AgentV {
                 FileSystemRights writes = FileSystemRights.ChangePermissions | FileSystemRights.TakeOwnership | FileSystemRights.Delete;
                 if (leaf) writes |= FileSystemRights.Write | FileSystemRights.DeleteSubdirectoriesAndFiles;
                 foreach (FileSystemAccessRule rule in acl.GetAccessRules(true, true, typeof(SecurityIdentifier))) {
-                    if (rule.AccessControlType == AccessControlType.Allow && (rule.FileSystemRights & writes) != 0 && !Privileged(rule.IdentityReference.Value)) throw new TrustFailure(5);
+                    if (rule.AccessControlType == AccessControlType.Allow && (rule.FileSystemRights & writes) != 0 && !Privileged(rule.IdentityReference.Value)) throw new TrustFailure(5, depth, (int)rule.FileSystemRights, (int)rule.PropagationFlags, PrincipalKind(rule.IdentityReference.Value));
                 }
-                current = Path.GetDirectoryName(current); leaf = false;
+                current = Path.GetDirectoryName(current); leaf = false; depth++;
                 if (String.IsNullOrEmpty(current)) break;
             }
         }
@@ -59,6 +59,15 @@ namespace AcornOps.AgentV {
             foreach (string item in Directory.GetFileSystemEntries(path)) {
                 if ((File.GetAttributes(item) & FileAttributes.Directory) != 0) Tree(item); else Check(item, false);
             }
+        }
+        static int PrincipalKind(string sid) {
+            if (sid == "S-1-5-18") return 1;
+            if (sid == "S-1-5-32-544") return 2;
+            if (sid == "S-1-3-0") return 4;
+            if (sid == "S-1-5-32-545") return 5;
+            if (sid == "S-1-5-11") return 6;
+            if (sid == "S-1-1-0") return 7;
+            return 9;
         }
         static bool Privileged(string sid) {
             return sid == "S-1-5-18" || sid == "S-1-5-32-544" || sid == "S-1-5-80-956008885-3418522649-1831038044-1853292631-2271478464";
@@ -120,7 +129,7 @@ namespace AcornOps.AgentV {
                 if (job != null) { job.TerminateAndWait(); job.Dispose(); }
                 Win32Exception native = error as Win32Exception;
                 TrustFailure trust = error as TrustFailure;
-                Diagnostic("Service startup failed stage=" + stage + " hresult=" + error.HResult + " native=" + (native == null ? 0 : native.NativeErrorCode) + " trust=" + (trust == null ? 0 : trust.Reason), true);
+                Diagnostic("Service startup failed stage=" + stage + " hresult=" + error.HResult + " native=" + (native == null ? 0 : native.NativeErrorCode) + " trust=" + (trust == null ? 0 : trust.Reason) + " depth=" + (trust == null ? -1 : trust.Depth) + " rights=" + (trust == null ? 0 : trust.Rights) + " propagation=" + (trust == null ? 0 : trust.Propagation) + " principal=" + (trust == null ? 0 : trust.Principal), true);
                 throw new InvalidOperationException("AgentV service startup failed");
             }
         }

@@ -148,9 +148,20 @@ try {
     if ($owned) {
         $service = Get-CimInstance Win32_Service -Filter "Name='AcornOpsAgentV'" -ErrorAction SilentlyContinue
         if ($null -ne $service) { $evidence.scm = @{ state = $service.State; exitCode = $service.ExitCode; serviceSpecificExitCode = $service.ServiceSpecificExitCode } }
+        $aclEvidence = @(); $aclPath = Join-Path $release 'node.exe'; $depth = 0
+        while ($aclPath -and (Test-Path -LiteralPath $aclPath)) {
+            $acl = Get-Acl -LiteralPath $aclPath
+            $rules = @($acl.GetAccessRules($true, $true, [Security.Principal.SecurityIdentifier]) | ForEach-Object {
+                $principal = $_.IdentityReference.Value
+                if ($principal -notin @('S-1-5-18','S-1-5-32-544','S-1-3-0','S-1-5-32-545','S-1-5-11','S-1-1-0','S-1-5-80-956008885-3418522649-1831038044-1853292631-2271478464')) { $principal = 'other' }
+                @{ principal = $principal; rights = [int]$_.FileSystemRights; propagation = [int]$_.PropagationFlags; inheritance = [int]$_.InheritanceFlags; type = [int]$_.AccessControlType }
+            })
+            $aclEvidence += @{ depth = $depth; rules = $rules }; $aclPath = Split-Path $aclPath -Parent; $depth++
+        }
+        $evidence.nodeAncestorAcls = $aclEvidence
         $diagnosticPath = Join-Path $root 'logs\host.log'
         if (Test-Path -LiteralPath $diagnosticPath -PathType Leaf) {
-            $evidence.hostDiagnostics = @(Get-Content -LiteralPath $diagnosticPath -Tail 32 | Where-Object { $_ -match '^Service startup failed stage=[a-z-]{1,32} hresult=-?[0-9]{1,12} native=-?[0-9]{1,12} trust=[0-9]{1,2}$' })
+            $evidence.hostDiagnostics = @(Get-Content -LiteralPath $diagnosticPath -Tail 32 | Where-Object { $_ -match '^Service startup failed stage=[a-z-]{1,32} hresult=-?[0-9]{1,12} native=-?[0-9]{1,12} trust=[0-9]{1,2} depth=-?[0-9]{1,3} rights=-?[0-9]{1,12} propagation=[0-9]{1,2} principal=[0-9]{1,2}$' })
         }
     }
     if ($null -ne $sentinel -and -not $sentinel.HasExited) { $sentinel.Kill(); $sentinel.WaitForExit() }
