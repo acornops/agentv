@@ -332,9 +332,29 @@ credential from the existing protocol; the original configuration remains and
 a new token may be needed. Lost commit/rollback responses are resolved through
 authenticated backend status and fresh local authentication evidence.
 
+For a rollback-denied transaction whose exact candidate is still active, an
+administrator may pass `-AcceptCommittedCandidate` to that fixed launcher.
+This explicit manual action requires a fresh candidate launch, matching config
+hash, local active authentication and authoritative backend connection proof.
+It rechecks before finalization and persists the operator intent so interruption
+can resume with new proof. Default/scheduled recovery remains pending; the
+option cannot be combined with `-Automatic` or `-Uninstall` and cannot select
+an old credential.
+
 The same protected launcher accepts `-Uninstall` after transactions are
 resolved. It stops/removes the owned service and recovery task, retaining durable
 configuration and credentials; it does not revoke a backend key. Do not remove
 or edit a pending journal to force progress. Native packaging interruption and
 real reboot qualification remain incomplete; these scripts are preview assets,
 not an enabled installation offer.
+
+Preview manual-support limits: a completed candidate that is now `grace` or
+`revoked`, or a retained credential that can no longer authenticate, stays
+unresolved with protected state intact. Automatic recovery does not select a
+historical credential or claim rollback success. A new enrollment is refused
+while that protected transaction remains unresolved. These cases require manual
+support and are not qualified recovery paths in this preview; there is no
+supported journal-deletion or credential-retirement shortcut. Explicit acceptance
+of a committed candidate applies only to a still-active candidate with fresh
+local and backend proof; it does not resolve non-active credentials. Windows
+onboarding remains disabled pending the full qualification/review gates.

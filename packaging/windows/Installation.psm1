@@ -84,8 +84,9 @@ function Save-AgentVJournal {
 }
 function Assert-AgentVJournal {
     param($Journal,$Owner)
-    if ($Journal.schema -cne 'acornops.agentv-windows-installation.v1' -or $Journal.ownerId -cne $Owner.id -or $Journal.operation -notin @('install','repair') -or $Journal.intent -notin @('commit','rollback','rollback-denied') -or $Journal.attempts -lt 0 -or $Journal.attempts -gt 12 -or $Journal.everStarted -isnot [bool]) { throw 'Invalid protected recovery journal.' }
+    if ($Journal.schema -cne 'acornops.agentv-windows-installation.v1' -or $Journal.ownerId -cne $Owner.id -or $Journal.operation -notin @('install','repair') -or $Journal.intent -notin @('commit','rollback','rollback-denied','accept-committed') -or $Journal.attempts -lt 0 -or $Journal.attempts -gt 12 -or $Journal.everStarted -isnot [bool]) { throw 'Invalid protected recovery journal.' }
     if ($Journal.hadService -isnot [bool] -or $Journal.hadTask -isnot [bool] -or $Journal.previousRunning -isnot [bool] -or $Journal.previousStartType -notin @(2,3,4) -or $Journal.selected -notin @('candidate','previous') -or ($null -ne $Journal.terminal -and $Journal.terminal -notin @('candidate','previous','removed')) -or ($Journal.terminal -eq 'removed' -and $null -ne $Journal.previous) -or ($Journal.hadTask -and $null -eq $Journal.previousMaintenance)) { throw 'Invalid recovery ownership state.' }
+    if ($Journal.intent -eq 'accept-committed' -and $null -eq $Journal.transaction) { throw 'Candidate acceptance requires an authenticated transaction.' }
     if ($Journal.previousTaskXml -and $Journal.previousTaskXml.Length -gt 65536) { throw 'Oversized recovery task backup.' }
     if ($null -ne $Journal.previousMaintenance) { Assert-AgentVVersion $Journal.previousMaintenance.version; if ($Journal.previousMaintenance.ownerId -cne $Owner.id -or $Journal.previousMaintenance.manifestSha256 -notmatch '^[0-9a-f]{64}$') { throw 'Invalid recovery launcher backup.' } }
     Assert-AgentVHttpsUrl -Value $Journal.platformUrl
@@ -286,18 +287,20 @@ function Finish-AgentVTransaction {
     Remove-Item -LiteralPath $script:Paths.Journal -Force
 }
 function Invoke-AgentVRecovery {
-    param([switch]$Automatic)
+    param([switch]$Automatic,[switch]$AcceptCommittedCandidate)
+    if ($Automatic -and $AcceptCommittedCandidate) { throw 'Candidate acceptance requires an explicit manual invocation.' }
     Assert-AgentVAdministrator
-    if (-not (Test-Path -LiteralPath $script:Paths.Journal)) { return 'idle' }
+    if (-not (Test-Path -LiteralPath $script:Paths.Journal)) { if ($AcceptCommittedCandidate) { throw 'No candidate transaction exists to accept.' }; return 'idle' }
     $owner = Read-AgentVJson -Path $script:Paths.Owner -Secret
     $journal = Read-AgentVJson -Path $script:Paths.Journal -Secret
     if ($journal.ownerId -cne $owner.id) { throw 'Recovery ownership mismatch.' }
     # Prepared ownership is probed by SYSTEM before any cutover marker is published.
-    if (-not (Test-Path -LiteralPath $script:Paths.Marker) -and $null -eq $journal.terminal -and $null -eq $journal.transaction) { return 'prepared' }
+    if (-not (Test-Path -LiteralPath $script:Paths.Marker) -and $null -eq $journal.terminal -and $null -eq $journal.transaction) { if ($AcceptCommittedCandidate) { throw 'No authenticated candidate transaction exists to accept.' }; return 'prepared' }
     $lock = Enter-AgentVLock -Path $script:Paths.Lock
     try {
         $journal = Read-AgentVJson -Path $script:Paths.Journal -Secret
         Assert-AgentVJournal -Journal $journal -Owner $owner
+        if ($AcceptCommittedCandidate -and ($null -eq $journal.transaction -or $journal.intent -notin @('rollback-denied','accept-committed'))) { throw 'Only the retained rollback-denied candidate can be explicitly accepted.' }
         if ($null -ne $journal.transaction -and -not (Test-Path -LiteralPath $script:Paths.Marker)) { Write-AgentVDurableJson -Path $script:Paths.Marker -Value @{schema='acornops.agentv-windows-active.v1';ownerId=$owner.id} }
         Import-AgentVInstallerNative -Directory (Join-Path $script:Paths.Releases $journal.candidate.version) -Version $journal.candidate.version
         if ($journal.terminal -eq 'removed') { Finish-AgentVTransaction -Journal $journal -Selection removed; return 'rolled-back' }
@@ -306,14 +309,20 @@ function Invoke-AgentVRecovery {
         if ($Automatic -and $journal.attempts -ge 12) { return 'manual-recovery-required' }
         if (-not $Automatic) { $journal.attempts=0 }
         $journal.attempts++; Save-AgentVJournal -Journal $journal -Phase 'recovery-entered'
-        return Resume-AgentVTransaction -Journal $journal
+        return Resume-AgentVTransaction -Journal $journal -AcceptCommittedCandidate:$AcceptCommittedCandidate
     } finally { $lock.Dispose() }
 }
 function Resume-AgentVTransaction {
-    param($Journal)
+    param($Journal,[switch]$AcceptCommittedCandidate)
     # Every re-entry disables, suppresses and repeats the monotonic drain; no wall-clock shortcut.
     Stop-AgentVAndDrain -Journal $Journal
     $status = if ($null -ne $Journal.transaction) { Get-AgentVRemoteStatus -Journal $Journal } else { $null }
+    $accepting = $AcceptCommittedCandidate -or $Journal.intent -eq 'accept-committed'
+    if ($accepting -and ($null -eq $status -or $status.status -ne 'completed' -or $status.credentialState -ne 'active')) {
+        $pendingPhase=if($null -ne $status -and $status.status -eq 'completed' -and $status.credentialState -in @('grace','revoked')){'replacement-required'}else{'recovery-pending'}
+        Save-AgentVJournal -Journal $Journal -Phase $pendingPhase
+        return $pendingPhase
+    }
     $which = 'candidate'
     if ($null -ne $status -and $status.status -in @('cancelled','expired') -and $status.credentialState -eq 'revoked') { if ($null -eq $Journal.previous) { Finish-AgentVTransaction -Journal $Journal -Selection 'removed'; return 'rolled-back' }; $which='previous' }
     elseif ($null -eq $Journal.transaction -and $Journal.intent -eq 'rollback') { $which='previous' }
@@ -327,8 +336,26 @@ function Resume-AgentVTransaction {
             $status = Get-AgentVRemoteStatus -Journal $Journal
             $phase = if ($null -ne $status -and $status.status -eq 'verified') { 'provisional' } else { 'active' }
             $ready = Test-AgentVReady -ConfigHash $hash -Phase $phase
+            if ($AcceptCommittedCandidate -and $Journal.intent -ne 'accept-committed') {
+                if ($null -ne $status -and $status.status -eq 'completed' -and $status.credentialState -eq 'active' -and $status.activeConnected -and $ready -and $which -eq 'candidate') {
+                    # Persist operator intent only after both current proofs. A later
+                    # owner must obtain fresh proofs again before terminal cleanup.
+                    $Journal.intent='accept-committed'
+                    Save-AgentVJournal -Journal $Journal -Phase 'accept-committed-intent'
+                } else {
+                    Start-Sleep -Milliseconds 500
+                    continue
+                }
+            }
             $decision = Get-AgentVRecoveryDecision -Intent $Journal.intent -Status $status -CandidateReady ($which -eq 'candidate' -and $ready) -PreviousReady ($which -eq 'previous' -and $ready) -PreviousExists ($null -ne $Journal.previous)
-            if ($decision -eq 'finalize-candidate') { Finish-AgentVTransaction -Journal $Journal -Selection 'candidate'; return 'completed' }
+            if ($decision -eq 'finalize-candidate') {
+                if ($Journal.intent -eq 'accept-committed') {
+                    $confirmed=Get-AgentVRemoteStatus -Journal $Journal
+                    $fresh=Test-AgentVReady -ConfigHash $hash -Phase 'active'
+                    if ((Get-AgentVRecoveryDecision -Intent 'accept-committed' -Status $confirmed -CandidateReady $fresh -PreviousReady $false -PreviousExists ($null -ne $Journal.previous)) -ne 'finalize-candidate') { Save-AgentVJournal -Journal $Journal -Phase 'recovery-pending'; return 'pending' }
+                }
+                Finish-AgentVTransaction -Journal $Journal -Selection 'candidate'; return 'completed'
+            }
             if ($decision -eq 'finalize-previous') { Finish-AgentVTransaction -Journal $Journal -Selection 'previous'; return 'rolled-back' }
             if ($decision -eq 'remove-initial') { Finish-AgentVTransaction -Journal $Journal -Selection 'removed'; return 'rolled-back' }
             if ($decision -eq 'replacement-required' -or $decision -eq 'retain-candidate-recovery-required') { Save-AgentVJournal -Journal $Journal -Phase $decision; return $decision }

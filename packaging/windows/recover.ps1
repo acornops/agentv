@@ -1,5 +1,5 @@
 [CmdletBinding()]
-param([switch]$Automatic,[switch]$Uninstall)
+param([switch]$Automatic,[switch]$Uninstall,[switch]$AcceptCommittedCandidate)
 $ErrorActionPreference='Stop'
 Set-StrictMode -Version Latest
 # This fixed launcher checks its admin/SYSTEM-only bootstrap files before imports.
@@ -21,6 +21,7 @@ function Assert-LauncherPath {
     }
 }
 try {
+    if ($AcceptCommittedCandidate -and ($Automatic -or $Uninstall)) { throw 'Candidate acceptance is manual recovery only.' }
     $program=Join-Path ([Environment]::GetFolderPath('ProgramFiles')) 'AcornOps\AgentV'
     $maintenance=Join-Path $program 'maintenance'
     foreach ($name in @('Paths.psm1','Package.psm1','worker.json')) { Assert-LauncherPath (Join-Path $maintenance $name) }
@@ -38,6 +39,6 @@ try {
     if ((Get-FileHash (Join-Path $release 'package-manifest.json') -Algorithm SHA256).Hash.ToLowerInvariant() -cne $pointer.manifestSha256) { throw 'Recovery package checksum changed.' }
     $null=Assert-AgentVPackage -Directory $release -Version $pointer.version
     $action=if($Uninstall){'Uninstall'}else{'Recover'}
-    & (Join-Path $release 'windows\install-worker.ps1') -Action $action -Automatic:$Automatic
+    & (Join-Path $release 'windows\install-worker.ps1') -Action $action -Automatic:$Automatic -AcceptCommittedCandidate:$AcceptCommittedCandidate
     if (-not $?) { exit 1 }
 } catch { Write-Error 'AgentV protected recovery could not run. No untrusted recovery input was executed.'; exit 1 }

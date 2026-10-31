@@ -12,6 +12,9 @@ function Get-AgentVRecoveryDecision {
         if ($CandidateReady -and $Status.activeConnected) { return 'finalize-candidate' }
         return 'pending'
     }
+    # Explicit acceptance is restricted to the exact completed active candidate.
+    # It can never fall through to historical restoration or a new commit.
+    if ($Intent -eq 'accept-committed') { return 'pending' }
     if ($Status.status -in @('cancelled','expired') -and $Status.credentialState -eq 'revoked') {
         if (-not $PreviousExists) { return 'remove-initial' }
         if ($PreviousReady -and $Status.activeConnected) { return 'finalize-previous' }
