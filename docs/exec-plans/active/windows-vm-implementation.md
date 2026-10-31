@@ -112,7 +112,7 @@ Provisional authentication remains distinct from active authentication: it must 
 - [x] Record and independently review the native service-host choice, including SCM recovery, observed whole-job teardown and runtime shutdown seam. Selected repository-owned .NET4.8 host; see [reviewed service host design](../../design-docs/windows-service-host.md). Implementation and native evidence remain pending.
 - [x] Independently review installer recovery ordering, ambiguous backend outcomes and queued SCM restart ownership; see [Windows installer recovery design](../../design-docs/windows-installer-recovery.md). Native interruption qualification remains required.
 - [x] Implement and qualify the native service host, unique SID permissions, bounded logs, private start gate and process-tree teardown in hosted CI first. Use an intermediate feature-branch checkpoint; only proceed with transactional installer cutover after that native host gate passes.
-- [ ] Repair and test Windows snapshot health metadata after redaction, then replay actual produced snapshots into the backend's strict Windows schema and authenticated ingress. Keep the global redactor and Linux payloads unchanged; this producer/consumer check supplements native collector qualification.
+- [x] Repair and test Windows snapshot health metadata after redaction, then replay actual produced snapshots into the backend's strict Windows schema and authenticated ingress. Keep the global redactor and Linux payloads unchanged; this producer/consumer check supplements native collector qualification.
 - [ ] Write installer state/failure tests covering new install, repair, credential replacement, interrupted exchange/verification/commit, lost commit response, upgrade, cleanup and uninstall. Never restore a revoked credential and claim rollback. Configuration deletion/revocation is explicit, not implicit uninstall behavior. Repair includes no-token reinstall after uninstall when retained owner, config and immutable release selection remain trusted; reject conflicting services/tasks or ambiguous ownership and prove fresh authenticated readiness without changing the credential.
 - [ ] Implement checksummed package/build/bootstrap, trusted paths and ACLs, sanitized service environment, graceful process tree stop and crash recovery. Scripts accept arguments as data, avoid command interpolation, and do not log credentials. Provide an explicit manual `-AcceptCommittedCandidate` recovery path for rollback-denied state, gated on the exact transaction remaining completed/active plus fresh launch/config-bound local readiness and remote confirmation; automatic recovery stays conservative, with no historical credential fallback.
 - [ ] Add CI on `windows-2022` and `windows-2025` with Node 22/24, plus native collector and disposable SCM install/recovery tests. Retain Ubuntu systemd release gates unchanged. Reboot qualification is separate from service restart.
@@ -130,11 +130,12 @@ Provisional authentication remains distinct from active authentication: it must 
 
 ### Task 7: Mixed-version qualification and final review
 
-**Files:** Integration/CI tests in affected feature repos; focused Windows mock filter fixes in AgentV `src/windows/mock.ts` and tests; control-plane catalog output-schema assertions and `src/agent/offline-reconciliation.ts` with focused connection-lifecycle tests; compatibility evidence in this plan/assessment, operations/release documentation and workspace change set.
+**Files:** Integration/CI tests in affected feature repos; focused Windows mock filter fixes in AgentV `src/windows/mock.ts` and tests; AgentV `src/config.ts` and tests for Windows-only setting isolation; control-plane catalog output-schema assertions and `src/agent/offline-reconciliation.ts` with focused connection-lifecycle tests; compatibility evidence in this plan/assessment, operations/release documentation and workspace change set.
 
 **Interfaces:** Released Linux experimental.14 → updated backend; updated Linux → updated backend; Windows mock/live → updated backend; concurrent targets in one workspace. Preserve exact target scoping through gateway and execution engine.
 
 - [ ] Resolve deferred qualification findings: make synthetic Windows service-state, listener-protocol and process-query filters match the published native contract; assert target-specific output schemas during control-plane target switches and through actual gateway integration. Keep fixes isolated to those contracts.
+- [ ] Preserve Linux ignoring Windows-only `ACORNOPS_VM_ALLOWED_LOG_CHANNELS`: a released Linux process accepts an otherwise valid configuration containing `Security`, while the new unconditional Windows channel parser rejects it. Restrict Windows channel parsing/validation to Windows configuration and add a failing Linux characterization plus Windows rejection tests before the fix. Preserve Linux unit validation and Windows Application/System restrictions.
 - [ ] Correct the pre-existing Kubernetes-only disconnect reconciliation in a separate scoped commit: update VM status and event identity through the VM boundary, retain Linux/Windows OS metadata, and preserve existing Kubernetes behavior. Characterize released Linux disconnect/reconnect, stale-socket replacement and owner/draining races before changing the handler; a departing connection must never mark its replacement offline.
 - [ ] Exercise old-agent/new-backend enrollment, reconnect, snapshots, log reads and approved Linux restart handling; replay legacy optional-field omissions and bad Windows claims. Use disposable services, never existing databases or VMs.
 - [ ] Run complete affected-repo validation, Linux package/bootstrap/curl and real Ubuntu systemd CI, Windows CI and mixed-target integration. Test only justified changes after prior passing runs; collect exact commands/results and inspect every failure.
@@ -248,3 +249,15 @@ action, tool, systemd packaging, dependency and CI files are unchanged from the
 baseline. Shared configuration/lifecycle/entry seams are excluded from that
 comparison and require behavioral regression tests. The observed pre-existing VM
 disconnect-status defect remains the separate scoped task 7 correction.
+
+Fourteen Linux approval checks passed through real approval APIs, receipt signing,
+the execution-engine client, gateway, backend and both released/updated AgentV
+processes. Each rejects unapproved writes, altered approved arguments and replay,
+then completes the approved restart and post-action read. Host actions remain
+synthetic, and fixture run state suppresses model continuation dispatch; this
+qualifies the tool/approval boundary rather than a complete assistant run.
+
+Shared-configuration review also reproduced a narrow Linux regression: the new
+Windows log-channel parser rejects a Windows-only environment setting that the
+released Linux runtime ignored. Task 7 must fix this with characterization tests
+before final qualification; it is not an accepted residual risk.
