@@ -23,6 +23,7 @@ Status: approved for implementation by the user on 2026-10-31. Work in progress.
 - Windows read-only support must reject write enrollment and access-policy updates, suppress unexpected advertised writes, and deny write dispatch on the server.
 - Keep `AGENTV_SYSTEMD_*`, Linux asset names, and generated Linux shell commands intact. Windows registration is disabled unless Windows rollout is explicitly enabled and a qualified release is configured.
 - Windows stopped service alone is not a failure. Incomplete evidence must never resolve service issues. Unavailable load/swap/inode values remain unavailable, not zero.
+- Windows service failure evidence requires `state='Stopped'`, a non-disabled start mode, and a numeric `exit_code` other than `0` or `1077` (`ERROR_SERVICE_NEVER_STARTED`). `service_specific_exit_code` is only meaningful when `exit_code=1066`; do not independently classify a stale nonzero service-specific value as failure. Unknown evidence stays unknown.
 - No arbitrary shell/PowerShell execution, WinRM, VM provisioning, package mutation tools, or registry/AD management.
 - Mocks never qualify native permissions, service hosting, reboot, or package recovery. No release tags, merges, production changes, or activation during implementation.
 
@@ -52,14 +53,16 @@ Existing Linux modules retain ownership of Linux semantics. Add Windows modules 
 
 **Interfaces:** Consume released Linux AgentV `v0.0.1-experimental.14` source-equivalent baseline and the frozen catalog at `/private/tmp/acornops-windows-validation/linux-v14-tools.json` (SHA-256 `e06aeb4e125a43ec271888f440b8763ef86ce8a64726454ebbc54b74745ca81c`). Produce fixed behavioral checks for subsequent tasks. No production changes.
 
-- [ ] Add exact catalog comparison using the existing registry/router and frozen fixture; preserve all nine descriptors including restart schemas and output envelopes. Check read-only and helper-qualified advertisement using existing lifecycle tests where needed.
-- [ ] Add only missing characterization checks for omitted OS defaults, exact Linux install command, legacy handshake/snapshot fields, issue fingerprints and incomplete-evidence recovery. Existing adequate tests count; document their locations instead of duplicating them.
-- [ ] Run focused tests, show that a deliberately perturbed expected fixture fails and restore it, then run AgentV validation and affected control-plane tests. Do not claim TDD for already-correct behavior; this is baseline characterization.
-- [ ] Self-review, commit tests/provenance with explicit file paths, report existing coverage and any gaps. Runtime files must remain unchanged.
+- [x] Add exact catalog comparison using the existing registry/router and frozen fixture; preserve all nine descriptors including restart schemas and output envelopes. Check read-only and helper-qualified advertisement using existing lifecycle tests where needed.
+- [x] Add only missing characterization checks for omitted OS defaults, exact Linux install command, legacy handshake/snapshot fields, issue fingerprints and incomplete-evidence recovery. Existing adequate tests count; document their locations instead of duplicating them.
+- [x] Run focused tests, show that a deliberately perturbed expected fixture fails and restore it, then run AgentV validation and affected control-plane tests. Do not claim TDD for already-correct behavior; this is baseline characterization.
+- [x] Self-review, commit tests/provenance with explicit file paths, report existing coverage and any gaps. Runtime files must remain unchanged.
 
 ### Task 2: Backend OS identity and read-only security boundaries
 
 **Files:** Control plane `src/types/virtual-machine-contracts.ts`, `src/controllers/workspaces/virtual-machine-controller.ts`, `src/store/repository-virtual-machines.ts`, `src/store/repository-agentv-enrollments.ts`, `src/agent/handshake.ts`, `src/services/agentv-enrollment.ts`, new `src/services/virtual-machine-windows-install-instructions.ts`, configuration and VM dispatch/policy modules reached by those paths; focused tests and matching contract documentation. AgentV counterpart contract docs may be updated, never runtime in this task.
+
+Generated public API counterpart: `docs-website/openapi/control-plane-public.json`, in its own `feat/windows-vm-support` worktree (baseline `a4d0451`). Never export through a sibling symlink into an original checkout. Run docs-website `check`, `validate`, and `links` on the generated change.
 
 **Interfaces:** Stored target identity is `{osFamily:'linux',serviceManager:'systemd'}` or `{osFamily:'windows',serviceManager:'scm'}`. Omitted registration values preserve Linux defaults; explicit mismatched pairs fail. Add `AGENTV_WINDOWS_ENABLED` (default false), `AGENTV_WINDOWS_RELEASE_VERSION`, `AGENTV_WINDOWS_RELEASE_BASE_URL` independent of Linux config. Windows registration requires all three configured correctly. OS metadata is immutable. Enrollment/handshake binds the claimed pair before provisional credential verification. Existing Linux call sites remain valid.
 
@@ -80,7 +83,7 @@ Existing Linux modules retain ownership of Linux semantics. Add Windows modules 
 - [ ] Implement a type-safe lifecycle runtime seam preserving the existing Linux constructor/default behavior; do not cast a Windows adapter to HostAdapter. Keep Linux snapshot manager, HostAdapter and command runner semantics unchanged.
 - [ ] Expose `startWindowsAgent(config, options)` from `src/windows-runtime.ts` with an idempotent stop handle, and a bounded service-start/stop entry module for task 5. Runtime must not load before the native host START gate, and STOP received during asynchronous startup must be retained. Preserve Linux standalone signals and existing 250ms exit behavior; see [reviewed service host design](../../design-docs/windows-service-host.md).
 - [ ] Add bounded native scripts through a trusted absolute PowerShell executable, fixed script identifiers and JSON data arguments. Restrict environment, clear preload variables, bound bytes/time/rows/time windows, support cancellation. Test metacharacters, Unicode, permission failures, truncation, invalid JSON and unsupported hosts.
-- [ ] Implement native host/CPU/memory, volumes, processes, services, listeners and Application/System logs. Stopped services with no failure evidence are healthy; coverage/health prevents false recovery. Preserve redaction and common tool envelope limits.
+- [ ] Implement native host/CPU/memory, volumes, processes, services, listeners and Application/System logs. Test ordinary stopped/never-started (1077)/disabled services as non-failures and stopped process-aborted (1067) as failure; service-specific details apply only to1066. Coverage/health prevents false recovery. Preserve redaction and common tool envelope limits.
 - [ ] Add a clearly synthetic deterministic Windows mock and fixtures; never label synthetic output as captured native evidence. Add native collector smoke suitable for Windows CI.
 - [ ] Run focused RED/GREEN tests, full AgentV validation/e2e and frozen Linux catalog comparisons; update protocol docs on both sides, commit and report. Archive contents/config defaults for Linux remain compatible.
 
@@ -90,9 +93,12 @@ Existing Linux modules retain ownership of Linux semantics. Add Windows modules 
 
 **Interfaces:** Consume the exact task 3 Windows schema/docs. Dispatch by stored OS; validate Windows version and bounded native fields without imposing new requirements on Linux snapshots. Keep Linux issue fingerprints unchanged. Windows system-volume metrics use `host_summary.system_volume`; Windows logs route `channel`, Linux continues `unit`.
 
+Produce an additive authenticated `GET /workspaces/:workspaceId/virtual-machines/registration-options` endpoint for users with `manage_targets`, before the `/:vmId` route. Return `{platforms:[{osFamily:'linux',serviceManager:'systemd',accessModes:['read_only','read_write']}, ...]}`; include `{osFamily:'windows',serviceManager:'scm',accessModes:['read_only']}` only when Windows is enabled with valid release coordinates. Do not expose release URLs/tokens or change the existing list response. Console task 6 consumes these options; existing clients need no new request.
+
 - [ ] Write failing tests for Windows snapshots/inventory/metrics/log routing, wrong-OS snapshot rejection, exact legacy Linux behavior, non-C system volume, partial/denied collection and unknown fields.
 - [ ] Implement isolated Windows interpretation. Define stable Windows issue fingerprints using native service names; stop-state alone produces no issue. Only sufficient successful evidence clears findings.
 - [ ] Confirm Windows built-in definitions contain read-only tools and schemas stay scoped to the target. Add mixed Linux/Windows same-name catalog tests through actual sync/dispatch entry points, including unexpected writes and target switches.
+- [ ] Add registration-options response and authorization tests for Linux-only default, explicitly enabled Windows, denied target-management permission and no configuration secret exposure. Update OpenAPI source and generated docs feature counterpart.
 - [ ] Run focused tests, canonical control-plane validation with disposable DB and cross-repo contract checks; update docs and commit. Review before adding user-facing Windows onboarding.
 
 ### Task 5: Windows Service packaging and native qualification
@@ -111,7 +117,7 @@ Existing Linux modules retain ownership of Linux semantics. Add Windows modules 
 
 **Files:** Console VM types/API, setup hook/form, access selector, VM settings/details/metrics/log components and their existing tests; API mirrors and documentation.
 
-**Interfaces:** Consume backend OS pair and Windows availability; Linux default stays unchanged. Windows is read-only, uses Application/System channels and PowerShell install instructions. Show unavailable Linux-only metrics accurately. Server remains authority for feature/release gating.
+**Interfaces:** Consume backend OS pair and task 4 registration-options availability; Linux default stays unchanged. Windows is read-only, uses Application/System channels and PowerShell install instructions. Show unavailable Linux-only metrics accurately. Server remains authority for feature/release gating.
 
 - [ ] Write failing tests for Linux default/unchanged install and allowlist validation, explicit Windows selection/read-only policy, OS-immutable settings, Windows log channel filters and absent metrics.
 - [ ] Implement small changes in existing VM components; preserve layout and Linux copy/validation. Do not expose mock/collector implementation settings in production UI.
@@ -143,4 +149,8 @@ Backend first, with Windows disabled. Linux agents need no upgrade. Windows acti
 
 ## Completion evidence
 
-Pending implementation. Baselines and environment-specific failures are recorded in [assessment](windows-vm-assessment.md). Per-task reports and reviewer evidence are kept in the local ignored plan workspace; durable conclusions are copied here before handoff.
+Task 1 passed independent review with no findings. AgentV `984ad70` adds frozen catalog/provenance, and control-plane `05de831` pins legacy behavior. AgentV validation passed133 tests plus4 e2e; CP focused29 passed. Deliberate fixture perturbation failed as expected, then original bytes were restored.
+
+Pre-runtime native Linux qualification at AgentV `32da905` passed both Ubuntu24.04/systemd Node22 and Node24 jobs, including install/restart/upgrade/rollback/uninstall. [CI run](https://github.com/acornops/agentv/actions/runs/41209224807) and [draft PR](https://github.com/acornops/agentv/pull/8) preserve evidence. This run qualifies the baseline, not future runtime changes.
+
+User selected hosted Windows CI for now. Actual Windows reboot and Core/Desktop Experience coverage remain separate unexecuted gates; no disposable Windows VM was supplied. Baselines and environment-specific failures are recorded in [assessment](windows-vm-assessment.md). Per-task reports and reviewer evidence are kept in the local ignored plan workspace; durable conclusions are copied here before handoff.

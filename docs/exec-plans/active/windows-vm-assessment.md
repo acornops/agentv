@@ -1,6 +1,6 @@
 # Windows VM assessment and Linux baseline
 
-Date: 2026-10-31. Status: assessment; no runtime implementation changes.
+Date: 2026-10-31. Status: completed baseline assessment; staged implementation now tracked separately.
 
 ## Goal
 
@@ -116,12 +116,12 @@ all changes stay on the feature branch with thorough review. The staged
 
 ## Rollout, docs, and residual risk
 
-No product behavior, deployed host, release tag, or production configuration has
-changed. This document and the design are assessment artifacts. Windows live
-collectors, Windows service installation/reboot recovery, real Linux systemd,
-database integration, and mixed-version cross-service qualification are not yet
-validated in this task. Do not report Windows support or zero regressions from
-this assessment alone.
+At the assessment checkpoint no product behavior, deployed host, release tag, or
+production configuration had changed. Subsequent feature work is tracked in the
+implementation plan. The native Linux baseline follow-up below extends the
+original evidence; Windows live collectors, Windows service installation/reboot
+recovery and mixed-version cross-service qualification remain outstanding.
+Do not report Windows support or zero regressions from this assessment alone.
 
 ## Released Linux compatibility characterization (task 1)
 
@@ -156,3 +156,9 @@ their existing test doubles; `DATABASE_URL` pointed to unused localhost port 9.
 No runtime source or packaging was changed. Full control-plane validation and
 native/package qualification were not repeated for this test-only task; their
 pre-change results above remain separate evidence.
+
+## Native Linux baseline follow-up
+
+AgentV feature commit `32da905` passed [CI run41209224807](https://github.com/acornops/agentv/actions/runs/41209224807) on2026-10-31 before runtime implementation. Validation, coverage, and both Ubuntu24.04 live systemd gates (Node22 and Node24) succeeded. Downloaded job logs explicitly confirm runtime selection/trust/pinning, release archive/bootstrap checks, display-form restart and canonical replay/precondition guards, and live install/restart/upgrade/rollback/uninstall.
+
+Logs: `/private/tmp/acornops-windows-validation/baseline-native-linux-node22.log` and `baseline-native-linux-node24.log`. This establishes native baseline behavior; changed runtime must pass these gates again. The user selected hosted Windows CI for this implementation, so actual Windows reboot testing remains unqualified.
