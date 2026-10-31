@@ -98,9 +98,9 @@ release, although they do not verify a downloaded release artifact's provenance.
 ## Assessment checkpoint
 
 The independent builder review reported no important unanswered planning
-questions. The proposed design was shown to the user and its approval requested
-through the task's structured input panel. Implementation remains pending that
-checkpoint. No runtime or packaging source has changed from the baseline.
+questions. The user approved implementation on 2026-10-31 and reiterated that
+all changes stay on the feature branch with thorough review. The staged
+[implementation plan](windows-vm-implementation.md) now tracks that work.
 
 ## Remaining work
 
@@ -111,7 +111,7 @@ checkpoint. No runtime or packaging source has changed from the baseline.
 - [x] Draft conservative design and phase/release gates.
 - [x] Complete baseline diagnostics and record outcomes; canonical validations passed.
 - [x] Independent builder review of design: no important unanswered planning questions.
-- [ ] Approve design, then write detailed per-phase implementation plans.
+- [x] Approve design, then write detailed per-phase implementation plans.
 - [ ] Implement and evaluate each reviewed phase.
 
 ## Rollout, docs, and residual risk

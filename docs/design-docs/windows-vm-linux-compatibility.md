@@ -1,6 +1,6 @@
 # Windows VM support with Linux compatibility
 
-Status: proposed design, awaiting review and implementation approval.
+Status: approved for implementation by the user on 2026-10-31; implementation in progress.
 Date: 2026-10-31.
 
 ## Intent and acceptance requirement
@@ -34,9 +34,9 @@ regression; unexecuted qualification is reported explicitly.
    authentication, transport, policy, and security fixes would need maintaining
    in two agents. Separate packages provide OS isolation without a repository fork.
 
-The proposal follows the same-AgentV direction discussed with the user. The
-phase-one Windows scope and qualification targets below are recommendations, not
-previously agreed product requirements.
+The approved design follows the same-AgentV direction discussed with the user.
+The phase-one Windows scope and qualification targets below govern the staged
+implementation; native qualification remains a release gate.
 
 ## Scope and phases
 

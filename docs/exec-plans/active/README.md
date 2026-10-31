@@ -7,4 +7,5 @@ acceptance gates are preserved in the release records.
 
 ## Windows VM support
 
-- [Windows VM assessment and Linux baseline](windows-vm-assessment.md) — Assessment and proposed compatibility-first design; implementation not started.
+- [Windows VM assessment and Linux baseline](windows-vm-assessment.md) — Completed baseline and approved compatibility design.
+- [Windows VM implementation](windows-vm-implementation.md) — Staged implementation and regression gates on feature branches.
