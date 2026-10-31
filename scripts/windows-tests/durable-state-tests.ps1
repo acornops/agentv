@@ -27,7 +27,7 @@ try {
     $link = Join-Path $root 'junction'; $null = New-Item -ItemType Junction -Path $link -Target $root
     $rejected = $false; try { Assert-AgentVTrustedPath -Path $root -Tree } catch { $rejected = $true }
     Assert $rejected 'Runtime validation followed a junction.'
-    Remove-Item -LiteralPath $link -Force
+    [IO.Directory]::Delete($link)
     $rejected = $false; try { Read-AgentVJson -Path $path -Limit 2 } catch { $rejected = $true }
     Assert $rejected 'Bounded journal read accepted oversized data.'
     Write-Output 'Native durable JSON replacement, lock, confidential ACL and reparse checks passed.'
