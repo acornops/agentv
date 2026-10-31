@@ -12,6 +12,8 @@ $ps=Join-Path ([Environment]::SystemDirectory) 'WindowsPowerShell\v1.0\powershel
 $script:CiProcesses=[Collections.Generic.List[Diagnostics.Process]]::new()
 . (Join-Path $PSScriptRoot 'process-fixture.ps1')
 function Wait-OwnershipCi([string]$Name){$clock=[Diagnostics.Stopwatch]::StartNew();while(-not(Test-Path (Join-Path $work $Name))){if($clock.Elapsed.TotalSeconds -gt 20){throw 'Ownership interleaving was not reached.'};Start-Sleep -Milliseconds 50}}
+foreach($interleaving in @('held','released')){
+$script:CiProcesses=[Collections.Generic.List[Diagnostics.Process]]::new();$owned=$false
 if((Test-Path $work) -or (Test-Path $paths.Root) -or (Test-Path $paths.Program) -or (Get-Service AcornOpsAgentV -ErrorAction SilentlyContinue) -or (ScheduledTasks\Get-ScheduledTask -TaskName AcornOpsAgentVRecovery -ErrorAction SilentlyContinue)){throw 'Refusing preexisting installation resources.'}
 try{
     & $module {Assert-AgentVAdministrator}
@@ -25,10 +27,15 @@ try{
     $owner=Read-AgentVJson -Path $paths.Owner -Secret
     $journal=Read-AgentVJson -Path $paths.Journal -Secret
     $before=(Get-FileHash $paths.Owner -Algorithm SHA256).Hash
+    if($interleaving -eq 'released'){
+        [IO.File]::WriteAllText((Join-Path $work 'release-winner'),'continue')
+        if(-not $winner.WaitForExit(10000) -or $null -eq $winner.ExitCode -or $winner.ExitCode -ne 0){throw 'Winning owner did not release its lock.'}
+    }
     [IO.File]::WriteAllText((Join-Path $work 'release-loser'),'continue')
-    if(-not $loser.WaitForExit(10000) -or $null -eq $loser.ExitCode -or $loser.ExitCode -ne 7){throw 'Losing fresh installer did not refuse the held lock.'}
+    $expectedExit=if($interleaving -eq 'held'){7}else{0}
+    if(-not $loser.WaitForExit(10000) -or $null -eq $loser.ExitCode -or $loser.ExitCode -ne $expectedExit){throw 'Fresh contender did not respect the actual lock state.'}
     $unchanged=(Get-FileHash $paths.Owner -Algorithm SHA256).Hash -ceq $before
-    Write-Output ('Fresh ownership interleaving loserExit='+$loser.ExitCode+' ownerUnchanged='+$unchanged)
+    Write-Output ('Fresh ownership interleaving='+$interleaving+' loserExit='+$loser.ExitCode+' ownerUnchanged='+$unchanged)
     if(-not $unchanged -or (Read-AgentVJson -Path $paths.Owner -Secret).id -cne $journal.ownerId -or $owner.id -cne $journal.ownerId){throw 'Losing fresh installer changed the winning owner identity or journal binding.'}
     [IO.File]::WriteAllText((Join-Path $work 'release-winner'),'continue')
     if(-not $winner.WaitForExit(10000) -or $null -eq $winner.ExitCode -or $winner.ExitCode -ne 0){throw 'Winning owner did not complete.'}
@@ -37,4 +44,5 @@ try{
 }finally{
     foreach($process in $script:CiProcesses){if(-not $process.HasExited){$process.Kill();$process.WaitForExit(5000)|Out-Null};$process.Dispose()}
     if($owned){if(Test-Path $paths.Root){Remove-Item -LiteralPath $paths.Root -Recurse -Force};if(-not $parentExisted -and (Test-Path $parent)){[IO.Directory]::Delete($parent)};Remove-Item -LiteralPath $work -Recurse -Force}
+}
 }
