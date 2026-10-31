@@ -4,7 +4,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 const dependencies = vi.hoisted(() => ({ spawn: vi.fn(), lstat: vi.fn(), realpath: vi.fn() }));
 vi.mock('node:child_process', () => ({ spawn: dependencies.spawn }));
 vi.mock('node:fs/promises', () => ({ lstat: dependencies.lstat, realpath: dependencies.realpath }));
-import { WindowsCollectorRunner } from './runner.js';
+import { WindowsCollectorRunner, type CollectorObservation } from './runner.js';
 const originalPlatform = process.platform; const originalArch = process.arch; const originalNode = process.versions.node;
 let child: EventEmitter & { stdout: PassThrough; stderr: PassThrough; stdin: PassThrough; kill: ReturnType<typeof vi.fn> };
 beforeEach(() => {
@@ -44,6 +44,38 @@ describe('Windows bounded process boundary', () => {
   it('refuses executable redirection before spawning', async () => {
     dependencies.lstat.mockResolvedValue({ isSymbolicLink: () => true });
     await expect(new WindowsCollectorRunner().run('services', {})).rejects.toThrow('unavailable or unsupported'); expect(dependencies.spawn).not.toHaveBeenCalled();
+  });
+  it('observes the original timeout separately from late stages, exit and close without raw output', async () => {
+    vi.useFakeTimers();
+    const events: CollectorObservation[] = [];
+    child.kill.mockImplementation(() => true);
+    const runner = new WindowsCollectorRunner(undefined, (event) => events.push(event));
+    const pending = runner.run('host', {}); const observed = pending.catch((error) => error);
+    await vi.advanceTimersByTimeAsync(0); child.emit('spawn');
+    child.stderr.write('secret\nagentv-stage:cpu_query_started\n');
+    await vi.advanceTimersByTimeAsync(8000);
+    expect(events.find((event) => event.event === 'timer_fired')).toMatchObject({ stage: 'cpu_query_started', stdout_bytes: 0 });
+    child.stderr.write('agentv-stage:script_complete\n'); child.stdout.write('private-output');
+    child.emit('exit', 1); await vi.advanceTimersByTimeAsync(25); child.emit('close', 1);
+    expect((await observed).toolCode).toBe('TOOL_TIMEOUT');
+    const labels = events.map((event) => event.event);
+    expect(labels.slice(0, 4)).toEqual(['trust_start', 'trust_end', 'spawn_before', 'spawn_after']);
+    expect(labels.indexOf('timer_fired')).toBeLessThan(labels.indexOf('exit'));
+    expect(labels.indexOf('exit')).toBeLessThan(labels.indexOf('close'));
+    expect(events.find((event) => event.event === 'timer_fired')!.stage).toBe('cpu_query_started');
+    expect(events.at(-1)).toMatchObject({ event: 'close', stage: 'script_complete', stdout_bytes: 14 });
+    expect(JSON.stringify(events)).not.toMatch(/secret|private-output/);
+    await runner.stop();
+  });
+  it('bounds observed stages and isolates observer exceptions from collector success', async () => {
+    const events: CollectorObservation[] = [];
+    const runner = new WindowsCollectorRunner(undefined, (event) => { events.push(event); throw new Error('observer failed'); });
+    const pending = runner.run('host', {}); await spawned();
+    child.stderr.write('agentv-stage:script_started\n'.repeat(100));
+    child.stdout.write('{"items":[],"status":"ok","truncated":false}'); child.emit('exit', 0); child.emit('close', 0);
+    expect((await pending).status).toBe('ok');
+    expect(events.filter((event) => event.event === 'stage')).toHaveLength(32);
+    expect(events.at(-1)?.event).toBe('close'); await runner.stop();
   });
   it('maps nonzero exit and invalid JSON without exposing stderr or raw output', async () => {
     const runner = new WindowsCollectorRunner(); const pending = runner.run('services', {}); const rejected = expect(pending).rejects.toThrow('unsuccessfully'); await spawned(); child.stderr.write('secret raw native diagnostic'); child.emit('close', 5); await rejected;

@@ -267,6 +267,18 @@ x64 and Node 22/24. Synthetic mock data is development-only and does not qualify
 host permissions or service installation. See the
 [Windows read runtime contract](contracts/windows-read-runtime.md).
 
+`ACORNOPS_VM_ALLOWED_LOG_CHANNELS` applies only to Windows; Linux ignores it
+and retains its exact systemd log-unit allowlist. Windows still permits only
+`Application` and `System`. Synthetic Windows filters match the native literal,
+case-insensitive query and service-state/protocol contracts.
+
+Native collector smoke evidence includes a bounded timeline for its first real
+collector call: trust checks, spawn, received stages, the eight-second timer,
+exit and close, plus an event-loop lag summary. The observer is enabled only by
+the smoke harness and records no raw output or input. These are parent receipt
+times, not native execution durations. A failed first call remains failed;
+later diagnostic timings do not qualify cold startup or establish its cause.
+
 `dist/windows-service-entry.js --config <absolute protected JSON path>` is a
 private child entrypoint for the separately reviewed native SCM host. It waits
 for strict newline JSON START before importing runtime/config modules. START

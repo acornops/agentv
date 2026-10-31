@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { createStageTimeline } from '../scripts/windows-collector-timing.mjs';
+import { createEventLoopSummary, createStageTimeline } from '../scripts/windows-collector-timing.mjs';
 
 describe('sanitized CI collector timing evidence', () => {
   it('timestamps only fixed stage lines across chunk boundaries', () => {
@@ -14,5 +14,14 @@ describe('sanitized CI collector timing evidence', () => {
     expect(timeline.events).toEqual([]);
     timeline.observe(Buffer.from('agentv-stage:script_started\n'.repeat(100)));
     expect(timeline.events).toHaveLength(32);
+  });
+  it('bounds event-loop observation in 100ms lag bins without retaining individual samples', () => {
+    let now = 0; const summary = createEventLoopSummary(() => now);
+    now = 100; summary.sample(); now = 550; summary.sample();
+    expect(summary.result()).toMatchObject({ resolution_ms: 100, sample_count: 2, max_lag_ms: 350 });
+    expect(summary.result().lag_bins[0]).toBe(1); expect(summary.result().lag_bins[3]).toBe(1);
+    for (let i = 0; i < 500; i++) { now += 100; summary.sample(); }
+    expect(summary.result().sample_count).toBe(120);
+    expect(summary.result().lag_bins).toHaveLength(101);
   });
 });

@@ -3,6 +3,20 @@ import { performance } from 'node:perf_hooks';
 import { win32 } from 'node:path';
 import { createHash } from 'node:crypto';
 
+// At most 120 samples; the final bin includes lag of ten seconds or more.
+export function createEventLoopSummary(clock = () => performance.now()) {
+  let previous = clock(); let count = 0; let maximum = 0;
+  const bins = Array(101).fill(0);
+  return {
+    sample() {
+      if (count >= 120) return;
+      const now = clock(); const lag = Math.max(0, now - previous - 100); previous = now;
+      bins[Math.min(100, Math.floor(lag / 100))]++; count++; maximum = Math.max(maximum, lag);
+    },
+    result() { return { resolution_ms: 100, sample_count: count, max_lag_ms: Math.round(maximum), lag_bins: [...bins] }; },
+  };
+}
+
 // Keep fixed stage names/times only: no raw stderr, stdout, identities or input.
 export function createStageTimeline(allowedStages, clock = () => performance.now()) {
   const events = []; let line = ''; let oversized = false;

@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import { createHash } from 'node:crypto';
 import { mkdir, writeFile } from 'node:fs/promises';
 import { WindowsCollectorRunner } from '../dist/windows/runner.js';
-import { probeCollectorTiming } from './windows-collector-timing.mjs';
+import { createEventLoopSummary, probeCollectorTiming } from './windows-collector-timing.mjs';
 import { WindowsLiveHost } from '../dist/windows/live.js';
 import { COLLECTOR_STAGES, scripts, WINDOWS_COLLECTOR_SCRIPT_VERSION } from '../dist/windows/scripts.js';
 
@@ -10,12 +10,23 @@ import { COLLECTOR_STAGES, scripts, WINDOWS_COLLECTOR_SCRIPT_VERSION } from '../
 assert.equal(process.platform, 'win32', 'Native collector smoke requires Windows');
 assert.equal(process.arch, 'x64');
 assert.ok([22, 24].includes(Number(process.versions.node.split('.')[0])));
-const runner = new WindowsCollectorRunner();
+const firstCall = { diagnostic_only: true, production_timeout_ms: 8000, events: [], event_loop: null };
+let observeFirstCall = true;
+const runner = new WindowsCollectorRunner(undefined, (event) => {
+  if (observeFirstCall && firstCall.events.length < 64) firstCall.events.push(event);
+});
 let failedCommand;
 const runCollector = runner.run.bind(runner);
 runner.run = async (script, data, signal) => {
+  const first = observeFirstCall;
+  const loop = first ? createEventLoopSummary() : null;
+  const interval = loop ? setInterval(() => loop.sample(), 100) : undefined;
   try { return await runCollector(script, data, signal); }
   catch (error) { failedCommand = { script, data }; throw error; }
+  finally {
+    if (interval) clearInterval(interval);
+    if (first) { firstCall.event_loop = loop.result(); observeFirstCall = false; }
+  }
 };
 const host = new WindowsLiveHost(['Application', 'System'], runner);
 const evidence = {
@@ -23,7 +34,7 @@ const evidence = {
   provenance: { runner_os: process.env.RUNNER_OS || null, runner_image: process.env.ImageOS || null, runner_image_version: process.env.ImageVersion || null, github_run_id: process.env.GITHUB_RUN_ID || null, github_run_attempt: process.env.GITHUB_RUN_ATTEMPT || null, revision: process.env.GITHUB_SHA || null, node: process.versions.node, architecture: process.arch, collected_at: new Date().toISOString() },
   script_contract: WINDOWS_COLLECTOR_SCRIPT_VERSION,
   script_sha256: Object.fromEntries(Object.entries(scripts).map(([name, script]) => [name, createHash('sha256').update(script).digest('hex')])),
-  host: {}, collections: {},
+  host: {}, collections: {}, first_call: firstCall,
 };
 let currentStage = 'initialization';
 const runStage = async (name, operation) => {

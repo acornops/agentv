@@ -7,6 +7,12 @@ import { COLLECTOR_STAGES, scripts, type ScriptId } from './scripts.js';
 
 const resultSchema = z.object({ items: z.array(z.unknown()).max(1000), truncated: z.boolean(), status: z.enum(['ok', 'partial', 'unavailable', 'permission_denied']) }).strict();
 export type CollectorResult = z.infer<typeof resultSchema>;
+export interface CollectorObservation {
+  event: 'trust_start' | 'trust_end' | 'trust_failed' | 'spawn_before' | 'spawn_after' | 'spawn' | 'stdin_finish' | 'stage' | 'stdout_first' | 'stderr_first' | 'timer_fired' | 'kill_requested' | 'exit' | 'close';
+  collector: ScriptId; at_ms: number; stage?: string; stdout_bytes?: number; stderr_bytes?: number; exit_code?: number | null;
+  stdout_first_ms?: number; stdout_last_ms?: number; stderr_first_ms?: number; stderr_last_ms?: number;
+}
+export type CollectorObserver = (event: CollectorObservation) => void;
 export interface CollectorRunner { run(script: ScriptId, data: Record<string, unknown>, signal?: AbortSignal): Promise<CollectorResult>; stop(): Promise<void>; }
 
 /** Build a fixed collector command with caller values only in JSON stdin. */
@@ -36,7 +42,7 @@ export class WindowsCollectorRunner implements CollectorRunner {
   private readonly children = new Map<ChildProcessWithoutNullStreams, Promise<void>>();
   private stopping = false;
   private readonly executable: string;
-  constructor(private readonly systemDirectory = 'C:\\Windows\\System32') {
+  constructor(private readonly systemDirectory = 'C:\\Windows\\System32', private readonly observer?: CollectorObserver) {
     if (process.platform !== 'win32') throw new Error('Live Windows collectors require Windows Server');
     if (process.arch !== 'x64' || ![22, 24].includes(Number(process.versions.node.split('.')[0]))) throw new Error('Live Windows collectors require x64 Node 22 or 24');
     if (!win32.isAbsolute(systemDirectory) || win32.normalize(systemDirectory) !== systemDirectory || !/^[A-Za-z]:\\/.test(systemDirectory)) throw new Error('Unsupported trusted Windows system directory');
@@ -50,37 +56,54 @@ export class WindowsCollectorRunner implements CollectorRunner {
   }
   async run(script: ScriptId, data: Record<string, unknown>, signal?: AbortSignal): Promise<CollectorResult> {
     if (this.stopping || signal?.aborted) throw new ToolExecutionError('TOOL_TIMEOUT', 'Windows collection cancelled');
-    try { await this.trustedExecutable(); } catch { throw new ToolExecutionError('COMMAND_UNAVAILABLE', 'Trusted Windows PowerShell path is unavailable or unsupported'); }
+    const observationStart = performance.now();
+    const trace = (event: CollectorObservation['event'], details: Partial<CollectorObservation> = {}) => {
+      if (!this.observer) return;
+      try { this.observer({ ...details, event, collector: script, at_ms: Math.round(performance.now() - observationStart) }); } catch { /* Diagnostics cannot affect collection. */ }
+    };
+    trace('trust_start');
+    try { await this.trustedExecutable(); trace('trust_end'); } catch { trace('trust_failed'); throw new ToolExecutionError('COMMAND_UNAVAILABLE', 'Trusted Windows PowerShell path is unavailable or unsupported'); }
     if (this.stopping || signal?.aborted) throw new ToolExecutionError('TOOL_TIMEOUT', 'Windows collection cancelled');
     const command = collectorCommand(script, data);
     return await new Promise((resolve, reject) => {
+      trace('spawn_before');
       const child = spawn(this.executable, command.args, { env: collectorEnvironment(this.systemDirectory), windowsHide: true, shell: false, stdio: ['pipe', 'pipe', 'pipe'] });
-      const started = Date.now(); let spawned = false; let stdinFinished = false; let stage = 'spawn_pending';
+      const started = Date.now(); trace('spawn_after'); let spawned = false; let stdinFinished = false; let stage = 'spawn_pending';
       let stdoutBytes = 0; let stderrBytes = 0; let stderrLine = ''; let oversizedLine = false;
       const diagnostics = () => ({ collector: script, stage, elapsed_ms: Date.now() - started, stdout_bytes: stdoutBytes, stderr_bytes: stderrBytes, stdin_finished: stdinFinished, spawned });
-      child.once('spawn', () => { spawned = true; if (stage === 'spawn_pending') stage = 'spawned'; });
+      const received: Partial<CollectorObservation> = {}; let observedStages = 0;
+      const snapshot = () => ({ stage, stdout_bytes: stdoutBytes, stderr_bytes: stderrBytes, ...received });
+      child.once('spawn', () => { spawned = true; if (stage === 'spawn_pending') stage = 'spawned'; trace('spawn', snapshot()); });
       const stages: ReadonlySet<string> = new Set(COLLECTOR_STAGES);
       const observeStage = (chunk: Buffer) => {
         for (const byte of chunk) {
           if (byte === 10) {
-            if (!oversizedLine && stderrLine.startsWith('agentv-stage:')) { const value = stderrLine.slice(13).replace(/\r$/, ''); if (stages.has(value)) stage = value; }
+            if (!oversizedLine && stderrLine.startsWith('agentv-stage:')) { const value = stderrLine.slice(13).replace(/\r$/, ''); if (stages.has(value)) { stage = value; if (observedStages++ < 32) trace('stage', snapshot()); } }
             stderrLine = ''; oversizedLine = false;
           } else if (stderrLine.length < 96 && !oversizedLine) stderrLine += String.fromCharCode(byte);
           else oversizedLine = true;
         }
       };
       let bytes = 0; const output: Buffer[] = []; let failure: ToolExecutionError | undefined;
-      const kill = (error: ToolExecutionError) => { failure ??= error; child.kill(); };
+      const kill = (error: ToolExecutionError) => { if (!failure) trace('kill_requested', snapshot()); failure ??= error; child.kill(); };
       const abort = () => kill(new ToolExecutionError('TOOL_TIMEOUT', 'Windows collection cancelled'));
-      const timer = setTimeout(() => kill(new ToolExecutionError('TOOL_TIMEOUT', 'Windows collector timed out')), 8000);
+      const timer = setTimeout(() => { trace('timer_fired', snapshot()); kill(new ToolExecutionError('TOOL_TIMEOUT', 'Windows collector timed out')); }, 8000);
       signal?.addEventListener('abort', abort, { once: true });
-      const consume = (chunk: Buffer, retain: boolean) => { bytes += chunk.length; if (retain) stdoutBytes += chunk.length; else stderrBytes += chunk.length; if (bytes > 1024 * 1024) kill(new ToolExecutionError('OUTPUT_TOO_LARGE', 'Windows collector output exceeds limit')); else if (retain) output.push(chunk); else observeStage(chunk); };
+      const consume = (chunk: Buffer, retain: boolean) => {
+        if (this.observer) {
+          const at = Math.round(performance.now() - observationStart);
+          const first = retain ? 'stdout_first_ms' : 'stderr_first_ms'; const last = retain ? 'stdout_last_ms' : 'stderr_last_ms';
+          if (received[first] === undefined) { received[first] = at; trace(retain ? 'stdout_first' : 'stderr_first', snapshot()); }
+          received[last] = at;
+        }
+        bytes += chunk.length; if (retain) stdoutBytes += chunk.length; else stderrBytes += chunk.length; if (bytes > 1024 * 1024) kill(new ToolExecutionError('OUTPUT_TOO_LARGE', 'Windows collector output exceeds limit')); else if (retain) output.push(chunk); else observeStage(chunk); };
       child.stdout.on('data', (chunk: Buffer) => consume(chunk, true)); child.stderr.on('data', (chunk: Buffer) => consume(chunk, false));
-      child.stdin.once('finish', () => { stdinFinished = true; });
+      child.stdin.once('finish', () => { stdinFinished = true; trace('stdin_finish', snapshot()); });
       child.stdin.on('error', () => undefined); child.stdin.end(command.stdin, 'utf8');
       const closed = new Promise<void>((done) => child.once('close', () => done())); this.children.set(child, closed);
       child.once('error', () => { failure ??= new ToolExecutionError('COMMAND_UNAVAILABLE', 'Windows collector could not start'); });
-      child.once('close', (code) => { clearTimeout(timer); signal?.removeEventListener('abort', abort); this.children.delete(child); if (failure) reject(new ToolExecutionError(failure.toolCode, failure.message, { ...failure.data, ...diagnostics() })); else if (code !== 0) reject(new ToolExecutionError('HOST_UNAVAILABLE', 'Windows collector exited unsuccessfully', diagnostics())); else { try { resolve(parseCollectorResult(Buffer.concat(output).toString('utf8'))); } catch (error) { reject(error); } } });
+      child.once('exit', (code) => trace('exit', { ...snapshot(), exit_code: code }));
+      child.once('close', (code) => { trace('close', { ...snapshot(), exit_code: code }); clearTimeout(timer); signal?.removeEventListener('abort', abort); this.children.delete(child); if (failure) reject(new ToolExecutionError(failure.toolCode, failure.message, { ...failure.data, ...diagnostics() })); else if (code !== 0) reject(new ToolExecutionError('HOST_UNAVAILABLE', 'Windows collector exited unsuccessfully', diagnostics())); else { try { resolve(parseCollectorResult(Buffer.concat(output).toString('utf8'))); } catch (error) { reject(error); } } });
     });
   }
   async stop(): Promise<void> { this.stopping = true; const pending = [...this.children.entries()]; for (const [child] of pending) child.kill(); await Promise.all(pending.map(([, closed]) => closed)); }
