@@ -7,7 +7,7 @@ $serviceName = 'AcornOpsAgentV'; $sc = Join-Path ([Environment]::SystemDirectory
 if (Get-Service $serviceName -ErrorAction SilentlyContinue) { throw 'Refusing preexisting service.' }
 $output = Join-Path $PSScriptRoot '..\..\artifacts\windows-installer-native'
 $owned = $false
-function Sc([string[]]$Arguments) { & $sc @Arguments | Out-Null; if ($LASTEXITCODE -ne 0) { throw 'Native SCM fixture setup failed.' } }
+function Invoke-AgentVCiSc([string[]]$Arguments) { & $sc @Arguments | Out-Null; if ($LASTEXITCODE -ne 0) { throw 'Native SCM fixture setup failed.' } }
 function Assert([bool]$Condition, [string]$Message) { if (-not $Condition) { throw $Message } }
 try {
     & (Join-Path $PSScriptRoot '..\build-windows-host.ps1') -OutputDirectory $output
@@ -16,16 +16,16 @@ try {
     Assert ((Get-FileHash $library -Algorithm SHA256).Hash.ToLowerInvariant() -eq $manifest.installerNative.binarySha256) 'Installer interop binary checksum mismatch.'
     $null = [Reflection.Assembly]::LoadFrom($library)
     $image = '"' + (Join-Path $output 'AgentV.ServiceHost.exe') + '" --node "C:\missing-ci-node.exe"'
-    Sc -Arguments @('create',$serviceName,'binPath=',$image,'obj=','NT AUTHORITY\LocalService','start=','demand'); $owned = $true
-    Sc -Arguments @('failure',$serviceName,'reset=','86400','actions=','restart/10000/restart/30000/restart/60000')
-    Sc -Arguments @('failureflag',$serviceName,'0')
+    Invoke-AgentVCiSc -Arguments @('create',$serviceName,'binPath=',$image,'obj=','NT AUTHORITY\LocalService','start=','demand'); $owned = $true
+    Invoke-AgentVCiSc -Arguments @('failure',$serviceName,'reset=','86400','actions=','restart/10000/restart/30000/restart/60000')
+    Invoke-AgentVCiSc -Arguments @('failureflag',$serviceName,'0')
     $policy = [AcornOps.AgentV.InstallerPolicy]::Read()
     Assert ($policy.Standard -and $policy.StartType -eq 3) 'Exact owned failure policy was not recognized.'
-    Sc -Arguments @('failure',$serviceName,'reset=','86400','actions=','restart/12345')
+    Invoke-AgentVCiSc -Arguments @('failure',$serviceName,'reset=','86400','actions=','restart/12345')
     $rejected = $false; try { [AcornOps.AgentV.InstallerPolicy]::DisableOwned() } catch { $rejected = $true }
     Assert $rejected 'Unknown custom failure policy was accepted.'
     Assert ([AcornOps.AgentV.InstallerPolicy]::Read().StartType -eq 3) 'Unknown-policy rejection mutated startup mode.'
-    Sc -Arguments @('failure',$serviceName,'reset=','86400','actions=','restart/10000/restart/30000/restart/60000')
+    Invoke-AgentVCiSc -Arguments @('failure',$serviceName,'reset=','86400','actions=','restart/10000/restart/30000/restart/60000')
     [AcornOps.AgentV.InstallerPolicy]::DisableOwned()
     [AcornOps.AgentV.InstallerPolicy]::SuppressOwned()
     $policy = [AcornOps.AgentV.InstallerPolicy]::Read()
