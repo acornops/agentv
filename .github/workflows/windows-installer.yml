@@ -1,0 +1,22 @@
+name: Windows installer recovery
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  recovery-state:
+    name: Recovery state (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 10
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [windows-2022, windows-2025]
+    steps:
+      - uses: actions/checkout@v4
+      - name: Exercise recovery state decisions
+        shell: powershell
+        run: ./scripts/windows-tests/recovery-decision-tests.ps1
