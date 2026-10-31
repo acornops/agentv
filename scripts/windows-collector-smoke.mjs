@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import { createHash } from 'node:crypto';
 import { mkdir, writeFile } from 'node:fs/promises';
 import { WindowsCollectorRunner } from '../dist/windows/runner.js';
+import { probeCollectorTiming } from './windows-collector-timing.mjs';
 import { WindowsLiveHost } from '../dist/windows/live.js';
 import { COLLECTOR_STAGES, scripts, WINDOWS_COLLECTOR_SCRIPT_VERSION } from '../dist/windows/scripts.js';
 
@@ -10,6 +11,12 @@ assert.equal(process.platform, 'win32', 'Native collector smoke requires Windows
 assert.equal(process.arch, 'x64');
 assert.ok([22, 24].includes(Number(process.versions.node.split('.')[0])));
 const runner = new WindowsCollectorRunner();
+let failedCommand;
+const runCollector = runner.run.bind(runner);
+runner.run = async (script, data, signal) => {
+  try { return await runCollector(script, data, signal); }
+  catch (error) { failedCommand = { script, data }; throw error; }
+};
 const host = new WindowsLiveHost(['Application', 'System'], runner);
 const evidence = {
   schema_version: 'acornops.agentv-windows-native-structure.v1', source: 'native-hosted-runner',
@@ -71,6 +78,10 @@ try {
 } catch (error) {
   evidence.failure = sanitizedFailure(error);
   process.stderr.write(`${JSON.stringify(evidence.failure)}\n`); process.exitCode = 1;
+  if (failedCommand && error?.toolCode === 'TOOL_TIMEOUT') {
+    try { evidence.post_failure_timing = await probeCollectorTiming(failedCommand.script, failedCommand.data); }
+    catch { evidence.post_failure_timing_error = 'DIAGNOSTIC_UNAVAILABLE'; }
+  }
 } finally {
   await host.stop();
   await mkdir(new URL('../artifacts/windows-collectors/', import.meta.url), { recursive: true });
