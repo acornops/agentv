@@ -209,14 +209,42 @@ source hashes match the reviewed C# source with Windows checkout line endings.
 passed. Transactional installer implementation and independent task review remain
 pending; this does not qualify installation recovery or reboot.
 
-Separate cold collector runs subsequently exposed three Server 2022/Node 24
-eight-second timeouts at different stages, followed by a passing matrix at
-`8172e70`. No production timeout was raised. Bounded diagnostic probes retain the
-original failing gate and gather timing evidence if it recurs. Treat this as an
-open reliability observation during final qualification, not a resolved cause.
+Separate cold collector runs subsequently exposed intermittent eight-second
+timeouts on Server 2022/Node 24, Server 2022/Node 22 and Server 2025/Node 24.
+Identical post-failure diagnostic trials completed in 1.49–2.15 seconds. Later
+matrices, including `f10e138`, passed, but the cold-start cause remains unresolved.
+No production timeout was raised, and diagnostics retain the original failing
+gate. Final qualification must account for this reliability observation.
 
 A source-unmodified Linux `v0.0.1-experimental.14` process also completed real
 TLS enrollment, reconnect and snapshot persistence against the disposable updated
 backend. Registration omitted OS fields and retained Linux/systemd defaults;
 all nine existing tool names remained advertised. Its observations/actions are
 synthetic, so native Linux behavior is qualified separately by Ubuntu CI.
+
+At checkpoint `f10e138`, all four hosted workflows passed: Linux lifecycle CI,
+Windows collectors, native service hosting and installer recovery primitives.
+The latter covers decision cases, exact SCM policies, protected durable writes
+and exclusive locks on Server 2022/2025; full installer cutover remains pending.
+
+Mixed-target preparation now runs released Linux, updated Linux and Windows
+AgentV processes concurrently against an isolated backend. A Windows-only
+snapshot aggregation bug found by actual ingress was fixed in `5bce18b`, with
+regression tests; shared Linux redaction was unchanged. Windows then reused its
+existing credential and persisted its snapshot successfully.
+
+The actual execution-engine client called the actual gateway, backend and agent
+processes for host, service and log reads on all three targets. Twelve checks
+passed, including rejecting service arguments from the other OS. Six registry
+target switches preserved each target's input/output schemas; all nine Linux
+schemas match between released and updated agents, and Windows has eight reads
+with no restart. Nine actual returned results match their own output schema and
+fail the corresponding other-OS schema. Existing VM generic result normalization
+is unchanged. The integration fixture bypasses model generation and automatic run
+dispatch; host observations remain synthetic. Full task 7 qualification is pending.
+
+A tracked-blob comparison at this checkpoint also confirms 72 Linux-owned source,
+action, tool, systemd packaging, dependency and CI files are unchanged from the
+baseline. Shared configuration/lifecycle/entry seams are excluded from that
+comparison and require behavioral regression tests. The observed pre-existing VM
+disconnect-status defect remains the separate scoped task 7 correction.
