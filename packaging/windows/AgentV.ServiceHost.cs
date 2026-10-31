@@ -45,10 +45,13 @@ namespace AcornOps.AgentV {
                 FileSystemSecurity acl = isDirectory ? (FileSystemSecurity)Directory.GetAccessControl(current) : File.GetAccessControl(current);
                 string owner = acl.GetOwner(typeof(SecurityIdentifier)).Value;
                 if (!Privileged(owner)) throw new TrustFailure(4);
-                FileSystemRights writes = FileSystemRights.ChangePermissions | FileSystemRights.TakeOwnership | FileSystemRights.Delete;
-                if (leaf) writes |= FileSystemRights.Write | FileSystemRights.DeleteSubdirectoriesAndFiles;
+                FileSystemRights writes = FileSystemRights.ChangePermissions | FileSystemRights.TakeOwnership | FileSystemRights.Delete | FileSystemRights.DeleteSubdirectoriesAndFiles;
+                if (leaf) writes |= FileSystemRights.Write;
                 foreach (FileSystemAccessRule rule in acl.GetAccessRules(true, true, typeof(SecurityIdentifier))) {
-                    if (rule.AccessControlType == AccessControlType.Allow && (rule.FileSystemRights & writes) != 0 && !Privileged(rule.IdentityReference.Value)) throw new TrustFailure(5, depth, (int)rule.FileSystemRights, (int)rule.PropagationFlags, PrincipalKind(rule.IdentityReference.Value));
+                    // InheritOnly grants nothing on this object. Descendants are checked separately.
+                    bool effective = (rule.PropagationFlags & PropagationFlags.InheritOnly) == 0;
+                    bool genericWrite = (unchecked((uint)rule.FileSystemRights) & 0x50000000u) != 0;
+                    if (effective && rule.AccessControlType == AccessControlType.Allow && ((rule.FileSystemRights & writes) != 0 || genericWrite) && !Privileged(rule.IdentityReference.Value)) throw new TrustFailure(5, depth, (int)rule.FileSystemRights, (int)rule.PropagationFlags, PrincipalKind(rule.IdentityReference.Value));
                 }
                 current = Path.GetDirectoryName(current); leaf = false; depth++;
                 if (String.IsNullOrEmpty(current)) break;
@@ -74,6 +77,8 @@ namespace AcornOps.AgentV {
         }
         internal static void Node(string path) {
             Check(path, false);
+            // Protect the loader search directory and existing adjacent dependencies too.
+            Tree(Path.GetDirectoryName(path));
             int major = FileVersionInfo.GetVersionInfo(path).FileMajorPart;
             if (major != 22 && major != 24) throw new TrustFailure(6);
             using (BinaryReader reader = new BinaryReader(File.OpenRead(path))) {

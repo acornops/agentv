@@ -132,6 +132,33 @@ try {
         Assert ((Get-Service AcornOpsAgentV).Status -eq 'Stopped') 'Writable existing child path rejected'
         Acl $bad $serviceSid
     }
+    # DeleteChild on any ancestor can replace a protected descendant despite its own DACL.
+    $acl = Get-Acl $programParent; $acl.AddAccessRule([Security.AccessControl.FileSystemAccessRule]::new([Security.Principal.SecurityIdentifier]'S-1-5-32-545','DeleteSubdirectoriesAndFiles','Allow')); Set-Acl $programParent $acl
+    try { Start-Service AcornOpsAgentV -ErrorAction Stop; throw 'Ancestor DeleteChild unexpectedly accepted.' } catch { if ($_.Exception.Message -eq 'Ancestor DeleteChild unexpectedly accepted.') { throw } }
+    Assert ((Get-Service AcornOpsAgentV).Status -eq 'Stopped') 'Ancestor effective DeleteChild permission rejected'
+    Acl $programParent $serviceSid
+    # Alternate Node has a protected executable but a separately writable loader directory.
+    $nodeDirectory = Join-Path $programParent 'NodeCheck'; $null = New-Item -ItemType Directory -Path $nodeDirectory
+    $alternateNode = Join-Path $nodeDirectory 'node.exe'; Copy-Item $node $alternateNode
+    Acl $nodeDirectory $serviceSid; Acl $alternateNode $serviceSid
+    $alternateImage = '"' + (Join-Path $release 'AgentV.ServiceHost.exe') + '" --node "' + $alternateNode + '"'
+    Sc -Arguments @('config','AcornOpsAgentV','binPath=', $alternateImage)
+    $acl = Get-Acl $nodeDirectory; $acl.AddAccessRule([Security.AccessControl.FileSystemAccessRule]::new([Security.Principal.SecurityIdentifier]'S-1-5-32-545','WriteData','Allow')); Set-Acl $nodeDirectory $acl
+    try { Start-Service AcornOpsAgentV -ErrorAction Stop; throw 'Writable Node container unexpectedly accepted.' } catch { if ($_.Exception.Message -eq 'Writable Node container unexpectedly accepted.') { throw } }
+    Assert ((Get-Service AcornOpsAgentV).Status -eq 'Stopped') 'Writable alternate Node loader directory rejected'
+    Acl $nodeDirectory $serviceSid
+    $dependency = Join-Path $nodeDirectory 'unused.dll'; Set-Content $dependency 'synthetic' -Encoding ASCII; Acl $dependency $serviceSid
+    $acl = Get-Acl $dependency; $acl.AddAccessRule([Security.AccessControl.FileSystemAccessRule]::new([Security.Principal.SecurityIdentifier]'S-1-5-32-545','Write','Allow')); Set-Acl $dependency $acl
+    try { Start-Service AcornOpsAgentV -ErrorAction Stop; throw 'Writable Node dependency unexpectedly accepted.' } catch { if ($_.Exception.Message -eq 'Writable Node dependency unexpectedly accepted.') { throw } }
+    Assert ((Get-Service AcornOpsAgentV).Status -eq 'Stopped') 'Writable existing alternate Node dependency rejected'
+    Remove-Item -LiteralPath $dependency
+    $nodeLink = Join-Path $programParent 'NodeLink'; $null = New-Item -ItemType Junction -Path $nodeLink -Target $nodeDirectory
+    $linkImage = '"' + (Join-Path $release 'AgentV.ServiceHost.exe') + '" --node "' + (Join-Path $nodeLink 'node.exe') + '"'
+    Sc -Arguments @('config','AcornOpsAgentV','binPath=', $linkImage)
+    try { Start-Service AcornOpsAgentV -ErrorAction Stop; throw 'Node junction unexpectedly accepted.' } catch { if ($_.Exception.Message -eq 'Node junction unexpectedly accepted.') { throw } }
+    Assert ((Get-Service AcornOpsAgentV).Status -eq 'Stopped') 'Alternate Node reparse ancestor rejected'
+    Remove-Item -LiteralPath $nodeLink -Force
+    Sc -Arguments @('config','AcornOpsAgentV','binPath=', $image)
     $unsupportedNode = Join-Path $release 'unsupported-node.exe'; Copy-Item $probe $unsupportedNode; Acl $unsupportedNode $serviceSid
     foreach ($invalidNode in @((Join-Path $release 'missing-node.exe'), $unsupportedNode)) {
         $invalidImage = '"' + (Join-Path $release 'AgentV.ServiceHost.exe') + '" --node "' + $invalidNode + '"'
