@@ -22,6 +22,12 @@ jobs:
       - name: Parse Windows package scripts with PowerShell5.1
         shell: powershell
         run: ./scripts/windows-tests/parse-package-tests.ps1
+      - name: Parse and bind actual generated control-plane commands
+        shell: powershell
+        run: ./scripts/windows-tests/generated-command-tests.ps1
+      - name: Refuse active marker without its protected journal
+        shell: powershell
+        run: ./scripts/windows-tests/missing-journal-tests.ps1 -AllowDisposableCi
       - name: Exercise recovery state decisions
         shell: powershell
         run: ./scripts/windows-tests/recovery-decision-tests.ps1

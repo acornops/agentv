@@ -1,0 +1,40 @@
+{
+  "controlPlaneRevision": "d0fbcacab54bd92ddac632fdf4f20f2880ae68dc",
+  "source": "src/services/virtual-machine-windows-install-instructions.ts",
+  "sourceSha256": "caacf74ba7a9a96f85c7ec618545b40e8ef183363d1520ecbc8cae48ad915225",
+  "cases": [
+    {
+      "name": "initial",
+      "command": "$agentvTemporaryFile = [System.IO.Path]::GetTempFileName(); $agentvInstaller = $agentvTemporaryFile + '.ps1'; try { Move-Item -LiteralPath $agentvTemporaryFile -Destination $agentvInstaller -ErrorAction Stop; $agentvCurl = Join-Path ([Environment]::GetFolderPath('System')) 'curl.exe'; & $agentvCurl -q --fail --silent --show-error --location --proto '=https' --proto-redir '=https' --max-redirs 5 --connect-timeout 15 --max-time 60 --max-filesize 1048576 --output $agentvInstaller 'https://releases.invalid/assets/v1.2.3-preview.1/install-agentv.ps1'; if (-not $? -or $LASTEXITCODE -ne 0) { throw 'AgentV download failed' }; & $agentvInstaller -ReleaseBaseUrl 'https://releases.invalid/assets' -PlatformUrl 'https://platform.invalid/acornops' -TargetId 'windows-wrapper-ci' -EnrollmentToken 'aev_11111111-1111-4111-8111-111111111111_sssssssssssssssssssssssssssssssssssssssssss'; if (-not $?) { throw 'AgentV installation failed' } } finally { Remove-Item -LiteralPath $agentvInstaller,$agentvTemporaryFile -Force -ErrorAction SilentlyContinue }",
+      "expected": {
+        "releaseBaseUrl": "https://releases.invalid/assets",
+        "platformUrl": "https://platform.invalid/acornops",
+        "targetId": "windows-wrapper-ci",
+        "enrollmentToken": "aev_11111111-1111-4111-8111-111111111111_sssssssssssssssssssssssssssssssssssssssssss",
+        "replaceCredential": false
+      }
+    },
+    {
+      "name": "repair",
+      "command": "$agentvTemporaryFile = [System.IO.Path]::GetTempFileName(); $agentvInstaller = $agentvTemporaryFile + '.ps1'; try { Move-Item -LiteralPath $agentvTemporaryFile -Destination $agentvInstaller -ErrorAction Stop; $agentvCurl = Join-Path ([Environment]::GetFolderPath('System')) 'curl.exe'; & $agentvCurl -q --fail --silent --show-error --location --proto '=https' --proto-redir '=https' --max-redirs 5 --connect-timeout 15 --max-time 60 --max-filesize 1048576 --output $agentvInstaller 'https://releases.invalid/assets/v1.2.3-preview.1/install-agentv.ps1'; if (-not $? -or $LASTEXITCODE -ne 0) { throw 'AgentV download failed' }; & $agentvInstaller -ReleaseBaseUrl 'https://releases.invalid/assets' -PlatformUrl 'https://platform.invalid/acornops' -TargetId 'windows-wrapper-ci'; if (-not $?) { throw 'AgentV installation failed' } } finally { Remove-Item -LiteralPath $agentvInstaller,$agentvTemporaryFile -Force -ErrorAction SilentlyContinue }",
+      "expected": {
+        "releaseBaseUrl": "https://releases.invalid/assets",
+        "platformUrl": "https://platform.invalid/acornops",
+        "targetId": "windows-wrapper-ci",
+        "enrollmentToken": "",
+        "replaceCredential": false
+      }
+    },
+    {
+      "name": "replacement",
+      "command": "$agentvTemporaryFile = [System.IO.Path]::GetTempFileName(); $agentvInstaller = $agentvTemporaryFile + '.ps1'; try { Move-Item -LiteralPath $agentvTemporaryFile -Destination $agentvInstaller -ErrorAction Stop; $agentvCurl = Join-Path ([Environment]::GetFolderPath('System')) 'curl.exe'; & $agentvCurl -q --fail --silent --show-error --location --proto '=https' --proto-redir '=https' --max-redirs 5 --connect-timeout 15 --max-time 60 --max-filesize 1048576 --output $agentvInstaller 'https://releases.invalid/assets/v1.2.3-preview.1/install-agentv.ps1'; if (-not $? -or $LASTEXITCODE -ne 0) { throw 'AgentV download failed' }; & $agentvInstaller -ReleaseBaseUrl 'https://releases.invalid/assets' -PlatformUrl 'https://platform.invalid/acornops' -TargetId 'windows-wrapper-ci' -EnrollmentToken 'aev_11111111-1111-4111-8111-111111111111_sssssssssssssssssssssssssssssssssssssssssss' -ReplaceCredential; if (-not $?) { throw 'AgentV installation failed' } } finally { Remove-Item -LiteralPath $agentvInstaller,$agentvTemporaryFile -Force -ErrorAction SilentlyContinue }",
+      "expected": {
+        "releaseBaseUrl": "https://releases.invalid/assets",
+        "platformUrl": "https://platform.invalid/acornops",
+        "targetId": "windows-wrapper-ci",
+        "enrollmentToken": "aev_11111111-1111-4111-8111-111111111111_sssssssssssssssssssssssssssssssssssssssssss",
+        "replaceCredential": true
+      }
+    }
+  ]
+}

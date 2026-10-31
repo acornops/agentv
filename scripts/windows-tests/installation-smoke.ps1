@@ -37,7 +37,7 @@ function Bootstrap-Ci([string]$Token,[switch]$Replace,[switch]$OmitCa){
     & $ps @arguments | ForEach-Object { Write-Host $_ }
     return $LASTEXITCODE
 }
-function Variant-Ci([string]$Version,[switch]$CorruptManifest){
+function Variant-Ci([string]$Version,[switch]$CorruptManifest,[switch]$FailAfterStart){
     # Synthetic same-code upgrade changes only version metadata; package contents
     # and selection/checksum behavior still flow through the production bootstrap.
     $source=Join-Path $assets ('agentv-'+$script:version+'-windows-x64.zip')
@@ -48,6 +48,12 @@ function Variant-Ci([string]$Version,[switch]$CorruptManifest){
         $metadataPath=Join-Path $directory 'package.json';$metadata=Get-Content $metadataPath -Raw|ConvertFrom-Json;$metadata.version=$Version;Json-Ci $metadataPath $metadata
         $manifestPath=Join-Path $directory 'package-manifest.json';$manifest=Get-Content $manifestPath -Raw|ConvertFrom-Json;$manifest.version=$Version
         $entry=@($manifest.files|Where-Object {$_.path -ceq 'package.json'})[0];$entry.sha256=(Get-FileHash $metadataPath -Algorithm SHA256).Hash.ToLowerInvariant();$entry.size=(Get-Item $metadataPath).Length
+        if($FailAfterStart){
+            $entryPath=Join-Path $directory 'dist\windows-service-entry.js'
+            [IO.File]::WriteAllText($entryPath,"process.stdin.once('data',()=>setTimeout(()=>process.exit(43),1500));process.stdin.resume();",[Text.Encoding]::ASCII)
+            $runtimeEntry=@($manifest.files|Where-Object {$_.path -ceq 'dist/windows-service-entry.js'})[0]
+            $runtimeEntry.sha256=(Get-FileHash $entryPath -Algorithm SHA256).Hash.ToLowerInvariant();$runtimeEntry.size=(Get-Item $entryPath).Length
+        }
         if($CorruptManifest){$entry.sha256='0'*64};Json-Ci $manifestPath $manifest
         $destination=Join-Path $releases ('v'+$Version);$null=New-Item -ItemType Directory -Path $destination
         $archive=Join-Path $destination ('agentv-'+$Version+'-windows-x64.zip')
@@ -156,6 +162,21 @@ try {
     $selected=Read-AgentVJson -Path $paths.Selection -Secret
     Assert-Ci ($exit -eq 0 -and $selected.version -ceq $upgradeVersion -and $upgraded.settings.ACORNOPS_AGENT_KEY -ceq $replaced.settings.ACORNOPS_AGENT_KEY -and (State-Ci).exchanges -eq 3) 'Runtime upgrade selects a new immutable version without reenrollment'
     Assert-Ci ((Test-Path (Join-Path $paths.Releases $version)) -and (Test-Path (Join-Path $paths.Releases $upgradeVersion))) 'Successful upgrade retains the previous immutable runtime'
+    $evidence.stage='upgrade-failure-after-selection'
+    $workingBootstrap=$bootstrap;$failedVersion=$version+'-failed'
+    $bootstrap=Variant-Ci -Version $failedVersion -FailAfterStart
+    $before=(State-Ci).exchanges
+    Json-Ci $controls @{}
+    $installer=Start-CiInstallerProcess -Name 'failed-upgrade' -Arguments @('-NoLogo','-NoProfile','-NonInteractive','-ExecutionPolicy','Bypass','-File',$bootstrap,'-ReleaseBaseUrl',($url+'/releases'),'-PlatformUrl',$url,'-TargetId','windows-installer-ci','-NodePath',$node,'-AdditionalCaBundleFile',$ca)
+    Wait-Ci {(JournalPhase-Ci) -eq 'started-candidate' -or $installer.HasExited} 180
+    $failedJournal=Read-CiJson $paths.Journal
+    $failedService=CimCmdlets\Get-CimInstance Win32_Service -Filter "Name='AcornOpsAgentV'"
+    Assert-Ci (-not $installer.HasExited -and $failedJournal.candidate.version -ceq $failedVersion -and $failedJournal.selected -ceq 'candidate' -and $failedService.PathName.Contains('\'+$failedVersion+'\')) 'The intentionally failing runtime is actually selected and started after the doctor gate'
+    Assert-Ci ($installer.WaitForExit(240000) -and $installer.ExitCode -eq 0) 'Upgrade failure after selection completes authenticated repair rollback'
+    $restored=Read-AgentVJson -Path $paths.Config -Secret -ServiceReadSid (Get-AgentVServiceSid)
+    $restoredSelection=Read-AgentVJson -Path $paths.Selection -Secret
+    Assert-Ci ($restoredSelection.version -ceq $upgradeVersion -and $restored.settings.ACORNOPS_AGENT_KEY -ceq $upgraded.settings.ACORNOPS_AGENT_KEY -and (State-Ci).exchanges -eq $before -and (State-Ci).activeConnected -and -not(Test-Path $paths.Journal)) 'Failed upgrade restores the prior runtime and credential with fresh authentication and no exchange'
+    $bootstrap=$workingBootstrap
     $evidence.stage='lost-rollback-response'
     Json-Ci $controls @{rejectPending=$true;loseRollbackResponse=$true}
     $before=(State-Ci).exchanges
@@ -180,6 +201,10 @@ try {
     $installer=Start-CiInstallerProcess -Name 'interrupted-installer' -Arguments @('-NoLogo','-NoProfile','-NonInteractive','-ExecutionPolicy','Bypass','-File',$bootstrap,'-ReleaseBaseUrl',($url+'/releases'),'-PlatformUrl',$url,'-TargetId','windows-installer-ci','-NodePath',$node,'-AdditionalCaBundleFile',$ca,'-EnrollmentToken',(Token-Ci),'-ReplaceCredential')
     Wait-Ci {(JournalPhase-Ci) -eq 'commit-intent' -or $installer.HasExited} 180
     Assert-Ci (-not $installer.HasExited -and (JournalPhase-Ci) -eq 'commit-intent') 'Installer reaches durable commit intent before response'
+    $ownedExchanges=(State-Ci).exchanges
+    $ownedJournal=(Get-FileHash $paths.Journal -Algorithm SHA256).Hash
+    $duplicateExit=Bootstrap-Ci -Token (Token-Ci) -Replace
+    Assert-Ci ($duplicateExit -ne 0 -and (State-Ci).exchanges -eq $ownedExchanges -and (Get-FileHash $paths.Journal -Algorithm SHA256).Hash -ceq $ownedJournal) 'A duplicate installer cannot mutate the active owner journal or exchange another token'
     $installer.Kill();$installer.WaitForExit(5000)|Out-Null
     Assert-Ci ((Test-Path $paths.Marker) -and (Test-Path $paths.Journal)) 'Terminating the installer retains recoverable protected authority'
     # Control this CI scenario's task trigger while testing two process interruptions.

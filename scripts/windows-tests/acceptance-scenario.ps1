@@ -38,6 +38,11 @@ function Invoke-CiAcceptance {
     Json-Ci $controls @{forceCredentialState='grace'}
     & $ps @recoveryArguments -AcceptCommittedCandidate
     Assert-Ci ($LASTEXITCODE -ne 0 -and (Read-CiJson $paths.Journal).intent -ceq 'rollback-denied' -and (State-Ci).rollbacks -eq 0) 'Explicit acceptance refuses a candidate whose authoritative generation is no longer active'
+    $script:evidence.stage='unknown-status-pending'
+    Json-Ci $controls @{statusUnavailable=$true}
+    & $ps @recoveryArguments -AcceptCommittedCandidate
+    $unknown=Read-CiJson $paths.Journal
+    Assert-Ci ($LASTEXITCODE -ne 0 -and $unknown.intent -ceq 'rollback-denied' -and $unknown.transaction.id -ceq $transactionId -and (Test-Path $paths.Marker) -and (State-Ci).rollbacks -eq 0) 'Unavailable authoritative status keeps the exact candidate transaction pending without historical rollback'
     $script:evidence.stage='stale-acceptance-denied'
     Json-Ci $controls @{rejectActive=$true}
     $recovery=Start-CiInstallerProcess -Name 'stale-acceptance' -Arguments ($recoveryArguments+@('-AcceptCommittedCandidate'))
