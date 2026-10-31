@@ -153,6 +153,27 @@ prerequisites. When adopting a previously stopped trusted host, PID0 plus the
 full disabled drain may carry historical crash1067; a stop requested by the
 current owner must instead return clean observable shutdown.
 
+Retained configuration after uninstall supports a later no-token repair when
+the retained owner, config, selected immutable release, manifest and ACL trust
+all validate. Recreate only absent SCM/task registrations; never adopt a foreign
+or conflicting service/task. Missing/ambiguous selection or unresolved pending
+transactions fail closed. Preserve target, credential and CA, and require a
+fresh authenticated connection before reporting repaired. Native
+uninstall→repair and conflicting-registration tests are required for this path.
+
+For the specific rollback-denied state, the fixed launcher exposes an explicit
+manual `-AcceptCommittedCandidate` recovery action. Default/scheduled recovery
+keeps the conservative pending result. Explicit acceptance may finalize only
+the journal's exact candidate after authenticated transaction status says
+completed+active, the backend confirms connection, and fresh local active
+readiness matches the new launch and config hash. Recheck those proofs before
+terminal selection/cleanup. Persist the operator intent under the protected
+lock so interruption can safely resume with fresh proofs. Unknown, pending,
+grace/revoked, stale or mismatched evidence cannot authorize acceptance, and
+this action never selects a historical credential. Native default-pending,
+explicit acceptance, stale/non-active rejection and interrupted-intent cases
+are required before qualification.
+
 
 Package trust checks use one fresh scope per invocation: normalize and validate
 ancestors once, then check every current file/directory owner, effective rights
@@ -161,3 +182,11 @@ case-insensitive file inventory and hash every file. No trust result is cached
 across calls. The launcher validates the manifest path before its pointer hash,
 then performs complete package integrity validation before loading worker/DLL.
 This removes repeated ancestor scans without changing permissions or deadlines.
+
+Preview limitation: completed+grace/revoked candidates and invalid retained
+credentials fail closed with protected state retained. No privileged journal
+retirement/replacement protocol is included in this scope. New enrollment is
+refused until protected state is resolved; these exact cases require manual
+support, remain unqualified, and must not be represented as automatic rollback
+success. No ad hoc journal/config deletion procedure is supported. Independent
+Task5 review must assess this explicit limitation against the full failure matrix.

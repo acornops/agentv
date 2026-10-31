@@ -457,14 +457,25 @@ function Invoke-AgentVInstallation {
         Import-AgentVInstallerNative -Directory $release -Version $Version
         $previous=$null; $previousStartType=2; $previousRunning=$true
         if (Test-Path -LiteralPath $script:Paths.Config) {
-            if ($null -eq $service -or -not (Test-Path -LiteralPath $script:Paths.Selection)) { throw 'Owned configuration requires explicit service recovery.' }
+            if (-not (Test-Path -LiteralPath $script:Paths.Selection)) { throw 'Owned configuration requires an unambiguous protected runtime selection.' }
             $previousConfig=Read-AgentVJson -Path $script:Paths.Config -Limit 65536 -Secret -ServiceReadSid (Get-AgentVServiceSid)
             Assert-AgentVConfig $previousConfig $TargetId $PlatformUrl
             $selection=Read-AgentVJson -Path $script:Paths.Selection -Secret
+            if ($selection.ownerId -cne $owner.id) { throw 'Retained runtime ownership does not match this installation.' }
+            Assert-AgentVVersion -Version $selection.version
+            $selectedRelease=Join-Path $script:Paths.Releases $selection.version
+            $null=Assert-AgentVPackage -Directory $selectedRelease -Version $selection.version
+            if ($selection.manifestSha256 -notmatch '^[0-9a-f]{64}$' -or (Get-FileHash (Join-Path $selectedRelease 'package-manifest.json') -Algorithm SHA256).Hash.ToLowerInvariant() -cne $selection.manifestSha256) { throw 'Retained runtime checksum binding changed.' }
+            Assert-AgentVNode -NodePath $selection.node
             $previous=[pscustomobject]@{version=$selection.version;node=$selection.node;manifestSha256=$selection.manifestSha256;config=$previousConfig}
-            if ((Get-AgentVImage $previous) -cne $service.PathName) { throw 'Service and protected selected runtime disagree.' }
-            $policy=[AcornOps.AgentV.InstallerPolicy]::Read(); if (-not $policy.Standard) { throw 'Refusing custom or suppressed recovery policy outside a transaction.' }
-            $previousStartType=$policy.StartType; $previousRunning=$service.State -eq 'Running'
+            if ($null -ne $service) {
+                if ((Get-AgentVImage $previous) -cne $service.PathName) { throw 'Service and protected selected runtime disagree.' }
+                $policy=[AcornOps.AgentV.InstallerPolicy]::Read(); if (-not $policy.Standard) { throw 'Refusing custom or suppressed recovery policy outside a transaction.' }
+                $previousStartType=$policy.StartType; $previousRunning=$service.State -eq 'Running'
+            }
+            # An absent service is recreated below only after this retained
+            # selection/config has passed the same ownership and trust checks.
+            # The ordinary repair path still requires fresh active auth.
             if ($EnrollmentToken -and -not $ReplaceCredential) { throw 'Replacing an existing credential requires ReplaceCredential.' }
         } elseif (-not $EnrollmentToken -or $ReplaceCredential) { throw 'Initial installation requires a one-use initial enrollment token.' }
         $settings = if ($null -ne $previous) { $previous.config.settings | ConvertTo-Json -Depth 8 | ConvertFrom-Json } else { [pscustomobject]@{ACORNOPS_AGENT_PLATFORM_URL=$PlatformUrl;ACORNOPS_TARGET_ID=$TargetId;ACORNOPS_AGENT_KEY=('ak_'+$TargetId+'_'+'a'*32);ACORNOPS_AGENT_TARGET_TYPE='virtual_machine';ACORNOPS_VM_OS_FAMILY='windows';ACORNOPS_VM_SERVICE_MANAGER='scm';ACORNOPS_VM_COLLECTOR_MODE='live';ACORNOPS_AGENT_WRITE_ENABLED='false';ACORNOPS_AGENT_MOCK_ACTIONS_ENABLED='false';ACORNOPS_AGENT_LOG_LEVEL='info'} }

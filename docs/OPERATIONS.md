@@ -343,8 +343,12 @@ an old credential.
 
 The same protected launcher accepts `-Uninstall` after transactions are
 resolved. It stops/removes the owned service and recovery task, retaining durable
-configuration and credentials; it does not revoke a backend key. Do not remove
-or edit a pending journal to force progress. Native packaging interruption and
+configuration and credentials; it does not revoke a backend key. A later
+no-token bootstrap can repair this retained installation only when ownership,
+config, selected immutable release, checksums and ACLs still validate. It
+recreates absent registrations and requires fresh authentication without changing
+the target/key/CA; conflicting existing registrations or unresolved state are
+refused. Do not remove or edit a pending journal to force progress. Native packaging interruption and
 real reboot qualification remain incomplete; these scripts are preview assets,
 not an enabled installation offer.
 
