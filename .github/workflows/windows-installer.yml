@@ -25,6 +25,9 @@ jobs:
       - name: Parse and bind actual generated control-plane commands
         shell: powershell
         run: ./scripts/windows-tests/generated-command-tests.ps1
+      - name: Characterize native child-process exit observation
+        shell: powershell
+        run: ./scripts/windows-tests/process-observation-tests.ps1 -AllowDisposableCi
       - name: Refuse active marker without its protected journal
         shell: powershell
         run: ./scripts/windows-tests/missing-journal-tests.ps1 -AllowDisposableCi

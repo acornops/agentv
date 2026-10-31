@@ -64,12 +64,7 @@ function Variant-Ci([string]$Version,[switch]$CorruptManifest,[switch]$FailAfter
         return $scriptPath
     } finally {Remove-Item $directory -Recurse -Force}
 }
-function Start-CiInstallerProcess([string[]]$Arguments,[string]$Name){
-    $quoted=@($Arguments | ForEach-Object { if($_.Contains('"')){throw 'Unsafe CI argument'}; '"'+$_+'"' })
-    $process=Start-Process -FilePath $ps -ArgumentList $quoted -PassThru -RedirectStandardOutput (Join-Path $work ($Name+'.stdout')) -RedirectStandardError (Join-Path $work ($Name+'.stderr'))
-    $script:CiProcesses.Add($process)
-    return $process
-}
+. (Join-Path $PSScriptRoot 'process-fixture.ps1')
 function JournalPhase-Ci {
     try {return (Read-CiJson $paths.Journal).phase}catch{return ''}
 }
@@ -172,7 +167,9 @@ try {
     $failedJournal=Read-CiJson $paths.Journal
     $failedService=CimCmdlets\Get-CimInstance Win32_Service -Filter "Name='AcornOpsAgentV'"
     Assert-Ci (-not $installer.HasExited -and $failedJournal.candidate.version -ceq $failedVersion -and $failedJournal.selected -ceq 'candidate' -and $failedService.PathName.Contains('\'+$failedVersion+'\')) 'The intentionally failing runtime is actually selected and started after the doctor gate'
-    Assert-Ci ($installer.WaitForExit(240000) -and $installer.ExitCode -eq 0) 'Upgrade failure after selection completes authenticated repair rollback'
+    $finished=$installer.WaitForExit(240000)
+    $evidence.failedUpgradeOutcome=@{finished=$finished;hasExited=$installer.HasExited;exitCode=$(if($finished){$installer.ExitCode}else{$null})}
+    Assert-Ci ($finished -and $installer.ExitCode -eq 0) 'Upgrade failure after selection completes authenticated repair rollback'
     $restored=Read-AgentVJson -Path $paths.Config -Secret -ServiceReadSid (Get-AgentVServiceSid)
     $restoredSelection=Read-AgentVJson -Path $paths.Selection -Secret
     Assert-Ci ($restoredSelection.version -ceq $upgradeVersion -and $restored.settings.ACORNOPS_AGENT_KEY -ceq $upgraded.settings.ACORNOPS_AGENT_KEY -and (State-Ci).exchanges -eq $before -and (State-Ci).activeConnected -and -not(Test-Path $paths.Journal)) 'Failed upgrade restores the prior runtime and credential with fresh authentication and no exchange'
@@ -236,6 +233,7 @@ try {
     $clock=[Diagnostics.Stopwatch]::StartNew()
     $reentry=Start-CiInstallerProcess -Name 'reentry' -Arguments $recoveryArgs
     Assert-Ci ($reentry.WaitForExit(180000)) 'Fixed launcher recovery completes after process interruption'
+    $evidence.reentryOutcome=@{hasExited=$reentry.HasExited;exitCode=$reentry.ExitCode;elapsedMs=$clock.ElapsedMilliseconds}
     Assert-Ci ($reentry.ExitCode -eq 0 -and $clock.Elapsed.TotalSeconds -ge 65) 'Recovery reentry repeats the full monotonic drain before starting selection'
     $recovered=Read-AgentVJson -Path $paths.Config -Secret -ServiceReadSid (Get-AgentVServiceSid)
     Assert-Ci ($recovered.settings.ACORNOPS_AGENT_KEY -ceq (State-Ci).activeKey -and (State-Ci).commits -eq 4 -and -not(Test-Path $paths.Journal)) 'Interrupted commit recovery finalizes exactly the authenticated candidate generation'
