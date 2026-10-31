@@ -26,5 +26,6 @@ jobs:
         shell: powershell
         run: ./scripts/windows-tests/installer-policy-tests.ps1 -AllowDisposableCi
       - name: Exercise native durable journal and lock boundaries
+        if: always()
         shell: powershell
         run: ./scripts/windows-tests/durable-state-tests.ps1 -AllowDisposableCi

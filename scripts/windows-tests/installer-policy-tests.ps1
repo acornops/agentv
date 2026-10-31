@@ -29,6 +29,7 @@ try {
     [AcornOps.AgentV.InstallerPolicy]::DisableOwned()
     [AcornOps.AgentV.InstallerPolicy]::SuppressOwned()
     $policy = [AcornOps.AgentV.InstallerPolicy]::Read()
+    Write-Output ('policy-after-suppress:' + (@{ startType=$policy.StartType; resetSeconds=$policy.ResetSeconds; delays=@($policy.Delays); restartOnly=$policy.RestartOnly; nonCrash=$policy.NonCrash; customCommand=$policy.CustomCommand; delayedAuto=$policy.DelayedAuto; serviceType=$policy.ServiceType; errorControl=$policy.ErrorControl; localService=($policy.Account -eq 'NT AUTHORITY\LocalService'); suppressed=$policy.Suppressed } | ConvertTo-Json -Compress))
     Assert ($policy.Suppressed -and $policy.StartType -eq 4) 'Suppression did not retain disabled startup.'
     # This service has never started, so no queued-restart drain is required.
     [AcornOps.AgentV.InstallerPolicy]::MakeManual()
