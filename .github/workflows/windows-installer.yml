@@ -46,10 +46,21 @@ jobs:
       - name: Compile and exercise fixed-service SCM policy interop
         shell: powershell
         run: ./scripts/windows-tests/installer-policy-tests.ps1 -AllowDisposableCi
+      - name: Coordinate watcher and SCM teardown completion
+        shell: powershell
+        run: ./scripts/windows-tests/host-teardown-race.ps1 -AllowDisposableCi
       - name: Exercise native durable journal and lock boundaries
         if: always()
         shell: powershell
         run: ./scripts/windows-tests/durable-state-tests.ps1 -AllowDisposableCi
+      - name: Upload synthetic teardown race evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: windows-teardown-race-${{ matrix.os }}
+          path: artifacts/windows-service-host/teardown-race-evidence.json
+          if-no-files-found: warn
+          retention-days: 14
   installation:
     needs: recovery-state
     name: Transactional installation (${{ matrix.os }}, Node ${{ matrix.node }}, ${{ matrix.scenario }})

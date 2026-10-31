@@ -7,6 +7,7 @@ $serviceName = 'AcornOpsAgentV'; $sc = Join-Path ([Environment]::SystemDirectory
 if (Get-Service $serviceName -ErrorAction SilentlyContinue) { throw 'Refusing preexisting service.' }
 $output = Join-Path (Join-Path $PSScriptRoot '..\..\artifacts\windows-installer-native') ('SCM policy '+[char]0xfc)
 $script:InstallationModule=Import-Module (Join-Path $PSScriptRoot '..\..\packaging\windows\Installation.psm1') -PassThru -Force
+Import-Module (Join-Path $PSScriptRoot '..\..\packaging\windows\Paths.psm1')
 $owned = $false
 function Invoke-AgentVCiSc([string[]]$Arguments) { & $script:InstallationModule {param($Values) Invoke-AgentVSc -Arguments $Values} -Values $Arguments }
 function Assert([bool]$Condition, [string]$Message) { if (-not $Condition) { throw $Message } }
@@ -18,6 +19,10 @@ try {
     $null = [Reflection.Assembly]::LoadFrom($library)
     $image = '"' + (Join-Path $output 'AgentV.ServiceHost.exe') + '" --node "C:\missing-ci-node.exe"'
     Invoke-AgentVCiSc -Arguments @('create',$serviceName,'binPath=',$image,'obj=','NT AUTHORITY\LocalService','start=','demand'); $owned = $true
+    Invoke-AgentVCiSc -Arguments @('sidtype',$serviceName,'unrestricted')
+    $registeredSid=([Security.Principal.NTAccount]'NT SERVICE\AcornOpsAgentV').Translate([Security.Principal.SecurityIdentifier]).Value
+    Assert ((Get-AgentVServiceSid) -ceq $registeredSid) 'Fixed service SID disagrees with registered NT SERVICE identity.'
+    Write-Output 'Fixed service SID matches registered NT SERVICE identity.'
     Assert ((CimCmdlets\Get-CimInstance Win32_Service -Filter "Name='AcornOpsAgentV'").PathName -ceq $image) 'PS5.1 SCM image quoting did not roundtrip space and Unicode paths.'
     Invoke-AgentVCiSc -Arguments @('failure',$serviceName,'reset=','86400','actions=','restart/10000/restart/30000/restart/60000')
     Invoke-AgentVCiSc -Arguments @('failureflag',$serviceName,'0')

@@ -6,7 +6,12 @@ function Get-AgentVPaths {
     $program = Join-Path ([Environment]::GetFolderPath('ProgramFiles')) 'AcornOps\AgentV'
     return [pscustomobject]@{ Root=$root; Program=$program; Releases=(Join-Path $program 'releases'); Maintenance=(Join-Path $program 'maintenance'); State=(Join-Path $root 'state'); Logs=(Join-Path $root 'logs'); Config=(Join-Path $root 'config.json'); Selection=(Join-Path $root 'selection.json'); Owner=(Join-Path $root 'owner.json'); Journal=(Join-Path $root 'transaction.json'); Marker=(Join-Path $root 'active.json'); Lock=(Join-Path $root 'installation.lock'); Task='AcornOpsAgentVRecovery'; Service='AcornOpsAgentV' }
 }
-function Get-AgentVServiceSid { return ([Security.Principal.NTAccount]'NT SERVICE\AcornOpsAgentV').Translate([Security.Principal.SecurityIdentifier]).Value }
+function Get-AgentVServiceSid {
+    # Coupled to the fixed AcornOpsAgentV service name. Native showsid and
+    # registered NT SERVICE translation must agree in qualification tests.
+    # The identity remains valid when uninstall removes SCM registration.
+    return 'S-1-5-80-3276908839-1019474047-1119164836-544100818-326905355'
+}
 function Set-AgentVAcl {
     param([Parameter(Mandatory=$true)][string]$Path, [string]$ServiceSid, [string]$Rights='ReadAndExecute')
     if (Test-Path -LiteralPath $Path -PathType Container) { $acl = New-Object Security.AccessControl.DirectorySecurity; $inherit = 'ContainerInherit, ObjectInherit' }

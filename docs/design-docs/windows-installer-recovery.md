@@ -49,6 +49,11 @@ Source: control-plane `src/controllers/agentv-installation-controller.ts` and
   Filesystem roots come from OS folder APIs, not caller environment overrides.
 - Config readable by the unique AgentV service SID, not all LocalService
   processes. Transaction secrets/backups are Administrators/SYSTEM only.
+  The installer uses the fixed SID coupled to the fixed `AcornOpsAgentV` name,
+  so retained config can be validated before recreating absent SCM registration.
+  Native tests compare it with `sc.exe showsid AcornOpsAgentV` while absent and
+  `NT SERVICE\AcornOpsAgentV` translation while registered. Renaming the service
+  requires updating and requalifying that identity; no account or ACL is broadened.
 - Before publishing the active transaction marker, durably save previous and
   candidate runtime/config selection, prior service enabled/running state and
   whether this was an initial install. Flush journal writes and atomically
