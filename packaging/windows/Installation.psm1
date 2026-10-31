@@ -271,7 +271,7 @@ function Ensure-AgentVRecoveryTask {
             # The Server2022 CIM provider can retain an earlier LastRunTime.
             # Query the registered task's COM state/result directly instead.
             $registered=$scheduler.GetFolder('\').GetTask($script:Paths.Task)
-            $decision=Get-AgentVTaskCompletionDecision -PriorRunUtc $priorRunUtc -MinimumRunUtc $minimumRunUtc -ObservedRunUtc $registered.LastRunTime.ToUniversalTime() -State ([int]$registered.State) -Result ([long]$registered.LastTaskResult) -Instances ([int]$registered.GetInstances(0).Count)
+            $decision=Get-AgentVTaskCompletionDecision -PriorRunUtc $priorRunUtc -MinimumRunUtc $minimumRunUtc -ObservedRunUtc ($registered.LastRunTime.ToUniversalTime()) -State ([int]$registered.State) -Result ([long]$registered.LastTaskResult) -Instances ([int]$registered.GetInstances(0).Count)
             if($decision -eq 'failed'){[Console]::Error.WriteLine('AgentV recovery task failure stage=usability native='+[long]$registered.LastTaskResult);throw 'SYSTEM recovery launcher failed its usability check.'}
             if($decision -eq 'ready'){break}
             if ($clock.Elapsed.TotalSeconds -gt 30) { throw 'SYSTEM recovery task did not complete its usability check.' }
