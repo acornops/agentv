@@ -156,3 +156,11 @@ identify PowerShell startup, encoding, stdin decoding and host CIM boundaries;
 only allowlisted stage names, elapsed time, byte counts and stdin/spawn flags
 are reported. Raw stderr and input values are excluded. Collector time/output
 budgets remain unchanged while native timeout causes are investigated.
+
+If native collection fails, CI runs separate fixed PowerShell initialization
+probes after the failed production gate. Each diagnostic observation is capped
+at 30 seconds and 32 KiB, comparing core/Utility command loading, explicit input,
+module cache and OS-discovered LocalAppData individually. These diagnostic
+windows do not change the production eight-second collector ceiling or turn a
+failed collector gate into a pass. Results contain only fixed markers and
+counts in `startup-probes.json`; no environment/path/value dumps are retained.

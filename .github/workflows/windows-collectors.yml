@@ -32,13 +32,19 @@ jobs:
       - run: npm run build
       - name: Verify Windows read runtime and service entry gate
         run: npx vitest run src/config.spec.ts src/windows-runtime.spec.ts src/windows-service-entry.spec.ts src/windows
+      - name: Verify fixed startup diagnostic isolation
+        run: node --test scripts/windows-powershell-startup-probe.spec.mjs
       - name: Read native collectors and capture sanitized structural evidence
+        id: native
         run: node scripts/windows-collector-smoke.mjs
+      - name: Observe first-cmdlet initialization after native failure
+        if: failure() && steps.native.outcome == 'failure'
+        run: node scripts/windows-powershell-startup-probe.mjs
       - name: Upload structural evidence and runner provenance
         if: always()
         uses: actions/upload-artifact@v4
         with:
           name: windows-collectors-${{ matrix.os }}-node${{ matrix.node }}
-          path: artifacts/windows-collectors/native-structure.json
+          path: artifacts/windows-collectors/*.json
           if-no-files-found: warn
           retention-days: 14
