@@ -150,3 +150,9 @@ uploads only sanitized structures and provenance. See the
 [Windows read contract](contracts/windows-read-runtime.md) for supported native
 paths, schemas and qualification limits. Packaging and actual service hosting
 remain separate tasks; collector CI does not establish either.
+
+Native collector failures retain a sanitized artifact too. Fixed stage markers
+identify PowerShell startup, encoding, stdin decoding and host CIM boundaries;
+only allowlisted stage names, elapsed time, byte counts and stdin/spawn flags
+are reported. Raw stderr and input values are excluded. Collector time/output
+budgets remain unchanged while native timeout causes are investigated.

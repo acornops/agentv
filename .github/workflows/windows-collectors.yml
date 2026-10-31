@@ -35,9 +35,10 @@ jobs:
       - name: Read native collectors and capture sanitized structural evidence
         run: node scripts/windows-collector-smoke.mjs
       - name: Upload structural evidence and runner provenance
+        if: always()
         uses: actions/upload-artifact@v4
         with:
           name: windows-collectors-${{ matrix.os }}-node${{ matrix.node }}
           path: artifacts/windows-collectors/native-structure.json
-          if-no-files-found: error
+          if-no-files-found: warn
           retention-days: 14

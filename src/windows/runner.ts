@@ -3,7 +3,7 @@ import { lstat, realpath } from 'node:fs/promises';
 import { win32 } from 'node:path';
 import { z } from 'zod';
 import { ToolExecutionError } from '../tools/errors.js';
-import { scripts, type ScriptId } from './scripts.js';
+import { COLLECTOR_STAGES, scripts, type ScriptId } from './scripts.js';
 
 const resultSchema = z.object({ items: z.array(z.unknown()).max(1000), truncated: z.boolean(), status: z.enum(['ok', 'partial', 'unavailable', 'permission_denied']) }).strict();
 export type CollectorResult = z.infer<typeof resultSchema>;
@@ -55,17 +55,32 @@ export class WindowsCollectorRunner implements CollectorRunner {
     const command = collectorCommand(script, data);
     return await new Promise((resolve, reject) => {
       const child = spawn(this.executable, command.args, { env: collectorEnvironment(this.systemDirectory), windowsHide: true, shell: false, stdio: ['pipe', 'pipe', 'pipe'] });
+      const started = Date.now(); let spawned = false; let stdinFinished = false; let stage = 'spawn_pending';
+      let stdoutBytes = 0; let stderrBytes = 0; let stderrLine = ''; let oversizedLine = false;
+      const diagnostics = () => ({ collector: script, stage, elapsed_ms: Date.now() - started, stdout_bytes: stdoutBytes, stderr_bytes: stderrBytes, stdin_finished: stdinFinished, spawned });
+      child.once('spawn', () => { spawned = true; if (stage === 'spawn_pending') stage = 'spawned'; });
+      const stages: ReadonlySet<string> = new Set(COLLECTOR_STAGES);
+      const observeStage = (chunk: Buffer) => {
+        for (const byte of chunk) {
+          if (byte === 10) {
+            if (!oversizedLine && stderrLine.startsWith('agentv-stage:')) { const value = stderrLine.slice(13).replace(/\r$/, ''); if (stages.has(value)) stage = value; }
+            stderrLine = ''; oversizedLine = false;
+          } else if (stderrLine.length < 96 && !oversizedLine) stderrLine += String.fromCharCode(byte);
+          else oversizedLine = true;
+        }
+      };
       let bytes = 0; const output: Buffer[] = []; let failure: ToolExecutionError | undefined;
       const kill = (error: ToolExecutionError) => { failure ??= error; child.kill(); };
       const abort = () => kill(new ToolExecutionError('TOOL_TIMEOUT', 'Windows collection cancelled'));
       const timer = setTimeout(() => kill(new ToolExecutionError('TOOL_TIMEOUT', 'Windows collector timed out')), 8000);
       signal?.addEventListener('abort', abort, { once: true });
-      const consume = (chunk: Buffer, retain: boolean) => { bytes += chunk.length; if (bytes > 1024 * 1024) kill(new ToolExecutionError('OUTPUT_TOO_LARGE', 'Windows collector output exceeds limit')); else if (retain) output.push(chunk); };
+      const consume = (chunk: Buffer, retain: boolean) => { bytes += chunk.length; if (retain) stdoutBytes += chunk.length; else stderrBytes += chunk.length; if (bytes > 1024 * 1024) kill(new ToolExecutionError('OUTPUT_TOO_LARGE', 'Windows collector output exceeds limit')); else if (retain) output.push(chunk); else observeStage(chunk); };
       child.stdout.on('data', (chunk: Buffer) => consume(chunk, true)); child.stderr.on('data', (chunk: Buffer) => consume(chunk, false));
+      child.stdin.once('finish', () => { stdinFinished = true; });
       child.stdin.on('error', () => undefined); child.stdin.end(command.stdin, 'utf8');
       const closed = new Promise<void>((done) => child.once('close', () => done())); this.children.set(child, closed);
       child.once('error', () => { failure ??= new ToolExecutionError('COMMAND_UNAVAILABLE', 'Windows collector could not start'); });
-      child.once('close', (code) => { clearTimeout(timer); signal?.removeEventListener('abort', abort); this.children.delete(child); if (failure) reject(failure); else if (code !== 0) reject(new ToolExecutionError('HOST_UNAVAILABLE', 'Windows collector exited unsuccessfully')); else { try { resolve(parseCollectorResult(Buffer.concat(output).toString('utf8'))); } catch (error) { reject(error); } } });
+      child.once('close', (code) => { clearTimeout(timer); signal?.removeEventListener('abort', abort); this.children.delete(child); if (failure) reject(new ToolExecutionError(failure.toolCode, failure.message, { ...failure.data, ...diagnostics() })); else if (code !== 0) reject(new ToolExecutionError('HOST_UNAVAILABLE', 'Windows collector exited unsuccessfully', diagnostics())); else { try { resolve(parseCollectorResult(Buffer.concat(output).toString('utf8'))); } catch (error) { reject(error); } } });
     });
   }
   async stop(): Promise<void> { this.stopping = true; const pending = [...this.children.entries()]; for (const [child] of pending) child.kill(); await Promise.all(pending.map(([, closed]) => closed)); }

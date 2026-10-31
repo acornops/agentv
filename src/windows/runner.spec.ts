@@ -30,6 +30,17 @@ describe('Windows bounded process boundary', () => {
     const runner = new WindowsCollectorRunner(); const controller = new AbortController(); const pending = runner.run('services', {}, controller.signal); const rejected = expect(pending).rejects.toThrow('cancelled'); await spawned(); controller.abort(); await rejected;
     await runner.stop(); await runner.stop(); await expect(runner.run('services', {})).rejects.toThrow('cancelled');
   });
+  it('reports only allowlisted bounded stage and process diagnostics at the unchanged timeout', async () => {
+    vi.useFakeTimers();
+    const runner = new WindowsCollectorRunner(); const pending = runner.run('host', {});
+    const observed = pending.catch((error) => error);
+    await vi.advanceTimersByTimeAsync(0); expect(dependencies.spawn).toHaveBeenCalledTimes(1); child.emit('spawn');
+    child.stderr.write('raw secret diagnostic\nagentv-stage:stdin_'); child.stderr.write('read_started\nagentv-stage:untrusted-secret-value\n');
+    await vi.advanceTimersByTimeAsync(8000);
+    expect(await observed).toMatchObject({ toolCode: 'TOOL_TIMEOUT', data: { collector: 'host', stage: 'stdin_read_started', elapsed_ms: 8000, stdout_bytes: 0, stdin_finished: true, spawned: true } });
+    expect(JSON.stringify(await pending.catch((error) => error.data))).not.toContain('secret');
+    expect(child.kill).toHaveBeenCalledTimes(1); await runner.stop();
+  });
   it('refuses executable redirection before spawning', async () => {
     dependencies.lstat.mockResolvedValue({ isSymbolicLink: () => true });
     await expect(new WindowsCollectorRunner().run('services', {})).rejects.toThrow('unavailable or unsupported'); expect(dependencies.spawn).not.toHaveBeenCalled();

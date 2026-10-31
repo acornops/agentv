@@ -40,6 +40,13 @@ describe('isolated Windows runtime', () => {
 });
 
 describe('conservative Windows evidence', () => {
+  it('cannot assert recovery from Running rows with missing native start or exit evidence', async () => {
+    for (const evidence of [{ start_mode: null, exit_code: 0 }, { start_mode: 'Auto', exit_code: null }, { start_mode: null, exit_code: null }]) {
+      const host = new WindowsMockHost([]);
+      host.listServices = async () => ({ items: [{ ...service, state: 'Running', ...evidence }], original_count: 1, omitted_count: 0, health: { collector: 'windows_services', status: 'ok', duration_ms: 0 } });
+      expect((await buildWindowsSnapshot(host)).finding_coverage.services).toBe('incomplete');
+    }
+  });
   it('cannot recover services from partial enumeration or unknown native evidence', async () => {
     for (const mode of ['partial', 'unknown', 'denied'] as const) {
       const host = new WindowsMockHost([]);
