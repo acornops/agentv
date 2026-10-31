@@ -95,20 +95,21 @@ Generated public API counterpart: `docs-website/openapi/control-plane-public.jso
 
 Produce an additive authenticated `GET /workspaces/:workspaceId/virtual-machines/registration-options` endpoint for users with `manage_targets`, before the `/:vmId` route. Return `{platforms:[{osFamily:'linux',serviceManager:'systemd',accessModes:['read_only','read_write']}, ...]}`; include `{osFamily:'windows',serviceManager:'scm',accessModes:['read_only']}` only when Windows is enabled with valid release coordinates. Do not expose release URLs/tokens or change the existing list response. Console task 6 consumes these options; existing clients need no new request.
 
-- [ ] Write failing tests for Windows snapshots/inventory/metrics/log routing, wrong-OS snapshot rejection, exact legacy Linux behavior, non-C system volume, partial/denied collection and unknown fields.
-- [ ] Implement isolated Windows interpretation. Define stable Windows issue fingerprints using native service names; stop-state alone produces no issue. Only sufficient successful evidence clears findings.
-- [ ] Confirm Windows built-in definitions contain read-only tools and schemas stay scoped to the target. Add mixed Linux/Windows same-name catalog tests through actual sync/dispatch entry points, including unexpected writes and target switches.
-- [ ] Add registration-options response and authorization tests for Linux-only default, explicitly enabled Windows, denied target-management permission and no configuration secret exposure. Update OpenAPI source and generated docs feature counterpart.
-- [ ] Run focused tests, canonical control-plane validation with disposable DB and cross-repo contract checks; update docs and commit. Review before adding user-facing Windows onboarding.
+- [x] Write failing tests for Windows snapshots/inventory/metrics/log routing, wrong-OS snapshot rejection, exact legacy Linux behavior, non-C system volume, partial/denied collection and unknown fields.
+- [x] Implement isolated Windows interpretation. Define stable Windows issue fingerprints using native service names; stop-state alone produces no issue. Only sufficient successful evidence clears findings.
+- [x] Confirm Windows built-in definitions contain read-only tools and schemas stay scoped to the target. Add mixed Linux/Windows same-name catalog tests through actual sync/dispatch entry points, including unexpected writes and target switches.
+- [x] Add registration-options response and authorization tests for Linux-only default, explicitly enabled Windows, denied target-management permission and no configuration secret exposure. Update OpenAPI source and generated docs feature counterpart.
+- [x] Run focused tests, canonical control-plane validation with disposable DB and cross-repo contract checks; update docs and commit. Review before adding user-facing Windows onboarding.
 
 ### Task 5: Windows Service packaging and native qualification
 
-**Files:** AgentV `packaging/windows/`, `scripts/build-windows-archive.ps1`, `scripts/windows-smoke.ps1`, Windows installer/host focused tests, `.github/workflows/ci.yml` or a separate Windows workflow, operational/development docs. Control-plane Windows install-instruction builder and enrollment tests.
+**Files:** AgentV `packaging/windows/`, `scripts/install-agentv.ps1`, `scripts/build-windows-archive.ps1`, `scripts/windows-smoke.ps1`, narrow `src/windows-service-entry.ts` readiness wiring and focused tests, Windows installer/host tests, `.github/workflows/ci.yml` or a separate Windows workflow, operational/development docs. Control-plane Windows install-instruction builder and enrollment tests.
 
 **Interfaces:** Separate Windows release asset and `install-agentv.ps1`, implementing the exact task 2 instruction arguments; control-plane instructions use independent task 2 release settings. Reuse exchange/verify/commit enrollment protocol with target OS binding. Keep existing Linux install command byte-for-byte stable. Explicit read-only Windows config under ProgramData, dedicated low-privilege service identity, actual SCM host.
 
 - [x] Record and independently review the native service-host choice, including SCM recovery, observed whole-job teardown and runtime shutdown seam. Selected repository-owned .NET4.8 host; see [reviewed service host design](../../design-docs/windows-service-host.md). Implementation and native evidence remain pending.
 - [x] Independently review installer recovery ordering, ambiguous backend outcomes and queued SCM restart ownership; see [Windows installer recovery design](../../design-docs/windows-installer-recovery.md). Native interruption qualification remains required.
+- [ ] Implement and qualify the native service host, unique SID permissions, bounded logs, private start gate and process-tree teardown in hosted CI first. Use an intermediate feature-branch checkpoint; only proceed with transactional installer cutover after that native host gate passes.
 - [ ] Write installer state/failure tests covering new install, repair, credential replacement, interrupted exchange/verification/commit, lost commit response, upgrade, cleanup and uninstall. Never restore a revoked credential and claim rollback. Configuration deletion/revocation is explicit, not implicit uninstall behavior.
 - [ ] Implement checksummed package/build/bootstrap, trusted paths and ACLs, sanitized service environment, graceful process tree stop and crash recovery. Scripts accept arguments as data, avoid command interpolation, and do not log credentials.
 - [ ] Add CI on `windows-2022` and `windows-2025` with Node 22/24, plus native collector and disposable SCM install/recovery tests. Retain Ubuntu systemd release gates unchanged. Reboot qualification is separate from service restart.
@@ -126,10 +127,11 @@ Produce an additive authenticated `GET /workspaces/:workspaceId/virtual-machines
 
 ### Task 7: Mixed-version qualification and final review
 
-**Files:** Integration/CI tests in affected feature repos, compatibility evidence in this plan/assessment, operations/release documentation and workspace change set.
+**Files:** Integration/CI tests in affected feature repos; focused Windows mock filter fixes in AgentV `src/windows/mock.ts` and tests; control-plane catalog output-schema assertions; compatibility evidence in this plan/assessment, operations/release documentation and workspace change set.
 
 **Interfaces:** Released Linux experimental.14 → updated backend; updated Linux → updated backend; Windows mock/live → updated backend; concurrent targets in one workspace. Preserve exact target scoping through gateway and execution engine.
 
+- [ ] Resolve deferred qualification findings: make synthetic Windows service-state, listener-protocol and process-query filters match the published native contract; assert target-specific output schemas during control-plane target switches and through actual gateway integration. Keep fixes isolated to those contracts.
 - [ ] Exercise old-agent/new-backend enrollment, reconnect, snapshots, log reads and approved Linux restart handling; replay legacy optional-field omissions and bad Windows claims. Use disposable services, never existing databases or VMs.
 - [ ] Run complete affected-repo validation, Linux package/bootstrap/curl and real Ubuntu systemd CI, Windows CI and mixed-target integration. Test only justified changes after prior passing runs; collect exact commands/results and inspect every failure.
 - [ ] Request independent whole-branch review; fix important findings with targeted regression checks and re-review fixes. Record all unexecuted native/reboot/real-host acceptance criteria without claiming zero-regression proof.
@@ -174,3 +176,20 @@ passed. [Matching Linux CI](https://github.com/acornops/agentv/actions/runs/4121
 passed validation and both Ubuntu systemd lifecycle jobs. Native service identity,
 ACLs, packaging and recovery remain task 5 gates. A minor mock-filter discrepancy
 is tracked for task 7 and final review; synthetic evidence does not qualify a VM.
+
+Task 4 passed independent review at control-plane `d0fbcac`, generated docs
+`c10e5f9`, and console contract-only `b4337a7`. Separate Windows ingestion,
+inventory, issues, recovery, system-volume metrics and channel-based logs now
+consume the native contract. Registration options expose only backend-qualified
+platforms. Canonical backend validation passed 1,583 tests/253 suites with zero
+failures or skips, including real PostgreSQL and authenticated gzip snapshot
+ingress; console validation passed 1,240 tests/234 files plus build/route checks.
+Docs and cross-repo contract checks passed. Input schema isolation is covered;
+explicit output-schema assertions are deferred to task 7. Existing expected
+failure-path test logs remain a non-blocking hygiene observation for final review.
+
+Coordinated drafts: [backend](https://github.com/acornops/control-plane/pull/33),
+[AgentV](https://github.com/acornops/agentv/pull/8),
+[console](https://github.com/acornops/management-console/pull/35), and
+[API docs](https://github.com/acornops/docs-website/pull/19). No merge, release or
+activation has occurred. Console behavior and Windows packaging are still pending.
