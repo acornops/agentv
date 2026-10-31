@@ -6,6 +6,7 @@ if(-not $AllowDisposableCi -or $env:CI -ne 'true' -or $env:GITHUB_ACTIONS -ne 't
 $repo=[IO.Path]::GetFullPath((Join-Path $PSScriptRoot '..\..'))
 Import-Module (Join-Path $repo 'packaging\windows\Paths.psm1')
 $module=Import-Module (Join-Path $repo 'packaging\windows\Installation.psm1') -PassThru -Force
+$paths=Get-AgentVPaths
 $work=Join-Path ([Environment]::GetFolderPath('CommonApplicationData')) 'AgentV Teardown CI'
 $compiler=Join-Path ([Environment]::GetFolderPath('Windows')) 'Microsoft.NET\Framework64\v4.0.30319\csc.exe'
 $owned=$false;$serviceOwned=$false;$stopper=$null;$members=@()
@@ -13,7 +14,7 @@ $evidence=[ordered]@{sourceRevision=(& git -C $repo rev-parse HEAD);synthetic=$t
 function Wait-TeardownCi([scriptblock]$Condition,[int]$Seconds=10){$clock=[Diagnostics.Stopwatch]::StartNew();while(-not (& $Condition)){if($clock.Elapsed.TotalSeconds -gt $Seconds){throw 'Teardown fixture deadline.'};Start-Sleep -Milliseconds 50}}
 function Assert-TeardownCi([bool]$Condition,[string]$Message){if(-not $Condition){throw $Message};$script:evidence.tests+=$Message}
 function Sc-TeardownCi([string[]]$Values){& $module {param($Arguments) Invoke-AgentVSc -Arguments $Arguments} -Arguments $Values}
-if((Test-Path $work) -or (Get-Service AcornOpsAgentV -ErrorAction SilentlyContinue)){throw 'Refusing preexisting teardown fixture resources.'}
+if((Test-Path $work) -or (Test-Path $paths.Root) -or (Test-Path $paths.Program) -or (Get-Service AcornOpsAgentV -ErrorAction SilentlyContinue) -or (ScheduledTasks\Get-ScheduledTask -TaskName $paths.Task -ErrorAction SilentlyContinue)){throw 'Refusing preexisting teardown fixture resources.'}
 try{
     & $module {Assert-AgentVAdministrator}
     New-AgentVProtectedDirectory -Path $work;$owned=$true
