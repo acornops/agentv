@@ -10,18 +10,20 @@
 
 **Spec:** [Approved compatibility design](../../design-docs/windows-vm-linux-compatibility.md).
 
-Status: approved for implementation by the user on 2026-10-31. Work in progress.
+Status: approved for implementation by the user on 2026-10-31. All eight planned
+source/decision tasks and the single broad review/fix re-review are complete.
 
-Execution status (2026-11-01): tasks 1–6 and Task 7 source/integration work
-are complete. Task 7 initial review and fix re-review are clean at control-plane
-`37c62d69f8aae157480a0502142bc662ee8bd816` and AgentV
-`f86bd5ab7040c9372f6160383ef7620091f821ea`. Final hosted backend CI is pending.
+Execution status (2026-11-01): AgentV runtime `f86bd5a` is unchanged at hosted
+checkpoint `e9e9bbd`; final source fixes are control-plane `3a1b969`, console
+`5eabc88`, and API docs `a39eb95`. The broad review's two important Windows
+diagnostic-display findings are addressed; the scoped re-review has no open
+findings. Final backend hosted CI passes 1,719 tests/255 suites with zero skips.
 Task 8's [qualification decision](../../design-docs/windows-qualification-decision.md)
-is complete: Windows rollout and writes remain unqualified and disabled.
-Unexplained native failures, real reboot/Core/Desktop coverage, and the full
-generated-download lifecycle remain gates. The single broad review and final
-coordinated PR handoff follow Task 8 and remain pending. The wider Windows
-program is incomplete; this plan stays active.
+keeps Windows rollout and writes unqualified and disabled. Unexplained native
+failures, real reboot/Core/Desktop coverage, the full generated-download lifecycle
+and combined native deployment remain gates. Final console CI passes; all four
+draft PRs carry coordinated validation and qualification evidence. The wider
+Windows program is incomplete; this plan stays active.
 
 ## Global constraints
 
@@ -152,9 +154,9 @@ Provisional authentication remains distinct from active authentication: it must 
 - [x] Exercise old-agent/new-backend enrollment, reconnect, snapshots, log reads and approved Linux restart handling; replay legacy optional-field omissions and bad Windows claims. Use disposable services, never existing databases or VMs.
 - [x] Run complete affected-repo validation, Linux package/bootstrap/curl and real Ubuntu systemd CI, Windows CI and mixed-target integration. Test only justified changes after prior passing runs; collect exact commands/results and inspect every failure.
 - [x] Complete independent Task 7 review and fix re-review; record unexecuted native/reboot/real-host criteria in the qualification decision without claiming zero-regression proof.
-- [ ] Collect final hosted backend CI [41246730821](https://github.com/acornops/control-plane/actions/runs/41246730821); pending at Task 8 decision.
-- [ ] Run the single broad review after Task 8; fix important findings with targeted regression checks and independently re-review fixes before handoff.
-- [ ] Finalize linked docs/change set, task status and coordinated draft PR handoff after broad review and final CI. Existing drafts are linked below; their creation does not complete this handoff. Retain disabled Windows rollout until native qualification. Do not merge/release/deploy.
+- [x] Collect hosted backend CI [41246730821](https://github.com/acornops/control-plane/actions/runs/41246730821) at the Task 7 checkpoint and [41249382697](https://github.com/acornops/control-plane/actions/runs/41249382697) after the final review fix; both pass.
+- [x] Run the single broad review after Task 8; fix important findings with targeted regression checks and independently re-review fixes before handoff.
+- [x] Finalize linked docs/change set, task status and coordinated draft PR handoff after broad review and final source CI. Preserve the exact tested checkpoint when making evidence-only documentation updates. Retain disabled Windows rollout until native qualification. Do not merge/release/deploy.
 
 ### Task 8: Windows writes qualification gate
 
@@ -360,7 +362,9 @@ controlled reconnects, metadata/policy/credential retention, 12 scoped reads,
 schema checks, eight Windows filters and 14 Linux approval checks. Host data and
 actions were synthetic. All 24 catalog reads succeeded; 22 schema validations
 passed, while both Linux mock `list_services` results reproduce baseline debt.
-Final backend hosted CI and the broad review/PR handoff remain pending.
+The backend checkpoint's [hosted CI](https://github.com/acornops/control-plane/actions/runs/41246730821)
+subsequently passed 1,712 tests/254 suites and all validation gates. The final
+review fixes and their evidence are recorded below.
 
 Task 8's [qualification decision](../../design-docs/windows-qualification-decision.md)
 keeps Windows rollout and writes disabled. Hosted native package/host success does
@@ -368,3 +372,49 @@ not resolve the unexplained cold-collector and service-identity failures or exec
 the reboot, Core/Desktop Experience and full generated-download gates. Future
 native-action controls are design requirements only. No merge, release,
 deployment or activation is authorized; the wider program remains incomplete.
+
+Final broad review and its one scoped fix re-review are complete. Both important
+findings are addressed at backend `3a1b969`, console `5eabc88`, and API docs
+`a39eb95`: successful Windows log responses retain health/truncation/counts, and
+inventory retains snapshot-bound category health/coverage/omitted counts. Unknown
+or partial collection remains visible with useful rows. Backend reads bind raw
+and derived data in one SQL statement; console caches bind workspace, target,
+generation and log channel. Linux keeps its exact resource response and cache
+paths. No open or new review findings remain.
+
+[Final backend CI](https://github.com/acornops/control-plane/actions/runs/41249382697)
+passes 1,719 tests/255 suites with zero failures/skips and the complete validation
+chain. The final focused console checks pass 17 unit tests and 19 browser
+fixtures. Nine additional actual backend/browser checks pass without interception,
+including denied/unavailable/partial logs, retained rows, counts, snapshot time,
+target/channel/cache separation and a narrow viewport. Host faults are synthetic
+process-local overrides; the actual transport/backend/browser compose normally.
+Both Linux targets retain online state, write policy and exact resource envelopes.
+
+Final mixed-target probes at backend `3a1b969` repeat reads, scope, OS rejection,
+registry/schema isolation, Windows filters and 14 approved Linux restart checks.
+All 24 reads succeed; 22 schemas pass and both Linux mock schema failures exactly
+match the frozen baseline. The Windows mock was restored to its ordinary fixture
+after fault testing. No native mutation or model-generated dispatch was claimed.
+
+At AgentV checkpoint `e9e9bbd`, all four hosted workflows pass:
+[Linux](https://github.com/acornops/agentv/actions/runs/41247116654),
+[Windows collectors](https://github.com/acornops/agentv/actions/runs/41247116633),
+[Windows service host](https://github.com/acornops/agentv/actions/runs/41247116727),
+and [Windows installer](https://github.com/acornops/agentv/actions/runs/41247116808).
+The tested merge is `f15c45fee1f30da9e4495348428eafcc8e677422`; its parents include
+`e9e9bbd`, and native source/script hashes match the reviewed runtime. Linux passes
+183 unit/E2E tests/34 files, package/bootstrap/curl and both Ubuntu 24.04 Node 22/24
+systemd lifecycle jobs. Windows passes all four collector/host pairs and all 18
+installer jobs, with all 16 scenario artifacts checked. These passing samples do
+not explain the earlier native failures. This final record changes documentation
+only; it does not relabel the tested checkpoint or qualify a release.
+
+Final [console CI](https://github.com/acornops/management-console/actions/runs/41249388708)
+passes Node 22 preflight (1,277 tests/237 files) and all eight browser jobs,
+including 330 fixture tests, at `5eabc88`.
+[Docs CI](https://github.com/acornops/docs-website/actions/runs/41249390190) and
+final cross-repository contract checks pass. All four PRs remain drafts on
+`feat/windows-vm-support`; original checkout file status is unchanged. Owned
+disposable services, images and private integration credentials are removed;
+feature worktrees and sanitized review/validation evidence remain available.
