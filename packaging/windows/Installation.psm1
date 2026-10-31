@@ -10,7 +10,12 @@ $script:PowerShell = Join-Path ([Environment]::SystemDirectory) 'WindowsPowerShe
 function Invoke-AgentVSc {
     param([string[]]$Arguments)
     & $script:Sc @Arguments | Out-Null
-    if ($LASTEXITCODE -ne 0) { throw 'AgentV SCM operation failed.' }
+    if ($LASTEXITCODE -ne 0) {
+        $code=$LASTEXITCODE;$verb=$Arguments[0]
+        if ($verb -notin @('create','config','description','sidtype','failure','failureflag','delete')) { $verb='other' }
+        Write-Output ('AgentV SCM failure operation='+$verb+' native='+[int]$code)
+        throw 'AgentV SCM operation failed.'
+    }
 }
 function Assert-AgentVAdministrator {
     $identity = [Security.Principal.WindowsIdentity]::GetCurrent()
