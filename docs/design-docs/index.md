@@ -8,3 +8,4 @@ Record durable design decisions here. Keep transient task notes in execution pla
 
 - [Core Beliefs](core-beliefs.md)
 - [Windows VM support with Linux compatibility](windows-vm-linux-compatibility.md) — Approved; preserves Linux contracts and stages Windows qualification.
+- [Windows service host](windows-service-host.md) — Reviewed native host boundary; packaging and qualification pending.
