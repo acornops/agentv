@@ -323,7 +323,9 @@ backups remain Administrators/SYSTEM-only.
 
 After restoring connectivity, an administrator can invoke the installed fixed
 `%ProgramFiles%\AcornOps\AgentV\maintenance\recover.ps1` using elevated
-PowerShell. Pending/unknown outcomes retain protected recovery state. Automatic
+PowerShell. Pending/unknown outcomes retain protected recovery state. An active marker with
+a missing journal is an error requiring manual support; recovery preserves the
+marker and does not report idle or invent a replacement journal. Automatic
 recovery is limited to twelve attempts, with five-minute triggers plus startup;
 manual recovery resets that bounded attempt count. Each reentry disables the
 owned service and drains queued SCM restarts for a full monotonic65seconds

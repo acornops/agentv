@@ -290,7 +290,11 @@ function Invoke-AgentVRecovery {
     param([switch]$Automatic,[switch]$AcceptCommittedCandidate)
     if ($Automatic -and $AcceptCommittedCandidate) { throw 'Candidate acceptance requires an explicit manual invocation.' }
     Assert-AgentVAdministrator
-    if (-not (Test-Path -LiteralPath $script:Paths.Journal)) { if ($AcceptCommittedCandidate) { throw 'No candidate transaction exists to accept.' }; return 'idle' }
+    if (-not (Test-Path -LiteralPath $script:Paths.Journal)) {
+        if (Test-Path -LiteralPath $script:Paths.Marker) { throw 'Active recovery marker has no protected journal; evidence was retained for manual support.' }
+        if ($AcceptCommittedCandidate) { throw 'No candidate transaction exists to accept.' }
+        return 'idle'
+    }
     $owner = Read-AgentVJson -Path $script:Paths.Owner -Secret
     $journal = Read-AgentVJson -Path $script:Paths.Journal -Secret
     if ($journal.ownerId -cne $owner.id) { throw 'Recovery ownership mismatch.' }
@@ -301,10 +305,12 @@ function Invoke-AgentVRecovery {
         $journal = Read-AgentVJson -Path $script:Paths.Journal -Secret
         Assert-AgentVJournal -Journal $journal -Owner $owner
         if ($AcceptCommittedCandidate -and ($null -eq $journal.transaction -or $journal.intent -notin @('rollback-denied','accept-committed'))) { throw 'Only the retained rollback-denied candidate can be explicitly accepted.' }
+        # Finalized is persisted after restoring selection and SCM policy. If
+        # marker removal already completed, only secret-journal cleanup remains.
+        if ($journal.phase -eq 'finalized' -and -not (Test-Path -LiteralPath $script:Paths.Marker)) { Remove-Item -LiteralPath $script:Paths.Journal -Force; return 'completed' }
         if ($null -ne $journal.transaction -and -not (Test-Path -LiteralPath $script:Paths.Marker)) { Write-AgentVDurableJson -Path $script:Paths.Marker -Value @{schema='acornops.agentv-windows-active.v1';ownerId=$owner.id} }
         Import-AgentVInstallerNative -Directory (Join-Path $script:Paths.Releases $journal.candidate.version) -Version $journal.candidate.version
         if ($journal.terminal -eq 'removed') { Finish-AgentVTransaction -Journal $journal -Selection removed; return 'rolled-back' }
-        if ($journal.phase -eq 'finalized' -and -not (Test-Path -LiteralPath $script:Paths.Marker)) { Remove-Item -LiteralPath $script:Paths.Journal -Force; return 'completed' }
         if ($null -ne $journal.terminal) { $journal.terminal=$null; Save-AgentVJournal -Journal $journal -Phase 'finalization-reverify' }
         if ($Automatic -and $journal.attempts -ge 12) { return 'manual-recovery-required' }
         if (-not $Automatic) { $journal.attempts=0 }

@@ -83,6 +83,10 @@ Source: control-plane `src/controllers/agentv-installation-controller.ts` and
 - Finalization durably records the terminal selection first, restores the
   intended service startup mode and failure actions, clears the active marker, then deletes secret
   backups/journal. All steps tolerate re-entry after interruption.
+- A validated finalized journal with its marker already removed needs only
+  journal cleanup; do not recreate the marker or restart the authenticated
+  service. An active marker with no journal is inconsistent protected state:
+  refuse recovery without changing evidence, rather than report successful idle.
 - Preserve the additional CA setting on repair; no token exchange for reuse of
   a valid local credential. Repair/upgrade must still reconnect successfully.
 - Successful uninstall stops/removes owned service/recovery registration, but
