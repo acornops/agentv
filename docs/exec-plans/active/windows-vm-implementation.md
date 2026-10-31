@@ -12,14 +12,14 @@
 
 Status: approved for implementation by the user on 2026-10-31. Work in progress.
 
-Execution ruling (2026-11-01): task 5's implementation and scoped fix review are
-complete at `2a69373`, with native concurrency checks and actual service-host and
-Linux matrices passing. Its full installer matrix remains a required pending
-gate. Task 6 may proceed against the already-reviewed backend and instruction
-contracts while that matrix runs. Only the console implementer is active; if an
-installer failure needs code changes, pause console implementation before resuming
-task 5. This overlaps validation with isolated UI work, not implementation owners.
-Task 5 completion and final qualification still require its native results.
+Execution status (2026-11-01): task 5 is complete at `2a69373`; all 18 hosted
+installer jobs, four native service-host cells and Linux matrices pass. Task 6's
+source and integration review are clean at console `6c77dbc`; local validation
+passes and the final hosted browser fixture shard is pending. Task 7 may proceed
+in the separate AgentV/backend/docs worktrees while that result is collected.
+There is one implementation owner. If console CI exposes a source failure, pause
+task 7 before resuming the console implementer. Final qualification still requires
+all reported gates, and hosted service restart does not qualify real reboot.
 
 ## Global constraints
 
