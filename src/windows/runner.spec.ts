@@ -35,9 +35,9 @@ describe('Windows bounded process boundary', () => {
     const runner = new WindowsCollectorRunner(); const pending = runner.run('host', {});
     const observed = pending.catch((error) => error);
     await vi.advanceTimersByTimeAsync(0); expect(dependencies.spawn).toHaveBeenCalledTimes(1); child.emit('spawn');
-    child.stderr.write('raw secret diagnostic\nagentv-stage:stdin_'); child.stderr.write('read_started\nagentv-stage:untrusted-secret-value\n');
+    child.stderr.write('raw secret diagnostic\nagentv-stage:encoding_'); child.stderr.write('construct_started\nagentv-stage:untrusted-secret-value\n');
     await vi.advanceTimersByTimeAsync(8000);
-    expect(await observed).toMatchObject({ toolCode: 'TOOL_TIMEOUT', data: { collector: 'host', stage: 'stdin_read_started', elapsed_ms: 8000, stdout_bytes: 0, stdin_finished: true, spawned: true } });
+    expect(await observed).toMatchObject({ toolCode: 'TOOL_TIMEOUT', data: { collector: 'host', stage: 'encoding_construct_started', elapsed_ms: 8000, stdout_bytes: 0, stdin_finished: true, spawned: true } });
     expect(JSON.stringify(await pending.catch((error) => error.data))).not.toContain('secret');
     expect(child.kill).toHaveBeenCalledTimes(1); await runner.stop();
   });
