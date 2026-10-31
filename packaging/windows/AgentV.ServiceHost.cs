@@ -1,6 +1,7 @@
 // Windows Framework 4.8; deliberately no packages, dynamic compilation, or HTTP.
 using System;
 using System.Collections.Generic;
+using System.ComponentModel;
 using System.Diagnostics;
 using System.IO;
 using System.Runtime.InteropServices;
@@ -27,23 +28,27 @@ namespace AcornOps.AgentV {
         }
     }
 
+    internal sealed class TrustFailure : IOException {
+        internal readonly int Reason;
+        internal TrustFailure(int reason) : base("Windows trust validation failed") { Reason = reason; }
+    }
     internal static class TrustedPaths {
         internal static void Check(string path, bool directory) {
-            if (!Path.IsPathRooted(path) || Path.GetFullPath(path) != path || path.StartsWith(@"\\")) throw new IOException("Untrusted path");
+            if (!Path.IsPathRooted(path) || Path.GetFullPath(path) != path || path.StartsWith(@"\\")) throw new TrustFailure(1);
             string current = path;
             bool leaf = true;
             while (current != null) {
                 FileAttributes attributes = File.GetAttributes(current);
-                if ((attributes & FileAttributes.ReparsePoint) != 0) throw new IOException("Reparse path");
+                if ((attributes & FileAttributes.ReparsePoint) != 0) throw new TrustFailure(2);
                 bool isDirectory = (attributes & FileAttributes.Directory) != 0;
-                if (leaf && directory != isDirectory) throw new IOException("Wrong path type");
+                if (leaf && directory != isDirectory) throw new TrustFailure(3);
                 FileSystemSecurity acl = isDirectory ? (FileSystemSecurity)Directory.GetAccessControl(current) : File.GetAccessControl(current);
                 string owner = acl.GetOwner(typeof(SecurityIdentifier)).Value;
-                if (!Privileged(owner)) throw new IOException("Untrusted owner");
+                if (!Privileged(owner)) throw new TrustFailure(4);
                 FileSystemRights writes = FileSystemRights.ChangePermissions | FileSystemRights.TakeOwnership | FileSystemRights.Delete;
                 if (leaf) writes |= FileSystemRights.Write | FileSystemRights.DeleteSubdirectoriesAndFiles;
                 foreach (FileSystemAccessRule rule in acl.GetAccessRules(true, true, typeof(SecurityIdentifier))) {
-                    if (rule.AccessControlType == AccessControlType.Allow && (rule.FileSystemRights & writes) != 0 && !Privileged(rule.IdentityReference.Value)) throw new IOException("Untrusted write access");
+                    if (rule.AccessControlType == AccessControlType.Allow && (rule.FileSystemRights & writes) != 0 && !Privileged(rule.IdentityReference.Value)) throw new TrustFailure(5);
                 }
                 current = Path.GetDirectoryName(current); leaf = false;
                 if (String.IsNullOrEmpty(current)) break;
@@ -61,10 +66,10 @@ namespace AcornOps.AgentV {
         internal static void Node(string path) {
             Check(path, false);
             int major = FileVersionInfo.GetVersionInfo(path).FileMajorPart;
-            if (major != 22 && major != 24) throw new IOException("Unsupported Node runtime");
+            if (major != 22 && major != 24) throw new TrustFailure(6);
             using (BinaryReader reader = new BinaryReader(File.OpenRead(path))) {
                 reader.BaseStream.Position = 0x3c; int pe = reader.ReadInt32(); reader.BaseStream.Position = pe;
-                if (reader.ReadUInt32() != 0x4550 || reader.ReadUInt16() != 0x8664) throw new IOException("Node must be x64");
+                if (reader.ReadUInt32() != 0x4550 || reader.ReadUInt16() != 0x8664) throw new TrustFailure(7);
             }
         }
     }
@@ -76,13 +81,15 @@ namespace AcornOps.AgentV {
         int stopping;
         internal Host(string nodePath) { node = nodePath; ServiceName = Program.Name; CanStop = true; CanShutdown = true; AutoLog = false; }
         protected override void OnStart(string[] args) {
+            string stage = "node-trust";
             try {
                 TrustedPaths.Node(node);
-                TrustedPaths.Tree(Program.Release);
-                TrustedPaths.Check(Program.Config, false);
+                stage = "release-trust"; TrustedPaths.Tree(Program.Release);
+                stage = "config-trust"; TrustedPaths.Check(Program.Config, false);
                 // Logs/state deliberately have SID write ACLs, established by the installer.
-                NoReparse(Program.State); NoReparse(Program.Logs);
+                stage = "state-paths"; NoReparse(Program.State); NoReparse(Program.Logs);
                 File.Delete(Path.Combine(Program.State, "authenticated.json"));
+                stage = "config-digest";
                 string digest;
                 using (FileStream config = File.OpenRead(Program.Config)) {
                     if (config.Length > 65536) throw new IOException("Config too large");
@@ -90,8 +97,8 @@ namespace AcornOps.AgentV {
                 }
                 Dictionary<string, object> launch = new Dictionary<string, object> { { "launchId", Guid.NewGuid().ToString() }, { "configSha256", digest }, { "stateDirectory", Program.State } };
                 JavaScriptSerializer json = new JavaScriptSerializer();
-                File.WriteAllText(Path.Combine(Program.State, "launch.json"), json.Serialize(launch), new UTF8Encoding(false));
-                job = new Job();
+                stage = "launch-evidence"; File.WriteAllText(Path.Combine(Program.State, "launch.json"), json.Serialize(launch), new UTF8Encoding(false));
+                stage = "job-create"; job = new Job();
                 ProcessStartInfo start = new ProcessStartInfo(node, Quote(Path.Combine(Program.Release, "dist", "windows-service-entry.js")) + " --config " + Quote(Program.Config));
                 start.UseShellExecute = false; start.CreateNoWindow = true;
                 start.RedirectStandardInput = true; start.RedirectStandardOutput = true; start.RedirectStandardError = true;
@@ -102,16 +109,18 @@ namespace AcornOps.AgentV {
                 start.EnvironmentVariables["WINDIR"] = Path.GetDirectoryName(system);
                 start.EnvironmentVariables["PATH"] = system;
                 start.EnvironmentVariables["TEMP"] = Program.State; start.EnvironmentVariables["TMP"] = Program.State;
-                child = Process.Start(start);
-                try { job.Assign(child.Handle); } catch { child.Kill(); child.WaitForExit(5000); throw; }
+                stage = "node-create"; child = Process.Start(start);
+                stage = "job-assign"; try { job.Assign(child.Handle); } catch { child.Kill(); child.WaitForExit(5000); throw; }
                 Drain(child.StandardOutput.BaseStream, "stdout"); Drain(child.StandardError.BaseStream, "stderr");
-                child.StandardInput.WriteLine(json.Serialize(new Dictionary<string, object> { { "command", "START" }, { "trustedSystemDirectory", system }, { "launch", launch } }));
+                stage = "start-gate"; child.StandardInput.WriteLine(json.Serialize(new Dictionary<string, object> { { "command", "START" }, { "trustedSystemDirectory", system }, { "launch", launch } }));
                 child.StandardInput.Flush();
                 Thread watcher = new Thread(Watch); watcher.IsBackground = true; watcher.Start();
-            } catch {
+            } catch (Exception error) {
                 Interlocked.Exchange(ref stopping, 1);
                 if (job != null) { job.TerminateAndWait(); job.Dispose(); }
-                Diagnostic("Service startup failed");
+                Win32Exception native = error as Win32Exception;
+                TrustFailure trust = error as TrustFailure;
+                Diagnostic("Service startup failed stage=" + stage + " hresult=" + error.HResult + " native=" + (native == null ? 0 : native.NativeErrorCode) + " trust=" + (trust == null ? 0 : trust.Reason), true);
                 throw new InvalidOperationException("AgentV service startup failed");
             }
         }
@@ -168,10 +177,10 @@ namespace AcornOps.AgentV {
             });
             drain.IsBackground = true; drain.Start();
         }
-        static void Diagnostic(string message) {
+        static void Diagnostic(string message, bool wait = false) {
             Thread thread = new Thread(delegate() {
                 try { using (RotatingSink sink = new RotatingSink(Path.Combine(Program.Logs, "host.log"))) { byte[] bytes = Encoding.UTF8.GetBytes(message + "\r\n"); sink.Write(bytes, bytes.Length); } } catch { }
-            }); thread.IsBackground = true; thread.Start();
+            }); thread.IsBackground = true; thread.Start(); if (wait) thread.Join(500);
         }
     }
 

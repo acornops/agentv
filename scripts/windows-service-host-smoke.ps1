@@ -145,6 +145,14 @@ try {
     Assert ((Get-Service AcornOpsAgentV).Status -eq 'Stopped') 'Runtime reparse dependency rejected'
     Remove-Item -LiteralPath $link -Force
 } finally {
+    if ($owned) {
+        $service = Get-CimInstance Win32_Service -Filter "Name='AcornOpsAgentV'" -ErrorAction SilentlyContinue
+        if ($null -ne $service) { $evidence.scm = @{ state = $service.State; exitCode = $service.ExitCode; serviceSpecificExitCode = $service.ServiceSpecificExitCode } }
+        $diagnosticPath = Join-Path $root 'logs\host.log'
+        if (Test-Path -LiteralPath $diagnosticPath -PathType Leaf) {
+            $evidence.hostDiagnostics = @(Get-Content -LiteralPath $diagnosticPath -Tail 32 | Where-Object { $_ -match '^Service startup failed stage=[a-z-]{1,32} hresult=-?[0-9]{1,12} native=-?[0-9]{1,12} trust=[0-9]{1,2}$' })
+        }
+    }
     if ($null -ne $sentinel -and -not $sentinel.HasExited) { $sentinel.Kill(); $sentinel.WaitForExit() }
     if ($probeOwned) { Stop-Service AcornOpsAgentVProbe -ErrorAction SilentlyContinue; & $sc delete AcornOpsAgentVProbe | Out-Null }
     if ($owned) { if (Get-Service AcornOpsAgentV -ErrorAction SilentlyContinue) { & $sc config AcornOpsAgentV start= disabled | Out-Null; Stop-Service AcornOpsAgentV -ErrorAction SilentlyContinue; & $sc delete AcornOpsAgentV | Out-Null }; Remove-Item -LiteralPath $dataParent,$programParent,$probeRoot -Recurse -Force -ErrorAction Continue }

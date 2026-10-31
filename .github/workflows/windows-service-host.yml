@@ -31,7 +31,7 @@ jobs:
       - run: npm ci
       - run: npm run build
       - name: Verify bounded START and authentication evidence
-        run: npx vitest run src/windows-service-entry.spec.ts src/windows-readiness.spec.ts
+        run: npx vitest run src/windows-service-entry.spec.ts src/windows-readiness.spec.ts src/windows-provisional-readiness.spec.ts
       - name: Qualify host in explicitly disposable hosted runner
         shell: pwsh
         run: ./scripts/windows-service-host-smoke.ps1 -AllowDisposableCi

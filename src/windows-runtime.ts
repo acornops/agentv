@@ -14,7 +14,7 @@ import type { WindowsHost } from './windows/types.js';
 export interface WindowsRuntimeOptions {
   /** Only the trusted native host may supply its OS-API-discovered directory. */
   trustedSystemDirectory?: string;
-  sessionState?: { authenticated: () => void; disconnected: () => void };
+  sessionState?: { authenticated: () => void; disconnected: () => void; provisionalAuthenticated?: () => void };
 }
 export interface WindowsStopHandle { stop(): Promise<void>; }
 

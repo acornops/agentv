@@ -41,7 +41,7 @@ export class LifecycleManager {
   constructor(
     private readonly config: AgentConfig, host: HostAdapter | RuntimeComposition, actions: ActionClient | null,
     private readonly router: McpRouter, private readonly logger: Logger, metrics: Observability,
-    private readonly sessionState: { authenticated: () => void; disconnected: () => void } = {
+    private readonly sessionState: { authenticated: () => void; disconnected: () => void; provisionalAuthenticated?: () => void } = {
       authenticated: () => undefined, disconnected: () => undefined
     },
   ) {
@@ -57,7 +57,7 @@ export class LifecycleManager {
   }
 
   /** Compose native Windows snapshots while preserving the Linux constructor defaults. */
-  static forWindows(config: AgentConfig, runtime: RuntimeComposition, router: McpRouter, logger: Logger, metrics: Observability, sessionState?: { authenticated: () => void; disconnected: () => void }): LifecycleManager {
+  static forWindows(config: AgentConfig, runtime: RuntimeComposition, router: McpRouter, logger: Logger, metrics: Observability, sessionState?: { authenticated: () => void; disconnected: () => void; provisionalAuthenticated?: () => void }): LifecycleManager {
     return new LifecycleManager(config, runtime, null, router, logger, metrics, sessionState);
   }
 
@@ -133,6 +133,7 @@ export class LifecycleManager {
     }
     if (this.handshakeDeadline) clearTimeout(this.handshakeDeadline); this.handshakeDeadline = null;
     if (result.provisional === true) {
+      if (this.runtime?.kind === 'windows') this.sessionState.provisionalAuthenticated?.();
       this.logger.info({}, 'AgentV installation credential verified; waiting for activation');
       setTimeout(() => this.transport.forceReconnect(), 1_000).unref();
       return;

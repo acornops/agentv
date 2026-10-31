@@ -289,8 +289,10 @@ and grants the service SID access only to the protected runtime/config and its
 own log/state directories. Before START it clears old authentication evidence,
 hashes config, assigns Node to a kill-on-close Job Object, and sends a fresh
 launch identity. The child checks that config hash before importing the runtime.
-On authenticated connection it atomically publishes bounded `authenticated.json`
-evidence; disconnect removes it. This file grants no recovery authority.
+Validated Windows provisional authentication publishes bounded `authenticated.json`
+evidence with phase `provisional`; activation replaces it with phase `active`.
+Both are bound to the launch and config, and disconnect removes the evidence.
+Provisional authentication does not enable tools, snapshots or heartbeat. This file grants no recovery authority.
 
 The native host has no enrollment HTTP or installer logic. SCM crash recovery
 uses 10/30/60-second restart delays and a one-day reset. Orderly stop waits up to
