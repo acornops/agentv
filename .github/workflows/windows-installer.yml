@@ -36,7 +36,7 @@ jobs:
         shell: powershell
         run: ./scripts/windows-tests/durable-state-tests.ps1 -AllowDisposableCi
   installation:
-    name: Transactional installation (${{ matrix.os }}, Node ${{ matrix.node }})
+    name: Transactional installation (${{ matrix.os }}, Node ${{ matrix.node }}, ${{ matrix.scenario }})
     runs-on: ${{ matrix.os }}
     timeout-minutes: 30
     strategy:
@@ -44,6 +44,7 @@ jobs:
       matrix:
         os: [windows-2022, windows-2025]
         node: [22, 24]
+        scenario: [lifecycle, acceptance]
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -56,12 +57,12 @@ jobs:
         run: ./scripts/windows-tests/parse-package-tests.ps1
       - name: Exercise disposable transactional installation
         shell: powershell
-        run: ./scripts/windows-tests/installation-smoke.ps1 -AllowDisposableCi
+        run: ./scripts/windows-tests/installation-smoke.ps1 -AllowDisposableCi -Scenario ${{ matrix.scenario }}
       - name: Upload sanitized installation evidence
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: windows-installer-${{ matrix.os }}-node${{ matrix.node }}
+          name: windows-installer-${{ matrix.os }}-node${{ matrix.node }}-${{ matrix.scenario }}
           path: artifacts/windows-installer/
           if-no-files-found: warn
           retention-days: 14

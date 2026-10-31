@@ -8,6 +8,8 @@ const options = JSON.parse(readFileSync(process.argv[2], 'utf8'));
 if (process.platform !== 'win32' || process.env.CI !== 'true' || process.env.GITHUB_ACTIONS !== 'true' || options.allowDisposableCi !== true) throw new Error('Disposable Windows CI required');
 const state = { activeKey: null, activeConnected: false, exchanges: 0, commits: 0, rollbacks: 0, transactions: {} };
 const persist = () => { writeFileSync(`${options.state}.pending`, JSON.stringify(state)); renameSync(`${options.state}.pending`, options.state); };
+const authenticatedSockets = new Map();
+const connected = () => [...authenticatedSockets.values()].some((key) => key === state.activeKey);
 const controls = () => JSON.parse(readFileSync(options.controls, 'utf8'));
 const server = createServer({ pfx: readFileSync(options.pfx), passphrase: options.passphrase }, (request, response) => {
   let bytes = 0; const chunks = [];
@@ -33,6 +35,14 @@ const server = createServer({ pfx: readFileSync(options.pfx), passphrase: option
     const transaction = match && state.transactions[match[1]];
     if (!transaction || request.headers['x-agentv-transaction-secret'] !== transaction.secret) return send(401, {});
     if (match[2] === 'status') {
+      // Pause only this disposable fixture's external status response after the
+      // production worker has durably persisted acceptance; no product hook.
+      if (control.holdAcceptanceRecheck) {
+        try {
+          const journal = readFileSync(options.journal);
+          if (journal.length <= 262144 && JSON.parse(journal.toString('utf8')).intent === 'accept-committed') return;
+        } catch { /* The atomic journal may be changing; a later poll observes it. */ }
+      }
       if (control.statusUnavailable) return send(503, {});
       return send(200, { transactionId: transaction.id, status: control.forceStatus || transaction.status, credentialState: control.forceCredentialState || transaction.credentialState, activeConnected: state.activeConnected });
     }
@@ -61,14 +71,15 @@ sockets.on('connection', (socket, request) => {
   const key = request.headers['x-agent-key'];
   const transaction = Object.values(state.transactions).find((item) => item.key === key && ['exchanged', 'verified'].includes(item.status));
   const control = controls();
-  if (request.url !== '/api/v1/agent/connect' || control.rejectAgent || (!transaction && key !== state.activeKey)) { socket.close(1008); return; }
+  if (request.url !== '/api/v1/agent/connect' || control.rejectAgent || (control.rejectActive && !transaction) || (control.rejectPending && transaction) || (!transaction && key !== state.activeKey)) { socket.close(1008); return; }
+  socket.on('close', () => { if (authenticatedSockets.delete(socket)) { state.activeConnected = connected(); persist(); } });
   socket.on('message', (raw, binary) => {
     if (binary) return;
     const message = JSON.parse(raw.toString());
     if (message.method !== 'lifecycle/handshake') return;
     if (message.id !== 'agentv-handshake-v2' || message.params?.targetId !== options.targetId || message.params?.hostFeatures?.osFamily !== 'windows' || message.params?.hostFeatures?.serviceManager !== 'scm') { socket.close(1008); return; }
     if (transaction) { transaction.status = 'verified'; persist(); }
-    else { state.activeConnected = true; persist(); }
+    else { authenticatedSockets.set(socket, key); state.activeConnected = connected(); persist(); }
     socket.send(JSON.stringify({ jsonrpc: '2.0', id: message.id, result: { workspaceId: 'disposable-windows-ci', targetId: options.targetId, targetType: 'virtual_machine', provisional: Boolean(transaction), sessionPolicy: { allowedTools: [], writeEnabled: false } } }));
   });
 });
