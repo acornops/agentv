@@ -16,37 +16,43 @@ function Set-AgentVAcl {
     if ($ServiceSid) { $acl.AddAccessRule([Security.AccessControl.FileSystemAccessRule]::new([Security.Principal.SecurityIdentifier]$ServiceSid,$Rights,$inherit,'None','Allow')) }
     Set-Acl -LiteralPath $Path -AclObject $acl
 }
+function Assert-AgentVPathObject {
+    param([string]$Path,[bool]$Leaf=$true,[switch]$Secret,[string]$ServiceReadSid,[string]$ServiceWriteSid)
+    if(-not [IO.Path]::IsPathRooted($Path) -or $Path.StartsWith('\\') -or [IO.Path]::GetFullPath($Path) -cne $Path){throw 'AgentV requires a normalized local absolute path.'}
+    $privileged=@('S-1-5-18','S-1-5-32-544','S-1-5-80-956008885-3418522649-1831038044-1853292631-2271478464')
+    $item=Get-Item -LiteralPath $Path -Force
+    if($item.Attributes -band [IO.FileAttributes]::ReparsePoint){throw 'AgentV refuses reparse paths.'}
+    $acl=Get-Acl -LiteralPath $Path
+    if($acl.GetOwner([Security.Principal.SecurityIdentifier]).Value -notin $privileged){throw 'AgentV refuses an untrusted path owner.'}
+    $writes=[int][Security.AccessControl.FileSystemRights]::ChangePermissions -bor [int][Security.AccessControl.FileSystemRights]::TakeOwnership -bor [int][Security.AccessControl.FileSystemRights]::Delete -bor [int][Security.AccessControl.FileSystemRights]::DeleteSubdirectoriesAndFiles
+    if($Leaf){$writes=$writes -bor [int][Security.AccessControl.FileSystemRights]::Write}
+    foreach($rule in $acl.GetAccessRules($true,$true,[Security.Principal.SecurityIdentifier])){
+        if($rule.AccessControlType -ne 'Allow' -or ($rule.PropagationFlags -band [Security.AccessControl.PropagationFlags]::InheritOnly)){continue}
+        $sid=$rule.IdentityReference.Value
+        if($sid -in $privileged){continue}
+        $bits=[BitConverter]::ToUInt32([BitConverter]::GetBytes([int]$rule.FileSystemRights),0)
+        if((($bits -band $writes) -ne 0 -or ($bits -band 0x50000000) -ne 0) -and -not($Leaf -and $ServiceWriteSid -and $sid -eq $ServiceWriteSid)){throw 'AgentV refuses effective untrusted write access.'}
+        if($Leaf -and $Secret -and $sid -ne $ServiceReadSid){throw 'AgentV confidential state has an unrelated access rule.'}
+    }
+}
 function Assert-AgentVTrustedPath {
     param([Parameter(Mandatory=$true)][string]$Path, [switch]$Tree, [switch]$Ancestor, [switch]$Secret, [string]$ServiceReadSid, [string]$ServiceWriteSid)
     if (-not [IO.Path]::IsPathRooted($Path) -or $Path.StartsWith('\\') -or [IO.Path]::GetFullPath($Path) -cne $Path) { throw 'AgentV requires a normalized local absolute path.' }
-    $privileged = @('S-1-5-18','S-1-5-32-544','S-1-5-80-956008885-3418522649-1831038044-1853292631-2271478464')
-    $current = $Path; $leaf = -not $Ancestor
-    while ($current) {
-        $item = Get-Item -LiteralPath $current -Force
-        if ($item.Attributes -band [IO.FileAttributes]::ReparsePoint) { throw 'AgentV refuses reparse paths.' }
-        $acl = Get-Acl -LiteralPath $current
-        if ($acl.GetOwner([Security.Principal.SecurityIdentifier]).Value -notin $privileged) { throw 'AgentV refuses an untrusted path owner.' }
-        $writes = [int][Security.AccessControl.FileSystemRights]::ChangePermissions -bor [int][Security.AccessControl.FileSystemRights]::TakeOwnership -bor [int][Security.AccessControl.FileSystemRights]::Delete -bor [int][Security.AccessControl.FileSystemRights]::DeleteSubdirectoriesAndFiles
-        if ($leaf) { $writes = $writes -bor [int][Security.AccessControl.FileSystemRights]::Write }
-        foreach ($rule in $acl.GetAccessRules($true,$true,[Security.Principal.SecurityIdentifier])) {
-            if ($rule.AccessControlType -ne 'Allow' -or ($rule.PropagationFlags -band [Security.AccessControl.PropagationFlags]::InheritOnly)) { continue }
-            $sid = $rule.IdentityReference.Value
-            if ($sid -in $privileged) { continue }
-            $bits = [BitConverter]::ToUInt32([BitConverter]::GetBytes([int]$rule.FileSystemRights),0)
-            if ((($bits -band $writes) -ne 0 -or ($bits -band 0x50000000) -ne 0) -and -not ($leaf -and $ServiceWriteSid -and $sid -eq $ServiceWriteSid)) { throw 'AgentV refuses effective untrusted write access.' }
-            if ($leaf -and $Secret -and $sid -ne $ServiceReadSid) { throw 'AgentV confidential state has an unrelated access rule.' }
-        }
-        $current = Split-Path $current -Parent; $leaf = $false
+    $current=$Path;$leaf=-not $Ancestor
+    while($current){
+        Assert-AgentVPathObject -Path $current -Leaf $leaf -Secret:$Secret -ServiceReadSid $ServiceReadSid -ServiceWriteSid $ServiceWriteSid
+        $current=Split-Path $current -Parent;$leaf=$false
     }
-    if ($Tree) {
-        # Visit each directory before enumerating it, so a junction is never traversed.
-        $stack = New-Object 'Collections.Generic.Stack[string]'; $stack.Push($Path); $count = 0
-        while ($stack.Count) {
-            $directory = $stack.Pop()
-            foreach ($child in Get-ChildItem -LiteralPath $directory -Force) {
-                $count++; if ($count -gt 20000) { throw 'AgentV runtime tree exceeds the package limit.' }
-                Assert-AgentVTrustedPath -Path $child.FullName
-                if ($child.PSIsContainer) { $stack.Push($child.FullName) }
+    if($Tree){
+        # This invocation has validated the root and all ancestors. Each child
+        # is checked before traversal; no trust result survives this invocation.
+        $stack=New-Object 'Collections.Generic.Stack[string]';$stack.Push($Path);$count=0
+        while($stack.Count){
+            $directory=$stack.Pop()
+            foreach($child in Get-ChildItem -LiteralPath $directory -Force){
+                $count++;if($count -gt 20000){throw 'AgentV runtime tree exceeds the package limit.'}
+                Assert-AgentVPathObject -Path $child.FullName
+                if($child.PSIsContainer){$stack.Push($child.FullName)}
             }
         }
     }

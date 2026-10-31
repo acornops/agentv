@@ -152,3 +152,12 @@ runtime privilege helper. The worker never compiles code or installs global
 prerequisites. When adopting a previously stopped trusted host, PID0 plus the
 full disabled drain may carry historical crash1067; a stop requested by the
 current owner must instead return clean observable shutdown.
+
+
+Package trust checks use one fresh scope per invocation: normalize and validate
+ancestors once, then check every current file/directory owner, effective rights
+and reparse state before traversing it. Match manifest entries to the actual
+case-insensitive file inventory and hash every file. No trust result is cached
+across calls. The launcher validates the manifest path before its pointer hash,
+then performs complete package integrity validation before loading worker/DLL.
+This removes repeated ancestor scans without changing permissions or deadlines.

@@ -12,18 +12,26 @@ function Assert-AgentVPackage {
     $manifestPath = Join-Path $Directory 'package-manifest.json'
     $manifest = Read-AgentVJson -Path $manifestPath -Limit 4194304
     if ($manifest.schema -cne 'acornops.agentv-windows-package.v1' -or $manifest.version -cne $Version -or $manifest.architecture -cne 'x64' -or @($manifest.files).Count -gt 20000 -or $manifest.sourceRevision -notmatch '^[0-9a-f]{40}$') { throw 'Invalid Windows package manifest.' }
+    # Every actual object was checked by the protected tree walk above. Exact
+    # inventory membership prevents aliases or unmanifested files; hashes still
+    # cover every entry. Do not repeat the ancestor walk for each manifest row.
+    $actual=@(Get-ChildItem -LiteralPath $Directory -Recurse -File -Force)
+    $actualNames=New-Object 'Collections.Generic.HashSet[string]' ([StringComparer]::OrdinalIgnoreCase)
+    $prefix=$Directory.TrimEnd('\')+'\'
+    foreach($item in $actual){
+        $relative=$item.FullName.Substring($prefix.Length).Replace('\','/')
+        if($relative -ine 'package-manifest.json'){$null=$actualNames.Add($relative)}
+    }
     $names = New-Object 'Collections.Generic.HashSet[string]' ([StringComparer]::OrdinalIgnoreCase)
     $total = 0
     foreach ($file in $manifest.files) {
-        if ($file.path -notmatch '^[A-Za-z0-9_@./+-]+$' -or $file.path.StartsWith('/') -or $file.path.Split('/') -contains '..' -or $file.path.Split('/') -contains '.' -or $file.sha256 -notmatch '^[0-9a-f]{64}$' -or $file.size -lt 0 -or -not $names.Add($file.path)) { throw 'Unsafe Windows manifest entry.' }
+        if ($file.path -isnot [string] -or -not $actualNames.Contains($file.path) -or $file.path -notmatch '^[A-Za-z0-9_@./+-]+$' -or $file.path.StartsWith('/') -or $file.path.Split('/') -contains '..' -or $file.path.Split('/') -contains '.' -or $file.sha256 -notmatch '^[0-9a-f]{64}$' -or $file.size -lt 0 -or -not $names.Add($file.path)) { throw 'Unsafe Windows manifest entry.' }
         $path = Join-Path $Directory $file.path.Replace('/','\')
-        Assert-AgentVTrustedPath -Path $path
         if (-not (Test-Path -LiteralPath $path -PathType Leaf) -or (Get-Item -LiteralPath $path).Length -ne $file.size -or (Get-FileHash -LiteralPath $path -Algorithm SHA256).Hash.ToLowerInvariant() -cne $file.sha256) { throw 'Windows package checksum mismatch.' }
         $total += $file.size; if ($total -gt 104857600) { throw 'Windows package exceeds unpacked size limit.' }
     }
     foreach ($required in @('AgentV.ServiceHost.exe','AgentV.InstallerNative.dll','host-manifest.json','dist/index.js','dist/windows-service-entry.js','windows/install-worker.ps1','windows/doctor.mjs','windows/recover.ps1','windows/Paths.psm1','windows/Package.psm1','windows/Recovery.psm1','windows/Installation.psm1','package.json','node_modules/ws/package.json','node_modules/zod/package.json')) { if (-not $names.Contains($required)) { throw 'Windows package is missing a required asset.' } }
-    $actual = @(Get-ChildItem -LiteralPath $Directory -Recurse -File -Force)
-    if ($actual.Count -ne $names.Count+1) { throw 'Windows runtime contains unmanifested files.' }
+    if ($actualNames.Count -ne $names.Count -or $actual.Count -ne $names.Count+1) { throw 'Windows runtime contains unmanifested files.' }
     $native = Read-AgentVJson -Path (Join-Path $Directory 'host-manifest.json') -Limit 65536
     if ($native.schema -cne 'acornops.agentv-windows-host.v1' -or $native.targetFramework -cne 'net48' -or $native.architecture -cne 'x64' -or $native.sourceRevision -cne $manifest.sourceRevision -or $native.binarySha256 -cne (Get-FileHash (Join-Path $Directory 'AgentV.ServiceHost.exe') -Algorithm SHA256).Hash.ToLowerInvariant() -or $native.installerNative.binarySha256 -cne (Get-FileHash (Join-Path $Directory 'AgentV.InstallerNative.dll') -Algorithm SHA256).Hash.ToLowerInvariant()) { throw 'Windows native manifest mismatch.' }
     return $manifest

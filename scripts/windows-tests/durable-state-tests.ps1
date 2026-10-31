@@ -26,6 +26,27 @@ try {
     Assert ((Read-AgentVJson -Path $manifest).architecture -ceq 'x64') 'BOM-bearing native host manifest could not be read.'
     [IO.File]::WriteAllText($manifest,'{"schema":"acornops.agentv-windows-host.v1","architecture":"x64"}',[Text.UTF8Encoding]::new($false))
     Assert ((Read-AgentVJson -Path $manifest).architecture -ceq 'x64') 'BOM-free package manifest could not be read.'
+    $tree=Join-Path $root 'runtime';New-AgentVProtectedDirectory $tree
+    $nested=Join-Path $tree 'nested';New-AgentVProtectedDirectory $nested
+    $leaf=Join-Path $nested 'dependency.json';Write-AgentVDurableJson -Path $leaf -Value @{fixture=$true}
+    $users=[Security.Principal.SecurityIdentifier]'S-1-5-32-545'
+    $acl=Get-Acl $leaf;$acl.AddAccessRule([Security.AccessControl.FileSystemAccessRule]::new($users,'Write','Allow'));Set-Acl $leaf $acl
+    $rejected=$false;try{Assert-AgentVTrustedPath -Path $tree -Tree}catch{$rejected=$true}
+    Assert $rejected 'Tree validation hid a writable existing dependency beneath a protected parent.'
+    Set-AgentVAcl $leaf
+    $acl=Get-Acl $nested;$acl.AddAccessRule([Security.AccessControl.FileSystemAccessRule]::new($users,'DeleteSubdirectoriesAndFiles','Allow'));Set-Acl $nested $acl
+    $rejected=$false;try{Assert-AgentVTrustedPath -Path $leaf}catch{$rejected=$true}
+    Assert $rejected 'A writable ancestor could replace a trusted dependency.'
+    Set-AgentVAcl $nested
+    $acl=Get-Acl $tree;$acl.AddAccessRule([Security.AccessControl.FileSystemAccessRule]::new($users,'Write','ContainerInherit, ObjectInherit','InheritOnly','Allow'));Set-Acl $tree $acl
+    Assert-AgentVTrustedPath -Path $tree -Tree
+    $inherited=Join-Path $tree 'inherited.json';[IO.File]::WriteAllText($inherited,'{}')
+    $acl=Get-Acl $inherited;$acl.SetOwner([Security.Principal.SecurityIdentifier]'S-1-5-32-544');Set-Acl $inherited $acl
+    $rejected=$false;try{Assert-AgentVTrustedPath -Path $tree -Tree}catch{$rejected=$true}
+    Assert $rejected 'Inherit-only parent permission hid effective inherited dependency writes.'
+    Set-AgentVAcl $inherited;Set-AgentVAcl $tree
+    $validationOutput=@(Assert-AgentVTrustedPath -Path $tree -Tree)
+    Assert ($validationOutput.Count -eq 0) 'Void trust validation emitted pipeline data.'
     $lockPath = Join-Path $root 'installation.lock'; $lock = Enter-AgentVLock -Path $lockPath
     $rejected = $false; try { $duplicate = Enter-AgentVLock -Path $lockPath; $duplicate.Dispose() } catch { $rejected = $true }
     Assert $rejected 'Duplicate owner acquired the installation lock.'

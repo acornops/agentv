@@ -36,7 +36,9 @@ try {
     if ($pointer.manifestSha256 -notmatch '^[0-9a-f]{64}$' -or $pointer.ownerId -notmatch '^[0-9a-f-]{36}$') { throw 'Invalid protected recovery selection.' }
     $release=Join-Path $program ('releases\'+$pointer.version)
     $timing.bootstrapMs=$partClock.ElapsedMilliseconds;$partClock.Restart();$timing.stage='release-tree'
-    Assert-AgentVTrustedPath -Path $release -Tree
+    # Trust the pointer-hash input first; the following package validation
+    # checks the complete tree and every hash before any worker/DLL load.
+    Assert-AgentVTrustedPath -Path (Join-Path $release 'package-manifest.json')
     $timing.treeMs=$partClock.ElapsedMilliseconds;$partClock.Restart();$timing.stage='package'
     if ((Get-FileHash (Join-Path $release 'package-manifest.json') -Algorithm SHA256).Hash.ToLowerInvariant() -cne $pointer.manifestSha256) { throw 'Recovery package checksum changed.' }
     $null=Assert-AgentVPackage -Directory $release -Version $pointer.version
