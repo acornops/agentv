@@ -4,3 +4,7 @@ Active multi-step plans live here. Move completed plans to `docs/exec-plans/comp
 
 Released work is indexed under completed plans; its remaining production
 acceptance gates are preserved in the release records.
+
+## Windows VM support
+
+- [Windows VM assessment and Linux baseline](windows-vm-assessment.md) — Assessment and proposed compatibility-first design; implementation not started.

@@ -16,6 +16,7 @@ This `docs/` tree is the repository-local system of record for agent-readable de
 
 - [Design Index](/docs/design-docs/index.md)
 - [Core Beliefs](/docs/design-docs/core-beliefs.md)
+- [Windows VM compatibility design](/docs/design-docs/windows-vm-linux-compatibility.md)
 
 ## Product Specs
 
@@ -26,6 +27,7 @@ This `docs/` tree is the repository-local system of record for agent-readable de
 
 - [Plans](/docs/PLANS.md)
 - [Active Plans](/docs/exec-plans/active/README.md)
+- [Windows VM assessment and Linux baseline](/docs/exec-plans/active/windows-vm-assessment.md)
 - [Completed Plans](/docs/exec-plans/completed/README.md)
 - [Restart State Input](/docs/exec-plans/completed/restart-state-input.md)
 - [Filesystem Capacity Alerts](/docs/exec-plans/completed/filesystem-capacity-alerts.md)
