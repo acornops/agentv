@@ -13,7 +13,7 @@ function Invoke-AgentVSc {
     if ($LASTEXITCODE -ne 0) {
         $code=$LASTEXITCODE;$verb=$Arguments[0]
         if ($verb -notin @('create','config','description','sidtype','failure','failureflag','delete')) { $verb='other' }
-        Write-Output ('AgentV SCM failure operation='+$verb+' native='+[int]$code)
+        [Console]::Error.WriteLine('AgentV SCM failure operation='+$verb+' native='+[int]$code)
         throw 'AgentV SCM operation failed.'
     }
 }
