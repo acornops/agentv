@@ -5,9 +5,10 @@ Set-StrictMode -Version Latest
 if (-not $AllowDisposableCi -or $env:CI -ne 'true' -or $env:GITHUB_ACTIONS -ne 'true') { throw 'Disposable hosted CI authorization required.' }
 $serviceName = 'AcornOpsAgentV'; $sc = Join-Path ([Environment]::SystemDirectory) 'sc.exe'
 if (Get-Service $serviceName -ErrorAction SilentlyContinue) { throw 'Refusing preexisting service.' }
-$output = Join-Path $PSScriptRoot '..\..\artifacts\windows-installer-native'
+$output = Join-Path (Join-Path $PSScriptRoot '..\..\artifacts\windows-installer-native') ('SCM policy '+[char]0xfc)
+$script:InstallationModule=Import-Module (Join-Path $PSScriptRoot '..\..\packaging\windows\Installation.psm1') -PassThru -Force
 $owned = $false
-function Invoke-AgentVCiSc([string[]]$Arguments) { & $sc @Arguments | Out-Null; if ($LASTEXITCODE -ne 0) { throw 'Native SCM fixture setup failed.' } }
+function Invoke-AgentVCiSc([string[]]$Arguments) { & $script:InstallationModule {param($Values) Invoke-AgentVSc -Arguments $Values} -Values $Arguments }
 function Assert([bool]$Condition, [string]$Message) { if (-not $Condition) { throw $Message } }
 try {
     & (Join-Path $PSScriptRoot '..\build-windows-host.ps1') -OutputDirectory $output
@@ -17,6 +18,7 @@ try {
     $null = [Reflection.Assembly]::LoadFrom($library)
     $image = '"' + (Join-Path $output 'AgentV.ServiceHost.exe') + '" --node "C:\missing-ci-node.exe"'
     Invoke-AgentVCiSc -Arguments @('create',$serviceName,'binPath=',$image,'obj=','NT AUTHORITY\LocalService','start=','demand'); $owned = $true
+    Assert ((CimCmdlets\Get-CimInstance Win32_Service -Filter "Name='AcornOpsAgentV'").PathName -ceq $image) 'PS5.1 SCM image quoting did not roundtrip space and Unicode paths.'
     Invoke-AgentVCiSc -Arguments @('failure',$serviceName,'reset=','86400','actions=','restart/10000/restart/30000/restart/60000')
     Invoke-AgentVCiSc -Arguments @('failureflag',$serviceName,'0')
     $policy = [AcornOps.AgentV.InstallerPolicy]::Read()
