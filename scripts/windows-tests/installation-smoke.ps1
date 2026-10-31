@@ -78,6 +78,15 @@ try {
     Assert-Ci ($LASTEXITCODE -eq 0) 'Installed protected launcher supports owned uninstall'
     Assert-Ci ($null -eq (Get-Service AcornOpsAgentV -ErrorAction SilentlyContinue) -and $null -eq (ScheduledTasks\Get-ScheduledTask -TaskName AcornOpsAgentVRecovery -ErrorAction SilentlyContinue)) 'Uninstall removes owned SCM and recovery registrations'
     Assert-Ci ((Test-Path $paths.Config) -and (State-Ci).rollbacks -eq 0) 'Uninstall retains durable config without revoking credentials'
+    $evidence.stage='retained-config-reinstall'
+    $before=(State-Ci).exchanges
+    $exit=Bootstrap-Ci
+    Assert-Ci ($exit -eq 0) 'No-token reinstall recreates absent SCM and task from trusted retained configuration'
+    $retained=Read-AgentVJson -Path $paths.Config -Secret -ServiceReadSid (Get-AgentVServiceSid)
+    Assert-Ci ($retained.settings.ACORNOPS_AGENT_KEY -ceq $replaced.settings.ACORNOPS_AGENT_KEY -and $retained.settings.ACORNOPS_TARGET_ID -ceq 'windows-installer-ci' -and $retained.settings.ACORNOPS_AGENT_ADDITIONAL_CA_BUNDLE_FILE -ceq $ca -and (State-Ci).exchanges -eq $before -and (State-Ci).activeConnected) 'Retained-config reinstall preserves key target and CA and freshly authenticates without reenrollment'
+    $acl=Get-Acl $paths.Config
+    $readers=@($acl.GetAccessRules($true,$true,[Security.Principal.SecurityIdentifier])|Where-Object {$_.AccessControlType -eq 'Allow'}|ForEach-Object {$_.IdentityReference.Value})
+    Assert-Ci ($readers -contains (Get-AgentVServiceSid) -and $readers -notcontains 'S-1-5-19' -and $readers -notcontains 'S-1-5-32-545') 'Recreated service retains unique SID credential permissions'
     $evidence.stage='complete'
 } catch {
     $evidence.failure=[ordered]@{type=$_.Exception.GetType().FullName;hresult=$_.Exception.HResult;file=[IO.Path]::GetFileName($_.InvocationInfo.ScriptName);line=$_.InvocationInfo.ScriptLineNumber}
@@ -97,6 +106,7 @@ try {
     }
     Json-Ci (Join-Path $artifact 'native-evidence.json') $evidence
     if($owned){
+        ScheduledTasks\Stop-ScheduledTask -TaskName AcornOpsAgentVRecovery -ErrorAction SilentlyContinue
         ScheduledTasks\Unregister-ScheduledTask -TaskName AcornOpsAgentVRecovery -Confirm:$false -ErrorAction SilentlyContinue
         if(Get-Service AcornOpsAgentV -ErrorAction SilentlyContinue){& $sc config AcornOpsAgentV start= disabled|Out-Null;& $sc failure AcornOpsAgentV reset= 0 actions= '""'|Out-Null;Stop-Service AcornOpsAgentV -ErrorAction SilentlyContinue;& $sc delete AcornOpsAgentV|Out-Null}
         if($null -ne $server -and -not $server.HasExited){$server.Kill();$server.WaitForExit(5000)|Out-Null}
