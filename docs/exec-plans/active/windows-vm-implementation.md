@@ -12,6 +12,15 @@
 
 Status: approved for implementation by the user on 2026-10-31. Work in progress.
 
+Execution ruling (2026-11-01): task 5's implementation and scoped fix review are
+complete at `2a69373`, with native concurrency checks and actual service-host and
+Linux matrices passing. Its full installer matrix remains a required pending
+gate. Task 6 may proceed against the already-reviewed backend and instruction
+contracts while that matrix runs. Only the console implementer is active; if an
+installer failure needs code changes, pause console implementation before resuming
+task 5. This overlaps validation with isolated UI work, not implementation owners.
+Task 5 completion and final qualification still require its native results.
+
 ## Global constraints
 
 - Work only in `/Users/tjtanjin/Desktop/acornops/tmp/windows-vm-support` feature worktrees on `feat/windows-vm-support`. Never stage sibling repositories or dependency symlinks.
@@ -109,14 +118,14 @@ Produce an additive authenticated `GET /workspaces/:workspaceId/virtual-machines
 
 Provisional authentication remains distinct from active authentication: it must not enable policy, snapshots, heartbeats or router readiness. Its protected marker is bound to the current launch and configuration, clears on disconnect, and supplements the backend's verified transaction status before commit. Active readiness still requires a fresh active-authentication marker and backend confirmation.
 
-- [x] Record and independently review the native service-host choice, including SCM recovery, observed whole-job teardown and runtime shutdown seam. Selected repository-owned .NET4.8 host; see [reviewed service host design](../../design-docs/windows-service-host.md). Implementation and native evidence remain pending.
-- [x] Independently review installer recovery ordering, ambiguous backend outcomes and queued SCM restart ownership; see [Windows installer recovery design](../../design-docs/windows-installer-recovery.md). Native interruption qualification remains required.
+- [x] Record and independently review the native service-host choice, including SCM recovery, observed whole-job teardown and runtime shutdown seam. Selected repository-owned .NET4.8 host; see [reviewed service host design](../../design-docs/windows-service-host.md). Implementation and hosted native evidence are complete at `2a69373`; reboot remains separate.
+- [x] Independently review installer recovery ordering, ambiguous backend outcomes and queued SCM restart ownership; see [Windows installer recovery design](../../design-docs/windows-installer-recovery.md). Hosted interruption qualification passes at `2a69373`.
 - [x] Implement and qualify the native service host, unique SID permissions, bounded logs, private start gate and process-tree teardown in hosted CI first. Use an intermediate feature-branch checkpoint; only proceed with transactional installer cutover after that native host gate passes.
 - [x] Repair and test Windows snapshot health metadata after redaction, then replay actual produced snapshots into the backend's strict Windows schema and authenticated ingress. Keep the global redactor and Linux payloads unchanged; this producer/consumer check supplements native collector qualification.
-- [ ] Write installer state/failure tests covering new install, repair, credential replacement, interrupted exchange/verification/commit, lost commit response, upgrade, cleanup and uninstall. Never restore a revoked credential and claim rollback. Configuration deletion/revocation is explicit, not implicit uninstall behavior. Repair includes no-token reinstall after uninstall when retained owner, config and immutable release selection remain trusted; reject conflicting services/tasks or ambiguous ownership and prove fresh authenticated readiness without changing the credential.
-- [ ] Implement checksummed package/build/bootstrap, trusted paths and ACLs, sanitized service environment, graceful process tree stop and crash recovery. Scripts accept arguments as data, avoid command interpolation, and do not log credentials. Provide an explicit manual `-AcceptCommittedCandidate` recovery path for rollback-denied state, gated on the exact transaction remaining completed/active plus fresh launch/config-bound local readiness and remote confirmation; automatic recovery stays conservative, with no historical credential fallback.
-- [ ] Add CI on `windows-2022` and `windows-2025` with Node 22/24, plus native collector and disposable SCM install/recovery tests. Retain Ubuntu systemd release gates unchanged. Reboot qualification is separate from service restart.
-- [ ] Test generated PowerShell installation instructions and byte-frozen Linux command; run native jobs on the feature branch if authenticated CI is available. Record gaps explicitly and keep rollout disabled without qualified artifact evidence. Commit reviewed packaging changes.
+- [x] Write installer state/failure tests covering new install, repair, credential replacement, interrupted exchange/verification/commit, lost commit response, upgrade, cleanup and uninstall. Never restore a revoked credential and claim rollback. Configuration deletion/revocation is explicit, not implicit uninstall behavior. Repair includes no-token reinstall after uninstall when retained owner, config and immutable release selection remain trusted; reject conflicting services/tasks or ambiguous ownership and prove fresh authenticated readiness without changing the credential.
+- [x] Implement checksummed package/build/bootstrap, trusted paths and ACLs, sanitized service environment, graceful process tree stop and crash recovery. Scripts accept arguments as data, avoid command interpolation, and do not log credentials. Provide an explicit manual `-AcceptCommittedCandidate` recovery path for rollback-denied state, gated on the exact transaction remaining completed/active plus fresh launch/config-bound local readiness and remote confirmation; automatic recovery stays conservative, with no historical credential fallback.
+- [x] Add CI on `windows-2022` and `windows-2025` with Node 22/24, plus native collector and disposable SCM install/recovery tests. Retain Ubuntu systemd release gates unchanged. Reboot qualification is separate from service restart.
+- [x] Test generated PowerShell installation instructions and byte-frozen Linux command; run native jobs on the feature branch if authenticated CI is available. Record gaps explicitly and keep rollout disabled without qualified artifact evidence. Commit reviewed packaging changes.
 
 ### Task 6: OS-aware VM console
 
@@ -134,6 +143,7 @@ Provisional authentication remains distinct from active authentication: it must 
 
 **Interfaces:** Released Linux experimental.14 → updated backend; updated Linux → updated backend; Windows mock/live → updated backend; concurrent targets in one workspace. Preserve exact target scoping through gateway and execution engine.
 
+- [ ] Integrate pinned current upstream into the feature branches before final compatibility validation: control-plane `7b38c5f` and docs-website `1afbed2`, following console `54f7e12`. Preserve both upstream and Windows contracts, review overlapping tool-schema changes, apply upstream migrations only to disposable test databases, and keep original checkouts unchanged. These are base updates, not new Windows migrations.
 - [ ] Resolve deferred qualification findings: make synthetic Windows service-state, listener-protocol and process-query filters match the published native contract; assert target-specific output schemas during control-plane target switches and through actual gateway integration. Keep fixes isolated to those contracts.
 - [ ] Preserve Linux ignoring Windows-only `ACORNOPS_VM_ALLOWED_LOG_CHANNELS`: a released Linux process accepts an otherwise valid configuration containing `Security`, while the new unconditional Windows channel parser rejects it. Restrict Windows channel parsing/validation to Windows configuration and add a failing Linux characterization plus Windows rejection tests before the fix. Preserve Linux unit validation and Windows Application/System restrictions.
 - [ ] Correct the pre-existing Kubernetes-only disconnect reconciliation in a separate scoped commit: update VM status and event identity through the VM boundary, retain Linux/Windows OS metadata, and preserve existing Kubernetes behavior. Characterize released Linux disconnect/reconnect, stale-socket replacement and owner/draining races before changing the handler; a departing connection must never mark its replacement offline.
@@ -298,3 +308,30 @@ again fails both Server 2022 cells. One subsequent diagnostic invocation also
 takes 8.37 seconds, so this is not established as a single first-call delay.
 The unchanged eight-second production limit and failed qualification outcome
 remain in place; a later passing run alone will not resolve this evidence.
+
+Task 5 is complete at AgentV `2a69373` after independent source review and one
+scoped fix round. The review found and closed concurrent fresh-owner replacement
+and a watcher/SCM-stop race; native qualification also found and closed service
+SID lookup during retained-config reinstall. Controlled native RED/GREEN tests
+cover all three on Server 2022 and 2025.
+
+[Final installer CI](https://github.com/acornops/agentv/actions/runs/41239335850)
+passes both short gates and all 16 Server 2022/2025 × Node 22/24 × scenario cells.
+Each OS/Node pair passes lifecycle 23 checks, recovery 21, startup 9, and explicit
+acceptance 21. Artifacts identify merge `2a9adb0a` and match the reviewed native
+host source hash. This includes fresh install, repair and retained reinstall,
+credential replacement, successful/failed upgrade, interrupted verification/commit,
+lost responses, queued restart suppression/reentry, cleanup and uninstall.
+[Actual host CI](https://github.com/acornops/agentv/actions/runs/41239335845)
+passes all four cells with 33 assertions each.
+[Matching Linux CI](https://github.com/acornops/agentv/actions/runs/41239335838)
+passes 167 unit tests plus four E2E tests, package/bootstrap/curl checks, and both
+Ubuntu systemd lifecycle jobs.
+
+These are hosted package/host gates, not complete Windows rollout qualification.
+The separate collector timing failures remain a Task 7 reliability issue even
+though the final collector matrix passed. Real reboot and Core/Desktop coverage
+remain unexecuted. The generated command is native parsed and argument-bound;
+its outer download/temp-file lifecycle has not been tested end to end. Completed
+grace/revoked credentials and invalid retained keys remain documented manual
+support cases. Windows activation and writes remain disabled.
