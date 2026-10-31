@@ -111,7 +111,7 @@ Provisional authentication remains distinct from active authentication: it must 
 
 - [x] Record and independently review the native service-host choice, including SCM recovery, observed whole-job teardown and runtime shutdown seam. Selected repository-owned .NET4.8 host; see [reviewed service host design](../../design-docs/windows-service-host.md). Implementation and native evidence remain pending.
 - [x] Independently review installer recovery ordering, ambiguous backend outcomes and queued SCM restart ownership; see [Windows installer recovery design](../../design-docs/windows-installer-recovery.md). Native interruption qualification remains required.
-- [ ] Implement and qualify the native service host, unique SID permissions, bounded logs, private start gate and process-tree teardown in hosted CI first. Use an intermediate feature-branch checkpoint; only proceed with transactional installer cutover after that native host gate passes.
+- [x] Implement and qualify the native service host, unique SID permissions, bounded logs, private start gate and process-tree teardown in hosted CI first. Use an intermediate feature-branch checkpoint; only proceed with transactional installer cutover after that native host gate passes.
 - [ ] Write installer state/failure tests covering new install, repair, credential replacement, interrupted exchange/verification/commit, lost commit response, upgrade, cleanup and uninstall. Never restore a revoked credential and claim rollback. Configuration deletion/revocation is explicit, not implicit uninstall behavior.
 - [ ] Implement checksummed package/build/bootstrap, trusted paths and ACLs, sanitized service environment, graceful process tree stop and crash recovery. Scripts accept arguments as data, avoid command interpolation, and do not log credentials.
 - [ ] Add CI on `windows-2022` and `windows-2025` with Node 22/24, plus native collector and disposable SCM install/recovery tests. Retain Ubuntu systemd release gates unchanged. Reboot qualification is separate from service restart.
@@ -195,3 +195,26 @@ Coordinated drafts: [backend](https://github.com/acornops/control-plane/pull/33)
 [console](https://github.com/acornops/management-console/pull/35), and
 [API docs](https://github.com/acornops/docs-website/pull/19). No merge, release or
 activation has occurred. Console behavior and Windows packaging are still pending.
+
+Task 5's service-host prerequisite passed at AgentV `d03bfbc`:
+[native host CI](https://github.com/acornops/agentv/actions/runs/41221285754)
+passed all Server 2022/2025 × Node 22/24 cells, with 33 checks each. These cover
+the LocalService token and unique SID, unrelated-user access denial, crash
+recovery, whole-process-tree stop, bounded logs and trusted runtime paths.
+Production collectors also ran under the contained service identity. Artifact
+source hashes match the reviewed C# source with Windows checkout line endings.
+[Matching Linux CI](https://github.com/acornops/agentv/actions/runs/41221285808)
+passed. Transactional installer implementation and independent task review remain
+pending; this does not qualify installation recovery or reboot.
+
+Separate cold collector runs subsequently exposed three Server 2022/Node 24
+eight-second timeouts at different stages, followed by a passing matrix at
+`8172e70`. No production timeout was raised. Bounded diagnostic probes retain the
+original failing gate and gather timing evidence if it recurs. Treat this as an
+open reliability observation during final qualification, not a resolved cause.
+
+A source-unmodified Linux `v0.0.1-experimental.14` process also completed real
+TLS enrollment, reconnect and snapshot persistence against the disposable updated
+backend. Registration omitted OS fields and retained Linux/systemd defaults;
+all nine existing tool names remained advertised. Its observations/actions are
+synthetic, so native Linux behavior is qualified separately by Ubuntu CI.
