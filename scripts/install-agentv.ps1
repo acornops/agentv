@@ -4,6 +4,7 @@ $ErrorActionPreference='Stop'
 Set-StrictMode -Version Latest
 $EmbeddedReleaseVersion = '@@VERSION@@'
 $stage=$null
+$bootstrapPhase='preflight'
 $ambient=@{}
 foreach($name in @('CURL_CA_BUNDLE','SSL_CERT_FILE','SSL_CERT_DIR','HTTPS_PROXY','HTTP_PROXY','ALL_PROXY','NO_PROXY')) { $ambient[$name]=[Environment]::GetEnvironmentVariable($name,'Process'); [Environment]::SetEnvironmentVariable($name,$null,'Process') }
 function Assert-BootstrapPath {
@@ -41,6 +42,7 @@ try {
     if ($EmbeddedReleaseVersion -notmatch '^\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?$') { throw 'Use a versioned release bootstrap.' }
     Assert-BootstrapUrl $ReleaseBaseUrl; Assert-BootstrapUrl $PlatformUrl
     if ($TargetId -notmatch '^[A-Za-z0-9_.-]{1,128}$') { throw 'Invalid target identifier.' }
+    $bootstrapPhase='staging'
     $parent=[Environment]::GetFolderPath('CommonApplicationData'); Assert-BootstrapPath -Path $parent -SharedParent
     $stagingRoot=Join-Path $parent 'AcornOpsAgentV-Staging'
     if (Test-Path -LiteralPath $stagingRoot) { Assert-BootstrapPath $stagingRoot; if (-not (Test-Path -LiteralPath (Join-Path $stagingRoot 'owned-v1'))) { throw 'Unrelated staging directory.' } }
@@ -50,22 +52,27 @@ try {
     $name='agentv-'+$EmbeddedReleaseVersion+'-windows-x64.zip'; $archive=Join-Path $stage $name; $checksum=$archive+'.sha256'
     $base=$ReleaseBaseUrl.TrimEnd('/')+'/v'+$EmbeddedReleaseVersion+'/'
     $tls=@(); if ($AdditionalCaBundleFile) { Assert-BootstrapPath -Path $AdditionalCaBundleFile -PublicRead; $tls=@('--cacert',$AdditionalCaBundleFile) }
+    $bootstrapPhase='download'
     foreach ($asset in @(@{name=$name;path=$archive;limit='52428800'},@{name=($name+'.sha256');path=$checksum;limit='1024'})) {
         & $curl -q --fail --silent --show-error --location --proto '=https' --proto-redir '=https' --max-redirs 5 --connect-timeout 15 --max-time 120 --max-filesize $asset.limit @tls --output $asset.path ($base+$asset.name)
         if ($LASTEXITCODE -ne 0) { throw 'Pinned Windows asset download failed.' }; Set-BootstrapAcl $asset.path
     }
+    $bootstrapPhase='archive-checksum'
     $expected=[IO.File]::ReadAllText($checksum).Trim()
     if ($expected -notmatch ('^([0-9a-fA-F]{64})\s+\*?'+[Regex]::Escape($name)+'$') -or (Get-FileHash $archive -Algorithm SHA256).Hash -ine $Matches[1]) { throw 'Windows archive checksum mismatch.' }
+    $bootstrapPhase='archive-open'
     Add-Type -AssemblyName System.IO.Compression.FileSystem
     $zip=[IO.Compression.ZipFile]::OpenRead($archive)
     $package=Join-Path $stage 'package'; $null=New-Item -ItemType Directory -Path $package; Set-BootstrapAcl $package
     try {
+        $bootstrapPhase='archive-entries'
         $names=New-Object 'Collections.Generic.HashSet[string]' ([StringComparer]::OrdinalIgnoreCase); $total=0
         foreach($entry in $zip.Entries) {
             $relative=$entry.FullName.Replace('\','/'); $trimmed=$relative.TrimEnd('/')
             if (-not $trimmed -or $relative -notmatch '^[A-Za-z0-9_@./+-]+$' -or $relative.StartsWith('/') -or $trimmed.Split('/') -contains '..' -or $trimmed.Split('/') -contains '.' -or -not $names.Add($trimmed) -or (($entry.ExternalAttributes -shr 16) -band 0xf000) -eq 0xa000 -or ($entry.ExternalAttributes -band 0x400)) { throw 'Unsafe Windows archive entry.' }
             $total += $entry.Length; if ($total -gt 104857600 -or $names.Count -gt 20000) { throw 'Windows archive exceeds unpacked limits.' }
         }
+        $bootstrapPhase='archive-extract'
         foreach($entry in $zip.Entries) {
             $relative=$entry.FullName.Replace('/','\'); $destination=Join-Path $package $relative
             if ($entry.FullName.EndsWith('/') -or $entry.FullName.EndsWith('\')) { if (-not (Test-Path -LiteralPath $destination)) { $null=New-Item -ItemType Directory -Path $destination -Force; Set-BootstrapAcl $destination }; continue }
@@ -75,10 +82,21 @@ try {
             Set-BootstrapAcl $destination
         }
     } finally { $zip.Dispose() }
+    $bootstrapPhase='package-acls'
     foreach($item in Get-ChildItem -LiteralPath $package -Recurse -Force){Set-BootstrapAcl $item.FullName}
+    $bootstrapPhase='package-import'
     Import-Module (Join-Path $package 'windows\Package.psm1') -Force
+    $bootstrapPhase='package-validate'
     $null=Assert-AgentVPackage -Directory $package -Version $EmbeddedReleaseVersion
+    $bootstrapPhase='worker'
     & (Join-Path $package 'windows\install-worker.ps1') -Version $EmbeddedReleaseVersion -PlatformUrl $PlatformUrl -TargetId $TargetId -EnrollmentToken $EnrollmentToken -ReplaceCredential:$ReplaceCredential -NodePath $NodePath -AdditionalCaBundleFile $AdditionalCaBundleFile
     if (-not $?) { throw 'Windows installation did not complete.' }
-} catch { Write-Error 'AgentV Windows installation could not complete. Existing configuration and any protected recovery journal were retained.'; exit 1 }
+} catch {
+    $failure=$_.Exception.GetBaseException()
+    $type=$failure.GetType().Name
+    if($type -notin @('RuntimeException','MethodInvocationException','IOException','FileNotFoundException','DirectoryNotFoundException','UnauthorizedAccessException','ArgumentException','InvalidOperationException','InvalidDataException','NotSupportedException','JsonReaderException','PSInvalidCastException','ParameterBindingException','ItemNotFoundException','CommandNotFoundException','PropertyNotFoundException')){$type='Other'}
+    $file=[IO.Path]::GetFileName($_.InvocationInfo.ScriptName)
+    if($file -notin @('install-agentv.ps1','Package.psm1','Paths.psm1','install-worker.ps1','Installation.psm1','Recovery.psm1','recover.ps1')){$file='other'}
+    Write-Output ('AgentV bootstrap failure stage='+$bootstrapPhase+' type='+$type+' hresult='+$failure.HResult+' file='+$file+' line='+[int]$_.InvocationInfo.ScriptLineNumber)
+    Write-Error 'AgentV Windows installation could not complete. Existing configuration and any protected recovery journal were retained.'; exit 1 }
 finally { foreach($name in $ambient.Keys){[Environment]::SetEnvironmentVariable($name,$ambient[$name],'Process')}; if ($stage -and (Test-Path -LiteralPath $stage)) { Remove-Item -LiteralPath $stage -Recurse -Force } }

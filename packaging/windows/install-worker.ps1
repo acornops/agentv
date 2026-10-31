@@ -11,7 +11,11 @@ try {
     Write-Output ('AgentV operation: '+$result)
 } catch {
     # Never print response bodies, credentials, configuration, or arbitrary exception text.
-    Write-Output ('AgentV failure type='+$_.Exception.GetType().Name+' hresult='+$_.Exception.HResult+' file='+[IO.Path]::GetFileName($_.InvocationInfo.ScriptName)+' line='+$_.InvocationInfo.ScriptLineNumber)
+    $failure=$_.Exception.GetBaseException();$type=$failure.GetType().Name
+    if($type -notin @('RuntimeException','MethodInvocationException','IOException','FileNotFoundException','DirectoryNotFoundException','UnauthorizedAccessException','ArgumentException','InvalidOperationException','InvalidDataException','NotSupportedException','JsonReaderException','PSInvalidCastException','ParameterBindingException','ItemNotFoundException','CommandNotFoundException','PropertyNotFoundException')){$type='Other'}
+    $file=[IO.Path]::GetFileName($_.InvocationInfo.ScriptName)
+    if($file -notin @('Package.psm1','Paths.psm1','install-worker.ps1','Installation.psm1','Recovery.psm1')){$file='other'}
+    Write-Output ('AgentV worker failure stage='+$Action.ToLowerInvariant()+' type='+$type+' hresult='+$failure.HResult+' file='+$file+' line='+[int]$_.InvocationInfo.ScriptLineNumber)
     Write-Error 'AgentV operation could not complete. Protected recovery state and existing credentials have been retained. Inspect the documented recovery procedure.'
     exit 1
 }
