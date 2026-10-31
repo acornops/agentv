@@ -104,7 +104,7 @@ try {
         if(Test-Path -LiteralPath $timingPath){
             try {
                 $timing=Read-AgentVJson -Path $timingPath -Limit 2048 -Secret
-                if($timing.schema -ceq 'acornops.agentv-recovery-timing.v1' -and $timing.stage -in @('bootstrap','release-tree','package','worker','finished')){
+                if($null -ne $task -and [DateTimeOffset]::Parse($timing.startedAt).UtcDateTime -ge $info.LastRunTime.ToUniversalTime().AddSeconds(-2) -and $timing.schema -ceq 'acornops.agentv-recovery-timing.v1' -and $timing.stage -in @('bootstrap','release-tree','package','worker','finished')){
                     $safe=@{stage=$timing.stage;workerSucceeded=($timing.workerSucceeded -eq $true)}
                     foreach($name in @('bootstrapMs','treeMs','packageMs','workerMs','totalMs')){if($timing.$name -isnot [ValueType] -or $timing.$name -lt 0 -or $timing.$name -gt 900000){throw 'Invalid diagnostic duration'};$safe[$name]=[long]$timing.$name}
                     $evidence.launcherTiming=$safe

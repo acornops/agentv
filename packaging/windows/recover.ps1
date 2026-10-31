@@ -20,7 +20,7 @@ function Assert-LauncherPath {
         $current=Split-Path $current -Parent; $leaf=$false
     }
 }
-$timing=[ordered]@{schema='acornops.agentv-recovery-timing.v1';stage='bootstrap';bootstrapMs=0;treeMs=0;packageMs=0;workerMs=0;totalMs=0;workerSucceeded=$false}
+$timing=[ordered]@{schema='acornops.agentv-recovery-timing.v1';startedAt=[DateTimeOffset]::UtcNow.ToString('o');stage='bootstrap';bootstrapMs=0;treeMs=0;packageMs=0;workerMs=0;totalMs=0;workerSucceeded=$false}
 $totalClock=[Diagnostics.Stopwatch]::StartNew();$partClock=[Diagnostics.Stopwatch]::StartNew();$canWriteTiming=$false
 try {
     $program=Join-Path ([Environment]::GetFolderPath('ProgramFiles')) 'AcornOps\AgentV'
