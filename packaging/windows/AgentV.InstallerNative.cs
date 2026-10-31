@@ -17,7 +17,8 @@ namespace AcornOps.AgentV {
         public bool CustomCommand { get; internal set; }
         public string Account { get; internal set; }
         public bool Standard { get { return Allowed && ResetSeconds == 86400 && RestartOnly && Delays.Length == 3 && Delays[0] == 10000 && Delays[1] == 30000 && Delays[2] == 60000; } }
-        public bool Suppressed { get { return Allowed && ResetSeconds == 86400 && Delays.Length == 0; } }
+        // SCM canonicalizes removal of all actions to reset period0.
+        public bool Suppressed { get { return Allowed && ResetSeconds == 0 && Delays.Length == 0; } }
         bool Allowed { get { return !NonCrash && !DelayedAuto && ServiceType == 16 && ErrorControl == 1 && !CustomCommand && String.Equals(Account, @"NT AUTHORITY\LocalService", StringComparison.OrdinalIgnoreCase) && (StartType == 2 || StartType == 3 || StartType == 4); } }
     }
     public static class InstallerPolicy {
