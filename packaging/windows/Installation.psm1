@@ -183,7 +183,14 @@ function Select-AgentV {
     Write-AgentVDurableJson -Path $script:Paths.Config -Value $selection.config -ServiceReadSid (Get-AgentVServiceSid)
     Invoke-AgentVSc -Arguments @('config','AcornOpsAgentV','binPath=',(Get-AgentVImage $selection))
     $Journal.everStarted = $true; Save-AgentVJournal -Journal $Journal -Phase ('start-'+$Which+'-intent')
-    Start-Service -Name AcornOpsAgentV
+    try { Start-Service -Name AcornOpsAgentV -ErrorAction Stop }
+    catch {
+        # Only an SCM start failure becomes missing readiness. Selection,
+        # trust and durable-write failures still terminate the owner operation.
+        Save-AgentVJournal -Journal $Journal -Phase ('start-'+$Which+'-failed')
+        [Console]::Error.WriteLine('AgentV service start failed selection='+$Which)
+        return $null
+    }
     Save-AgentVJournal -Journal $Journal -Phase ('started-'+$Which)
     return (Get-FileHash -LiteralPath $script:Paths.Config -Algorithm SHA256).Hash.ToLowerInvariant()
 }
@@ -334,14 +341,20 @@ function Resume-AgentVTransaction {
     elseif ($null -eq $Journal.transaction -and $Journal.intent -eq 'rollback') { $which='previous' }
     elseif ($null -ne $status -and $status.status -eq 'completed' -and $status.credentialState -in @('grace','revoked')) { Save-AgentVJournal -Journal $Journal -Phase 'replacement-required'; return 'replacement-required' }
     $hash = Select-AgentV -Journal $Journal -Which $which
+    if ($null -eq $hash -and $which -eq 'candidate' -and $Journal.intent -eq 'commit') {
+        # Intent is not permission to restore: transaction rollback still needs
+        # an authoritative backend outcome and fresh previous readiness.
+        $Journal.intent='rollback'; Save-AgentVJournal -Journal $Journal -Phase 'rollback-intent'
+        if ($null -eq $Journal.transaction -and $null -ne $Journal.previous) { return Resume-AgentVTransaction -Journal $Journal }
+    }
     $clock = [Diagnostics.Stopwatch]::StartNew(); $mutationSent=$false
     do {
         if ($null -eq $Journal.transaction) {
-            if (Test-AgentVReady -ConfigHash $hash -Phase 'active') { Finish-AgentVTransaction -Journal $Journal -Selection $which; return 'completed' }
+            if ($null -ne $hash -and (Test-AgentVReady -ConfigHash $hash -Phase 'active')) { Finish-AgentVTransaction -Journal $Journal -Selection $which; return 'completed' }
         } else {
             $status = Get-AgentVRemoteStatus -Journal $Journal
             $phase = if ($null -ne $status -and $status.status -eq 'verified') { 'provisional' } else { 'active' }
-            $ready = Test-AgentVReady -ConfigHash $hash -Phase $phase
+            $ready = $null -ne $hash -and (Test-AgentVReady -ConfigHash $hash -Phase $phase)
             if ($AcceptCommittedCandidate -and $Journal.intent -ne 'accept-committed') {
                 if ($null -ne $status -and $status.status -eq 'completed' -and $status.credentialState -eq 'active' -and $status.activeConnected -and $ready -and $which -eq 'candidate') {
                     # Persist operator intent only after both current proofs. A later
@@ -357,7 +370,7 @@ function Resume-AgentVTransaction {
             if ($decision -eq 'finalize-candidate') {
                 if ($Journal.intent -eq 'accept-committed') {
                     $confirmed=Get-AgentVRemoteStatus -Journal $Journal
-                    $fresh=Test-AgentVReady -ConfigHash $hash -Phase 'active'
+                    $fresh=$null -ne $hash -and (Test-AgentVReady -ConfigHash $hash -Phase 'active')
                     if ((Get-AgentVRecoveryDecision -Intent 'accept-committed' -Status $confirmed -CandidateReady $fresh -PreviousReady $false -PreviousExists ($null -ne $Journal.previous)) -ne 'finalize-candidate') { Save-AgentVJournal -Journal $Journal -Phase 'recovery-pending'; return 'pending' }
                 }
                 Finish-AgentVTransaction -Journal $Journal -Selection 'candidate'; return 'completed'

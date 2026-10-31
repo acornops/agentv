@@ -80,6 +80,14 @@ Source: control-plane `src/controllers/agentv-installation-controller.ts` and
 - Persist commit/rollback intent before sending the request. After an ambiguous
   response or rejection, query status; a retry may reject after the original
   request already succeeded. Keep unknown outcomes pending without guessing.
+- A synchronous SCM start rejection supplies no readiness evidence. Only the
+  start operation is caught; trust, runtime selection and durable-write errors
+  still terminate the operation. An ordinary candidate failure records rollback
+  intent, then follows the existing authenticated cancellation/restoration rules.
+  Unknown backend status preserves the candidate and journal. Repair without an
+  enrollment transaction may restore its trusted previous runtime only after a
+  new drain and fresh authentication; explicit committed-candidate acceptance
+  never falls back to a historical credential.
 - Finalization durably records the terminal selection first, restores the
   intended service startup mode and failure actions, clears the active marker, then deletes secret
   backups/journal. All steps tolerate re-entry after interruption.
