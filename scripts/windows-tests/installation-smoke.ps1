@@ -1,5 +1,5 @@
 [CmdletBinding()]
-param([switch]$AllowDisposableCi,[ValidateSet('lifecycle','acceptance')][string]$Scenario='lifecycle')
+param([switch]$AllowDisposableCi,[ValidateSet('lifecycle','recovery','startup','acceptance')][string]$Scenario='lifecycle')
 $ErrorActionPreference='Stop'
 Set-StrictMode -Version Latest
 if (-not $AllowDisposableCi -or $env:CI -ne 'true' -or $env:GITHUB_ACTIONS -ne 'true') { throw 'Explicit disposable hosted-CI authorization is required.' }
@@ -37,7 +37,7 @@ function Bootstrap-Ci([string]$Token,[switch]$Replace,[switch]$OmitCa){
     & $ps @arguments | ForEach-Object { Write-Host $_ }
     return $LASTEXITCODE
 }
-function Variant-Ci([string]$Version,[switch]$CorruptManifest,[switch]$FailAfterStart){
+function Variant-Ci([string]$Version,[switch]$CorruptManifest,[switch]$FailAfterStart,[switch]$FailScmStart){
     # Synthetic same-code upgrade changes only version metadata; package contents
     # and selection/checksum behavior still flow through the production bootstrap.
     $source=Join-Path $assets ('agentv-'+$script:version+'-windows-x64.zip')
@@ -53,6 +53,25 @@ function Variant-Ci([string]$Version,[switch]$CorruptManifest,[switch]$FailAfter
             [IO.File]::WriteAllText($entryPath,"process.stdin.once('data',()=>setTimeout(()=>process.exit(43),1500));process.stdin.resume();",[Text.Encoding]::ASCII)
             $runtimeEntry=@($manifest.files|Where-Object {$_.path -ceq 'dist/windows-service-entry.js'})[0]
             $runtimeEntry.sha256=(Get-FileHash $entryPath -Algorithm SHA256).Hash.ToLowerInvariant();$runtimeEntry.size=(Get-Item $entryPath).Length
+        }
+        if($FailScmStart){
+            # This distinctly synthetic fixture never launches a child and is
+            # never a release host. Its only behavior is real SCM start rejection.
+            $fixtureSource=Join-Path $PSScriptRoot 'FailStartHost.cs'
+            $fixtureHost=Join-Path $directory 'AgentV.ServiceHost.exe'
+            $compiler=Join-Path ([Environment]::GetFolderPath('Windows')) 'Microsoft.NET\Framework64\v4.0.30319\csc.exe'
+            & $compiler /nologo /target:exe /platform:x64 /reference:System.ServiceProcess.dll ('/out:'+$fixtureHost) $fixtureSource
+            if($LASTEXITCODE -ne 0){throw 'Synthetic start-rejection fixture compilation failed.'}
+            $hostManifestPath=Join-Path $directory 'host-manifest.json'
+            $hostManifest=Get-Content $hostManifestPath -Raw|ConvertFrom-Json
+            $hostManifest.binarySha256=(Get-FileHash $fixtureHost -Algorithm SHA256).Hash.ToLowerInvariant()
+            $hostManifest.sourceSha256=(Get-FileHash $fixtureSource -Algorithm SHA256).Hash.ToLowerInvariant()
+            Json-Ci $hostManifestPath $hostManifest
+            foreach($relative in @('AgentV.ServiceHost.exe','host-manifest.json')){
+                $changed=Join-Path $directory $relative
+                $changedEntry=@($manifest.files|Where-Object {$_.path -ceq $relative})[0]
+                $changedEntry.sha256=(Get-FileHash $changed -Algorithm SHA256).Hash.ToLowerInvariant();$changedEntry.size=(Get-Item $changed).Length
+            }
         }
         if($CorruptManifest){$entry.sha256='0'*64};Json-Ci $manifestPath $manifest
         $destination=Join-Path $releases ('v'+$Version);$null=New-Item -ItemType Directory -Path $destination
@@ -94,6 +113,7 @@ try {
     $server=Start-Process -FilePath $node -ArgumentList @(('"'+(Join-Path $PSScriptRoot 'installation-server.mjs')+'"'),('"'+$options+'"')) -PassThru -RedirectStandardOutput (Join-Path $work 'server.stdout') -RedirectStandardError (Join-Path $work 'server.stderr')
     Wait-Ci {Test-Path -LiteralPath $listening}
     $url='https://localhost:'+((Get-Content $listening -Raw|ConvertFrom-Json).port)
+    if($Scenario -eq 'lifecycle'){
     $evidence.stage='checksum-rejection'
     $sidecar=Join-Path $assets ('agentv-'+$version+'-windows-x64.zip.sha256')
     $savedChecksum=[IO.File]::ReadAllBytes($sidecar)
@@ -114,6 +134,7 @@ try {
         $exit=Bootstrap-Ci -Token (Token-Ci)
         Assert-Ci ($exit -ne 0 -and (State-Ci).exchanges -eq 0 -and -not(Test-Path $paths.Owner)) 'Unreadable Node prerequisite rejects before token exchange'
     } finally {Set-AgentVAcl $node 'S-1-5-32-545'}
+    }
     $evidence.stage='fresh-install'
     $exit=Bootstrap-Ci -Token (Token-Ci)
     Assert-Ci ($exit -eq 0) 'Pinned bootstrap installs through the real SCM host'
@@ -124,147 +145,12 @@ try {
     Assert-Ci (-not(Test-Path $paths.Journal) -and -not(Test-Path $paths.Marker)) 'Finalization removes protected transaction state'
     $config=Read-AgentVJson -Path $paths.Config -Secret -ServiceReadSid (Get-AgentVServiceSid);$key=$config.settings.ACORNOPS_AGENT_KEY
     Assert-Ci ($config.settings.ACORNOPS_AGENT_ADDITIONAL_CA_BUNDLE_FILE -ceq $ca) 'Initial trusted CA selection is persisted'
-    if($Scenario -eq 'acceptance'){Invoke-CiAcceptance;$evidence.stage='complete';return}
-    $evidence.stage='repair'
-    # Bootstrap TLS still needs CA to download; the worker repair deliberately omits it.
-    $worker=Join-Path $paths.Releases ($version+'\windows\install-worker.ps1')
-    & $ps -NoLogo -NoProfile -NonInteractive -ExecutionPolicy Bypass -File $worker -Version $version -PlatformUrl $url -TargetId windows-installer-ci -NodePath $node
-    Assert-Ci ($LASTEXITCODE -eq 0) 'Repair reconnects through the owned service'
-    $repaired=Read-AgentVJson -Path $paths.Config -Secret -ServiceReadSid (Get-AgentVServiceSid)
-    Assert-Ci ($repaired.settings.ACORNOPS_AGENT_KEY -ceq $key -and $repaired.settings.ACORNOPS_AGENT_ADDITIONAL_CA_BUNDLE_FILE -ceq $ca -and (State-Ci).exchanges -eq 1) 'Repair preserves credential and CA without another exchange'
-    $evidence.stage='invalid-upgrade-manifest'
-    $firstBootstrap=$bootstrap
-    $bootstrap=Variant-Ci -Version ($version+'-invalid') -CorruptManifest
-    $exit=Bootstrap-Ci
-    Assert-Ci ($exit -ne 0 -and (State-Ci).exchanges -eq 1 -and (Get-Service AcornOpsAgentV).Status -eq 'Running' -and (Read-AgentVJson -Path $paths.Config -Secret -ServiceReadSid (Get-AgentVServiceSid)).settings.ACORNOPS_AGENT_KEY -ceq $key) 'Invalid candidate package leaves prior service and credential intact'
-    $bootstrap=$firstBootstrap
-    $evidence.stage='lost-exchange-response'
-    Json-Ci $controls @{loseExchangeResponse=$true}
-    $exit=Bootstrap-Ci -Token (Token-Ci) -Replace
-    $retained=Read-AgentVJson -Path $paths.Config -Secret -ServiceReadSid (Get-AgentVServiceSid)
-    Assert-Ci ($exit -ne 0 -and $retained.settings.ACORNOPS_AGENT_KEY -ceq $key -and -not(Test-Path $paths.Marker) -and (Get-Service AcornOpsAgentV).Status -eq 'Running') 'Lost exchange response retains original running configuration without cutover'
-    $evidence.stage='lost-commit-replacement'
-    Json-Ci $controls @{loseCommitResponse=$true}
-    $exit=Bootstrap-Ci -Token (Token-Ci) -Replace
-    Assert-Ci ($exit -eq 0) 'Lost replacement commit response resolves using authenticated status'
-    $replaced=Read-AgentVJson -Path $paths.Config -Secret -ServiceReadSid (Get-AgentVServiceSid)
-    Assert-Ci ($replaced.settings.ACORNOPS_AGENT_KEY -cne $key -and $replaced.settings.ACORNOPS_AGENT_KEY -ceq (State-Ci).activeKey -and (State-Ci).commits -eq 2) 'Replacement retains the committed candidate generation'
-    $evidence.stage='immutable-upgrade'
-    $upgradeVersion=$version+'-upgrade'
-    $bootstrap=Variant-Ci -Version $upgradeVersion
-    $exit=Bootstrap-Ci
-    $upgraded=Read-AgentVJson -Path $paths.Config -Secret -ServiceReadSid (Get-AgentVServiceSid)
-    $selected=Read-AgentVJson -Path $paths.Selection -Secret
-    Assert-Ci ($exit -eq 0 -and $selected.version -ceq $upgradeVersion -and $upgraded.settings.ACORNOPS_AGENT_KEY -ceq $replaced.settings.ACORNOPS_AGENT_KEY -and (State-Ci).exchanges -eq 3) 'Runtime upgrade selects a new immutable version without reenrollment'
-    Assert-Ci ((Test-Path (Join-Path $paths.Releases $version)) -and (Test-Path (Join-Path $paths.Releases $upgradeVersion))) 'Successful upgrade retains the previous immutable runtime'
-    $evidence.stage='upgrade-failure-after-selection'
-    $workingBootstrap=$bootstrap;$failedVersion=$version+'-failed'
-    $bootstrap=Variant-Ci -Version $failedVersion -FailAfterStart
-    $before=(State-Ci).exchanges
-    Json-Ci $controls @{}
-    $installer=Start-CiInstallerProcess -Name 'failed-upgrade' -Arguments @('-NoLogo','-NoProfile','-NonInteractive','-ExecutionPolicy','Bypass','-File',$bootstrap,'-ReleaseBaseUrl',($url+'/releases'),'-PlatformUrl',$url,'-TargetId','windows-installer-ci','-NodePath',$node,'-AdditionalCaBundleFile',$ca)
-    Wait-Ci {(JournalPhase-Ci) -eq 'started-candidate' -or $installer.HasExited} 180
-    $failedJournal=Read-CiJson $paths.Journal
-    $failedService=CimCmdlets\Get-CimInstance Win32_Service -Filter "Name='AcornOpsAgentV'"
-    Assert-Ci (-not $installer.HasExited -and $failedJournal.candidate.version -ceq $failedVersion -and $failedJournal.selected -ceq 'candidate' -and $failedService.PathName.Contains('\'+$failedVersion+'\')) 'The intentionally failing runtime is actually selected and started after the doctor gate'
-    $finished=$installer.WaitForExit(240000)
-    $evidence.failedUpgradeOutcome=@{finished=$finished;hasExited=$installer.HasExited;exitCode=$(if($finished){$installer.ExitCode}else{$null})}
-    Assert-Ci ($finished -and $installer.ExitCode -eq 0) 'Upgrade failure after selection completes authenticated repair rollback'
-    $restored=Read-AgentVJson -Path $paths.Config -Secret -ServiceReadSid (Get-AgentVServiceSid)
-    $restoredSelection=Read-AgentVJson -Path $paths.Selection -Secret
-    Assert-Ci ($restoredSelection.version -ceq $upgradeVersion -and $restored.settings.ACORNOPS_AGENT_KEY -ceq $upgraded.settings.ACORNOPS_AGENT_KEY -and (State-Ci).exchanges -eq $before -and (State-Ci).activeConnected -and -not(Test-Path $paths.Journal)) 'Failed upgrade restores the prior runtime and credential with fresh authentication and no exchange'
-    $bootstrap=$workingBootstrap
-    $evidence.stage='lost-rollback-response'
-    Json-Ci $controls @{rejectPending=$true;loseRollbackResponse=$true}
-    $before=(State-Ci).exchanges
-    $exit=Bootstrap-Ci -Token (Token-Ci) -Replace
-    $rolledBack=Read-AgentVJson -Path $paths.Config -Secret -ServiceReadSid (Get-AgentVServiceSid)
-    Assert-Ci ($exit -eq 0 -and $rolledBack.settings.ACORNOPS_AGENT_KEY -ceq $upgraded.settings.ACORNOPS_AGENT_KEY -and (State-Ci).activeConnected -and (State-Ci).exchanges -eq ($before+1) -and (State-Ci).rollbacks -eq 1 -and -not(Test-Path $paths.Journal)) 'Lost rollback response restores the previous credential only after authenticated cancellation and fresh local connection'
-    $evidence.stage='interrupted-verification'
-    Json-Ci $controls @{rejectPending=$true}
-    $installer=Start-CiInstallerProcess -Name 'interrupted-verification' -Arguments @('-NoLogo','-NoProfile','-NonInteractive','-ExecutionPolicy','Bypass','-File',$bootstrap,'-ReleaseBaseUrl',($url+'/releases'),'-PlatformUrl',$url,'-TargetId','windows-installer-ci','-NodePath',$node,'-AdditionalCaBundleFile',$ca,'-EnrollmentToken',(Token-Ci),'-ReplaceCredential')
-    Wait-Ci {(JournalPhase-Ci) -eq 'started-candidate' -or $installer.HasExited} 180
-    Assert-Ci (-not $installer.HasExited -and (JournalPhase-Ci) -eq 'started-candidate') 'Installer reaches candidate startup while verification remains unavailable'
-    $installer.Kill();$installer.WaitForExit(5000)|Out-Null
-    ScheduledTasks\Disable-ScheduledTask -TaskName AcornOpsAgentVRecovery|Out-Null
-    Json-Ci $controls @{}
-    $launcher=Join-Path $paths.Maintenance 'recover.ps1'
-    & $ps -NoLogo -NoProfile -NonInteractive -ExecutionPolicy Bypass -File $launcher
-    $verified=Read-AgentVJson -Path $paths.Config -Secret -ServiceReadSid (Get-AgentVServiceSid)
-    Assert-Ci ($LASTEXITCODE -eq 0 -and $verified.settings.ACORNOPS_AGENT_KEY -ceq (State-Ci).activeKey -and (State-Ci).commits -eq 3 -and -not(Test-Path $paths.Journal)) 'Recovery after interrupted verification authenticates and finalizes the candidate without repeating enrollment'
-    ScheduledTasks\Enable-ScheduledTask -TaskName AcornOpsAgentVRecovery|Out-Null
-    $evidence.stage='interrupted-commit'
-    Json-Ci $controls @{holdCommit=$true}
-    $installer=Start-CiInstallerProcess -Name 'interrupted-installer' -Arguments @('-NoLogo','-NoProfile','-NonInteractive','-ExecutionPolicy','Bypass','-File',$bootstrap,'-ReleaseBaseUrl',($url+'/releases'),'-PlatformUrl',$url,'-TargetId','windows-installer-ci','-NodePath',$node,'-AdditionalCaBundleFile',$ca,'-EnrollmentToken',(Token-Ci),'-ReplaceCredential')
-    Wait-Ci {(JournalPhase-Ci) -eq 'commit-intent' -or $installer.HasExited} 180
-    Assert-Ci (-not $installer.HasExited -and (JournalPhase-Ci) -eq 'commit-intent') 'Installer reaches durable commit intent before response'
-    $ownedExchanges=(State-Ci).exchanges
-    $ownedJournal=(Get-FileHash $paths.Journal -Algorithm SHA256).Hash
-    $duplicateExit=Bootstrap-Ci -Token (Token-Ci) -Replace
-    Assert-Ci ($duplicateExit -ne 0 -and (State-Ci).exchanges -eq $ownedExchanges -and (Get-FileHash $paths.Journal -Algorithm SHA256).Hash -ceq $ownedJournal) 'A duplicate installer cannot mutate the active owner journal or exchange another token'
-    $installer.Kill();$installer.WaitForExit(5000)|Out-Null
-    Assert-Ci ((Test-Path $paths.Marker) -and (Test-Path $paths.Journal)) 'Terminating the installer retains recoverable protected authority'
-    # Control this CI scenario's task trigger while testing two process interruptions.
-    ScheduledTasks\Disable-ScheduledTask -TaskName AcornOpsAgentVRecovery|Out-Null
-    $hostService=CimCmdlets\Get-CimInstance Win32_Service -Filter "Name='AcornOpsAgentV'"
-    Assert-Ci ($hostService.ProcessId -gt 0 -and $hostService.PathName.StartsWith('"'+$paths.Releases+'\')) 'Crash probe selects only the installed owned service process'
-    $descendants=@(CimCmdlets\Get-CimInstance Win32_Process -Filter ("ParentProcessId="+$hostService.ProcessId)|Select-Object -ExpandProperty ProcessId)
-    Stop-Process -Id $hostService.ProcessId -Force
-    Wait-Ci {(Get-Service AcornOpsAgentV).Status -eq 'Stopped'}
-    # Transactional ownership has already suppressed actions; restore only the exact
-    # qualified policy here to create a real queued crash before recovery entry.
-    Invoke-CiSc -Arguments @('failure','AcornOpsAgentV','reset=','86400','actions=','restart/10000/restart/30000/restart/60000')
-    Invoke-CiSc -Arguments @('failureflag','AcornOpsAgentV','0')
-    Start-Service AcornOpsAgentV
-    Wait-Ci {(CimCmdlets\Get-CimInstance Win32_Service -Filter "Name='AcornOpsAgentV'").ProcessId -gt 0}
-    $hostService=CimCmdlets\Get-CimInstance Win32_Service -Filter "Name='AcornOpsAgentV'"
-    Stop-Process -Id $hostService.ProcessId -Force
-    Wait-Ci {(Get-Service AcornOpsAgentV).Status -eq 'Stopped'}
-    $launcher=Join-Path $paths.Maintenance 'recover.ps1'
-    $recoveryArgs=@('-NoLogo','-NoProfile','-NonInteractive','-ExecutionPolicy','Bypass','-File',$launcher)
-    $recovery=Start-CiInstallerProcess -Name 'interrupted-drain' -Arguments $recoveryArgs
-    Wait-Ci {(JournalPhase-Ci) -eq 'restart-drain' -or $recovery.HasExited}
-    Assert-Ci (-not $recovery.HasExited) 'Recovery enters disabled queued-restart drain after a historical host crash'
-    Start-Sleep -Seconds 12
-    $during=CimCmdlets\Get-CimInstance Win32_Service -Filter "Name='AcornOpsAgentV'"
-    Assert-Ci ($during.State -eq 'Stopped' -and $during.StartMode -eq 'Disabled' -and $during.ProcessId -eq 0) 'Queued ten-second SCM restart cannot run during disabled drain'
-    $recovery.Kill();$recovery.WaitForExit(5000)|Out-Null
-    Json-Ci $controls @{loseCommitResponse=$true}
-    $clock=[Diagnostics.Stopwatch]::StartNew()
-    $reentry=Start-CiInstallerProcess -Name 'reentry' -Arguments $recoveryArgs
-    Assert-Ci ($reentry.WaitForExit(180000)) 'Fixed launcher recovery completes after process interruption'
-    $evidence.reentryOutcome=@{hasExited=$reentry.HasExited;exitCode=$reentry.ExitCode;elapsedMs=$clock.ElapsedMilliseconds}
-    Assert-Ci ($reentry.ExitCode -eq 0 -and $clock.Elapsed.TotalSeconds -ge 65) 'Recovery reentry repeats the full monotonic drain before starting selection'
-    $recovered=Read-AgentVJson -Path $paths.Config -Secret -ServiceReadSid (Get-AgentVServiceSid)
-    Assert-Ci ($recovered.settings.ACORNOPS_AGENT_KEY -ceq (State-Ci).activeKey -and (State-Ci).commits -eq 4 -and -not(Test-Path $paths.Journal)) 'Interrupted commit recovery finalizes exactly the authenticated candidate generation'
-    Assert-Ci (@($descendants|Where-Object {Get-Process -Id $_ -ErrorAction SilentlyContinue}).Count -eq 0) 'Owned host crash leaves no previously contained Node process'
-    ScheduledTasks\Enable-ScheduledTask -TaskName AcornOpsAgentVRecovery|Out-Null
-    $evidence.stage='uninstall'
-    $launcher=Join-Path $paths.Maintenance 'recover.ps1'
-    & $ps -NoLogo -NoProfile -NonInteractive -ExecutionPolicy Bypass -File $launcher -Uninstall
-    Assert-Ci ($LASTEXITCODE -eq 0) 'Installed protected launcher supports owned uninstall'
-    Assert-Ci ($null -eq (Get-Service AcornOpsAgentV -ErrorAction SilentlyContinue) -and $null -eq (ScheduledTasks\Get-ScheduledTask -TaskName AcornOpsAgentVRecovery -ErrorAction SilentlyContinue)) 'Uninstall removes owned SCM and recovery registrations'
-    Assert-Ci ((Test-Path $paths.Config) -and (State-Ci).rollbacks -eq 1) 'Uninstall retains durable config without revoking credentials'
-    $evidence.stage='conflicting-service-refusal'
-    $foreignImage='"'+(Join-Path $paths.Releases ($upgradeVersion+'\AgentV.ServiceHost.exe'))+'" --node "'+$node+'"'
-    Invoke-CiSc -Arguments @('create','AcornOpsAgentV','binPath=',$foreignImage,'start=','disabled','obj=','NT AUTHORITY\LocalService')
-    Assert-Ci $true 'Disposable conflicting service fixture created'
-    try {
-        Invoke-CiSc -Arguments @('description','AcornOpsAgentV','Unrelated disposable CI service')
-        $before=(State-Ci).exchanges
-        $exit=Bootstrap-Ci
-        $conflicting=CimCmdlets\Get-CimInstance Win32_Service -Filter "Name='AcornOpsAgentV'"
-        Assert-Ci ($exit -ne 0 -and $conflicting.Description -ceq 'Unrelated disposable CI service' -and $conflicting.StartMode -eq 'Disabled' -and (State-Ci).exchanges -eq $before) 'Retained-config repair refuses a conflicting service without modification or exchange'
-    } finally {Invoke-CiSc -Arguments @('delete','AcornOpsAgentV')}
-    $evidence.stage='retained-config-reinstall'
-    $before=(State-Ci).exchanges
-    $exit=Bootstrap-Ci
-    Assert-Ci ($exit -eq 0) 'No-token reinstall recreates absent SCM and task from trusted retained configuration'
-    $retained=Read-AgentVJson -Path $paths.Config -Secret -ServiceReadSid (Get-AgentVServiceSid)
-    Assert-Ci ($retained.settings.ACORNOPS_AGENT_KEY -ceq $recovered.settings.ACORNOPS_AGENT_KEY -and $retained.settings.ACORNOPS_TARGET_ID -ceq 'windows-installer-ci' -and $retained.settings.ACORNOPS_AGENT_ADDITIONAL_CA_BUNDLE_FILE -ceq $ca -and (State-Ci).exchanges -eq $before -and (State-Ci).activeConnected) 'Retained-config reinstall preserves key target and CA and freshly authenticates without reenrollment'
-    $acl=Get-Acl $paths.Config
-    $readers=@($acl.GetAccessRules($true,$true,[Security.Principal.SecurityIdentifier])|Where-Object {$_.AccessControlType -eq 'Allow'}|ForEach-Object {$_.IdentityReference.Value})
-    Assert-Ci ($readers -contains (Get-AgentVServiceSid) -and $readers -notcontains 'S-1-5-19' -and $readers -notcontains 'S-1-5-32-545') 'Recreated service retains unique SID credential permissions'
+    switch($Scenario){
+        'lifecycle' {. (Join-Path $PSScriptRoot 'lifecycle-scenario.ps1')}
+        'recovery' {. (Join-Path $PSScriptRoot 'recovery-scenario.ps1')}
+        'startup' {. (Join-Path $PSScriptRoot 'startup-scenario.ps1')}
+        'acceptance' {Invoke-CiAcceptance}
+    }
     $evidence.stage='complete'
 } catch {
     $evidence.failure=[ordered]@{type=$_.Exception.GetType().FullName;hresult=$_.Exception.HResult;file=[IO.Path]::GetFileName($_.InvocationInfo.ScriptName);line=$_.InvocationInfo.ScriptLineNumber}
