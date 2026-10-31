@@ -93,7 +93,11 @@ function Read-AgentVJson {
         $buffer = New-Object byte[] ($Limit+1); $length = 0
         while ($length -lt $buffer.Length) { $count = $file.Read($buffer,$length,$buffer.Length-$length); if (-not $count) { break }; $length += $count }
         if ($length -gt $Limit) { throw 'AgentV state exceeds its bound.' }
-        return [Text.Encoding]::UTF8.GetString($buffer,0,$length) | ConvertFrom-Json
+        # Windows PowerShell5.1 Set-Content UTF8 emits a BOM. Strip exactly
+        # that optional byte prefix, retaining the original bounded byte count.
+        $offset=0
+        if ($length -ge 3 -and $buffer[0] -eq 239 -and $buffer[1] -eq 187 -and $buffer[2] -eq 191) { $offset=3 }
+        return [Text.Encoding]::UTF8.GetString($buffer,$offset,$length-$offset) | ConvertFrom-Json
     } finally { $file.Dispose() }
 }
 function Enter-AgentVLock {
