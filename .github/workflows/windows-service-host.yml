@@ -1,0 +1,45 @@
+name: Windows native service host
+
+on:
+  workflow_dispatch:
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: windows-service-host-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  native-service-host:
+    name: Native SCM host (${{ matrix.os }}, Node ${{ matrix.node }})
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [windows-2022, windows-2025]
+        node: [22, 24]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ matrix.node }}
+          cache: npm
+      - run: npm ci
+      - run: npm run build
+      - name: Verify bounded START and authentication evidence
+        run: npx vitest run src/windows-service-entry.spec.ts src/windows-readiness.spec.ts
+      - name: Qualify host in explicitly disposable hosted runner
+        shell: pwsh
+        run: ./scripts/windows-service-host-smoke.ps1 -AllowDisposableCi
+      - name: Upload native host evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: windows-service-host-${{ matrix.os }}-node${{ matrix.node }}
+          path: artifacts/windows-service-host/
+          if-no-files-found: warn
+          retention-days: 14

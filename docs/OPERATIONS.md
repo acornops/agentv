@@ -269,8 +269,9 @@ host permissions or service installation. See the
 
 `dist/windows-service-entry.js --config <absolute protected JSON path>` is a
 private child entrypoint for the separately reviewed native SCM host. It waits
-for strict newline JSON `{"command":"START","trustedSystemDirectory":"C:\\Windows\\System32"}`
-before importing runtime/config modules. The host supplies the trusted directory
+for strict newline JSON START before importing runtime/config modules. START
+contains `trustedSystemDirectory` and a strict `launch` object with UUID
+`launchId`, hexadecimal SHA-256 `configSha256`, and absolute `stateDirectory`. The host supplies the trusted directory
 from OS APIs only after assigning the child to its Job Object. It sends
 `{"command":"STOP"}` for shutdown. STOP during asynchronous startup is retained;
 EOF after START requests shutdown. START has a 10-second deadline, runtime
@@ -282,6 +283,19 @@ The config is at most 64 KiB and has the strict shape
 Only named AgentV settings are projected. The service entry enforces
 Windows/SCM/live/read-only settings; conflicting values, arbitrary keys and
 non-string values fail. Node/runtime/system-directory paths are outside config.
-Protected ACLs, trusted native launch paths, readiness-marker storage, SCM
-hosting and package transactions belong to the native host/installer, which is
-not implemented or qualified by this runtime entry seam.
+The repository Framework 4.8 host is being qualified separately. It derives
+ProgramData from OS folder APIs, fixes config at `AcornOps\AgentV\config.json`,
+and grants the service SID access only to the protected runtime/config and its
+own log/state directories. Before START it clears old authentication evidence,
+hashes config, assigns Node to a kill-on-close Job Object, and sends a fresh
+launch identity. The child checks that config hash before importing the runtime.
+On authenticated connection it atomically publishes bounded `authenticated.json`
+evidence; disconnect removes it. This file grants no recovery authority.
+
+The native host has no enrollment HTTP or installer logic. SCM crash recovery
+uses 10/30/60-second restart delays and a one-day reset. Orderly stop waits up to
+15 seconds, terminates remaining job members, and observes zero active processes
+within a further 5 seconds. Child stdout/stderr use 5 MiB current files and three
+retained rotations each. Sink failure drains/discards data. Hosted native results,
+transactional installation and reboot qualification remain required before any
+Windows onboarding activation.

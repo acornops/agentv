@@ -1,5 +1,7 @@
 import type { Readable } from 'node:stream';
 import { open } from 'node:fs/promises';
+import { createHash } from 'node:crypto';
+import { createWindowsReadiness } from './windows-readiness.js';
 import { win32, resolve } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { z } from 'zod';
@@ -13,7 +15,9 @@ const settingsKeys = [
   'ACORNOPS_VM_OS_FAMILY', 'ACORNOPS_VM_SERVICE_MANAGER', 'ACORNOPS_VM_COLLECTOR_MODE', 'ACORNOPS_AGENT_WRITE_ENABLED', 'ACORNOPS_AGENT_MOCK_ACTIONS_ENABLED',
 ] as const;
 const fixed = { ACORNOPS_VM_OS_FAMILY: 'windows', ACORNOPS_VM_SERVICE_MANAGER: 'scm', ACORNOPS_VM_COLLECTOR_MODE: 'live', ACORNOPS_AGENT_WRITE_ENABLED: 'false', ACORNOPS_AGENT_MOCK_ACTIONS_ENABLED: 'false', ACORNOPS_AGENT_TARGET_TYPE: 'virtual_machine' };
-const commandSchema = z.discriminatedUnion('command', [z.object({ command: z.literal('START'), trustedSystemDirectory: z.string().min(1).max(4096) }).strict(), z.object({ command: z.literal('STOP') }).strict()]);
+const launchSchema = z.object({ launchId: z.string().uuid(), configSha256: z.string().regex(/^[a-f0-9]{64}$/), stateDirectory: z.string().max(1024).refine((value) => win32.isAbsolute(value)) }).strict();
+type ServiceRuntimeOptions = WindowsRuntimeOptions & { launch?: z.infer<typeof launchSchema> };
+const commandSchema = z.discriminatedUnion('command', [z.object({ command: z.literal('START'), trustedSystemDirectory: z.string().min(1).max(1024), launch: launchSchema }).strict(), z.object({ command: z.literal('STOP') }).strict()]);
 
 /** Parse only named AgentV settings; service launch paths never come from config. */
 export function parseWindowsServiceConfig(raw: string): Record<string, string> {
@@ -25,7 +29,7 @@ export function parseWindowsServiceConfig(raw: string): Record<string, string> {
   return { ...parsed.settings, ...fixed };
 }
 
-async function startFromProtectedConfig(configPath: string, options: WindowsRuntimeOptions): Promise<WindowsStopHandle> {
+async function startFromProtectedConfig(configPath: string, options: ServiceRuntimeOptions): Promise<WindowsStopHandle> {
   const file = await open(configPath, 'r');
   let raw: string;
   try {
@@ -35,18 +39,21 @@ async function startFromProtectedConfig(configPath: string, options: WindowsRunt
     if (length > 64 * 1024) throw new Error('Windows service config exceeds limit');
     raw = buffer.subarray(0, length).toString('utf8');
   } finally { await file.close(); }
+  if (!options.launch || createHash('sha256').update(raw).digest('hex') !== options.launch.configSha256) throw new Error('Windows service configuration changed during launch');
+  const sessionState = createWindowsReadiness({ directory: options.launch.stateDirectory, ...options.launch });
+  sessionState.disconnected();
   const settings = parseWindowsServiceConfig(raw);
   for (const name of Object.keys(process.env)) if (name.startsWith('ACORNOPS_')) delete process.env[name];
   Object.assign(process.env, settings);
   // Imports occur only after the native host has assigned the child to its job.
   const [{ loadConfig }, { startWindowsAgent }] = await Promise.all([import('./config.js'), import('./windows-runtime.js')]);
-  return startWindowsAgent(loadConfig(), options);
+  return startWindowsAgent(loadConfig(), { ...options, sessionState });
 }
 
 /** Wait for private START, retain early STOP, and bound protocol/start/stop lifetimes. */
 export async function runWindowsServiceEntry(options: {
   input: Readable; configPath: string; sessionState?: WindowsRuntimeOptions['sessionState'];
-  start?: (path: string, runtime: WindowsRuntimeOptions) => Promise<WindowsStopHandle>;
+  start?: (path: string, runtime: ServiceRuntimeOptions) => Promise<WindowsStopHandle>;
 }): Promise<void> {
   if (!win32.isAbsolute(options.configPath)) throw new Error('Windows service config path must be absolute');
   let buffer = Buffer.alloc(0); let started = false; let stopRequested = false; let handle: WindowsStopHandle | undefined; let stopping: Promise<void> | undefined;
@@ -76,7 +83,7 @@ export async function runWindowsServiceEntry(options: {
       if (started || stopRequested) { fail(); return; }
       started = true; clearTimeout(startTimer);
       startTimer = setTimeout(() => { stopRequested = true; rejectDone(new Error('Windows runtime startup deadline exceeded')); }, 15000);
-      void (options.start || startFromProtectedConfig)(options.configPath, { trustedSystemDirectory: command.trustedSystemDirectory, sessionState: options.sessionState }).then((runtime) => { clearTimeout(startTimer); handle = runtime; if (stopRequested) void boundedStop(); }).catch(() => rejectDone(new Error('Windows runtime startup failed')));
+      void (options.start || startFromProtectedConfig)(options.configPath, { trustedSystemDirectory: command.trustedSystemDirectory, sessionState: options.sessionState, launch: command.launch }).then((runtime) => { clearTimeout(startTimer); handle = runtime; if (stopRequested) void boundedStop(); }).catch(() => rejectDone(new Error('Windows runtime startup failed')));
     }
   };
   const end = () => { if (!started || buffer.length) fail(); else requestStop(); };

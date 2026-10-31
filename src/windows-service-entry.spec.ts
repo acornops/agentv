@@ -2,13 +2,16 @@ import { PassThrough } from 'node:stream';
 import { describe, expect, it, vi } from 'vitest';
 import { runWindowsServiceEntry, parseWindowsServiceConfig } from './windows-service-entry.js';
 
+const launch = { launchId: 'a747fa58-2486-4fb3-a050-a46eece839b0', configSha256: 'a'.repeat(64), stateDirectory: 'C:\\protected\\state' };
+const startCommand = JSON.stringify({ command: 'START', trustedSystemDirectory: 'C:\\Windows\\System32', launch }) + '\n';
+
 describe('bounded private SCM child gate', () => {
   it('imports runtime only after START and retains STOP during asynchronous startup', async () => {
     const input = new PassThrough(); let release!: () => void; const waiting = new Promise<void>((resolve) => { release = resolve; });
     const stop = vi.fn(async () => undefined); const load = vi.fn(async () => { await waiting; return { stop }; });
     const result = runWindowsServiceEntry({ input, configPath: 'C:\\protected\\config.json', start: load });
     expect(load).not.toHaveBeenCalled();
-    input.write('{"command":"START","trustedSystemDirectory":"C:\\\\Windows\\\\System32"}\n');
+    input.write(startCommand);
     await Promise.resolve(); expect(load).toHaveBeenCalledTimes(1);
     input.write('{"command":"STOP"}\n'); release(); await result;
     expect(stop).toHaveBeenCalledTimes(1);
@@ -23,7 +26,7 @@ describe('bounded private SCM child gate', () => {
     const before = new PassThrough(); const unused = vi.fn(); const stopped = runWindowsServiceEntry({ input: before, configPath: 'C:\\config.json', start: unused }); before.end('{"command":"STOP"}\n'); await stopped; expect(unused).not.toHaveBeenCalled();
     const input = new PassThrough(); let release!: () => void; const pending = new Promise<void>((resolve) => { release = resolve; }); const stop = vi.fn(async () => undefined);
     const result = runWindowsServiceEntry({ input, configPath: 'C:\\config.json', start: async () => { await pending; return { stop }; } });
-    input.end('{"command":"START","trustedSystemDirectory":"C:\\\\Windows\\\\System32"}\n');
+    input.end(startCommand);
     await new Promise((resolve) => setImmediate(resolve)); release(); await result; expect(stop).toHaveBeenCalledTimes(1);
   });
   it('rejects arbitrary keys, writes, mock mode and non-string protected settings', () => {
