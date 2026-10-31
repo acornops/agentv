@@ -18,6 +18,7 @@ This `docs/` tree is the repository-local system of record for agent-readable de
 - [Core Beliefs](/docs/design-docs/core-beliefs.md)
 - [Windows VM compatibility design](/docs/design-docs/windows-vm-linux-compatibility.md)
 - [Windows service host design](/docs/design-docs/windows-service-host.md)
+- [Windows installer recovery design](/docs/design-docs/windows-installer-recovery.md)
 
 ## Product Specs
 

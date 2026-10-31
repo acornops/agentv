@@ -39,9 +39,9 @@ Status: approved for implementation by the user on 2026-10-31. Work in progress.
 
 Existing Linux modules retain ownership of Linux semantics. Add Windows modules alongside them, rather than converting Linux types to optional-field bags.
 
-- AgentV `src/adapters/windows/{types,runner,scripts,live-host,mock-host}.ts`: native read contracts, bounded fixed-script execution, live decoding and deterministic mock fixtures.
-- AgentV `src/tools/windows.ts`: separate read-only tool definitions using the existing registry/executor/result envelope.
-- AgentV `src/core/windows-snapshot-manager.ts`: Windows snapshot derivation and bounded publication. A narrow lifecycle runtime input supplies snapshots, capabilities, host features and log availability; the existing Linux constructor behavior remains the default.
+- AgentV `src/windows/{types,runner,scripts,live,mock,service-health}.ts`: native read contracts, bounded fixed-script execution, live decoding, evidence rules and deterministic mock fixtures.
+- AgentV `src/windows/tools.ts`: separate read-only tool definitions using the existing registry/executor/result envelope.
+- AgentV `src/windows/snapshot.ts`: Windows snapshot derivation and bounded publication. A narrow lifecycle runtime input supplies snapshots, capabilities, host features and log availability; the existing Linux constructor behavior remains the default.
 - AgentV `src/windows-runtime.ts`: side-effect-free Windows composition returning an idempotent shutdown callback, shared by standalone Windows and the service bootstrap. Never import the Linux CLI from the native service bootstrap.
 - Control plane `src/types/virtual-machine-contracts.ts`, repository and handshake: identity/policy/auth boundaries. New Windows snapshot and interpretation helpers keep native semantics outside Linux branches.
 - AgentV `packaging/windows/`, `scripts/*windows*`: SCM host, installer, archive and qualification scripts, isolated from Linux packaging.
@@ -79,13 +79,13 @@ Generated public API counterpart: `docs-website/openapi/control-plane-public.jso
 
 **Interfaces:** Publish `acornops.agentv-windows-snapshot.v1`, native service fields `name`, `display_name`, `state`, `start_mode`, `process_id`, `exit_code`, `service_specific_exit_code`; host summary includes explicit `os_family:'windows'`, version/build and `system_volume`, common numeric CPU/memory and health. Keep unavailable platform-specific metrics absent/null. Keep outer snapshot collections `host_summary`, `filesystems`, `degraded_services`, `top_processes`, `listeners`, `findings`, `collector_health`, `finding_coverage`, `truncation` with their exact Windows types documented. Windows tool names reuse the eight Linux read names with native input/output schemas; `get_service` uses `name`, logs use `channel` restricted to local Application/System allowlist. No restart tool.
 
-- [ ] First write failing tests for OS/config dispatch, no writes, wrong-host rejection in live mode, schema separation and common lifecycle compatibility. The mock selects data by explicit OS, independently of host OS.
-- [ ] Implement a type-safe lifecycle runtime seam preserving the existing Linux constructor/default behavior; do not cast a Windows adapter to HostAdapter. Keep Linux snapshot manager, HostAdapter and command runner semantics unchanged.
-- [ ] Expose `startWindowsAgent(config, options)` from `src/windows-runtime.ts` with an idempotent stop handle, and a bounded service-start/stop entry module for task 5. Runtime must not load before the native host START gate, and STOP received during asynchronous startup must be retained. Preserve Linux standalone signals and existing 250ms exit behavior; see [reviewed service host design](../../design-docs/windows-service-host.md).
-- [ ] Add bounded native scripts through a trusted absolute PowerShell executable, fixed script identifiers and JSON data arguments. Restrict environment, clear preload variables, bound bytes/time/rows/time windows, support cancellation. Test metacharacters, Unicode, permission failures, truncation, invalid JSON and unsupported hosts.
-- [ ] Implement native host/CPU/memory, volumes, processes, services, listeners and Application/System logs. Test ordinary stopped/never-started (1077)/disabled services as non-failures and stopped process-aborted (1067) as failure; service-specific details apply only to1066. Coverage/health prevents false recovery. Preserve redaction and common tool envelope limits.
-- [ ] Add a clearly synthetic deterministic Windows mock and fixtures; never label synthetic output as captured native evidence. Add native collector smoke and an additive hosted matrix on `windows-2022`/`windows-2025` with Node 22/24 so native parsing is qualified before task 4 consumes the contract. Capture sanitized native output and runner provenance. Keep existing Ubuntu gates unchanged; task 5 extends this Windows qualification to service packaging.
-- [ ] Run focused RED/GREEN tests, full AgentV validation/e2e and frozen Linux catalog comparisons; update protocol docs on both sides, commit and report. Archive contents/config defaults for Linux remain compatible.
+- [x] First write failing tests for OS/config dispatch, no writes, wrong-host rejection in live mode, schema separation and common lifecycle compatibility. The mock selects data by explicit OS, independently of host OS.
+- [x] Implement a type-safe lifecycle runtime seam preserving the existing Linux constructor/default behavior; do not cast a Windows adapter to HostAdapter. Keep Linux snapshot manager, HostAdapter and command runner semantics unchanged.
+- [x] Expose `startWindowsAgent(config, options)` from `src/windows-runtime.ts` with an idempotent stop handle, and a bounded service-start/stop entry module for task 5. Runtime must not load before the native host START gate, and STOP received during asynchronous startup must be retained. Preserve Linux standalone signals and existing 250ms exit behavior; see [reviewed service host design](../../design-docs/windows-service-host.md).
+- [x] Add bounded native scripts through a trusted absolute PowerShell executable, fixed script identifiers and JSON data arguments. Restrict environment, clear preload variables, bound bytes/time/rows/time windows, support cancellation. Test metacharacters, Unicode, permission failures, truncation, invalid JSON and unsupported hosts.
+- [x] Implement native host/CPU/memory, volumes, processes, services, listeners and Application/System logs. Test ordinary stopped/never-started (1077)/disabled services as non-failures and stopped process-aborted (1067) as failure; service-specific details apply only to1066. Coverage/health prevents false recovery. Preserve redaction and common tool envelope limits.
+- [x] Add a clearly synthetic deterministic Windows mock and fixtures; never label synthetic output as captured native evidence. Add native collector smoke and an additive hosted matrix on `windows-2022`/`windows-2025` with Node 22/24 so native parsing is qualified before task 4 consumes the contract. Capture sanitized native output and runner provenance. Keep existing Ubuntu gates unchanged; task 5 extends this Windows qualification to service packaging.
+- [x] Run focused RED/GREEN tests, full AgentV validation/e2e and frozen Linux catalog comparisons; update protocol docs on both sides, commit and report. Archive contents/config defaults for Linux remain compatible.
 
 ### Task 4: Backend Windows telemetry, logs and target tool isolation
 
@@ -108,6 +108,7 @@ Produce an additive authenticated `GET /workspaces/:workspaceId/virtual-machines
 **Interfaces:** Separate Windows release asset and `install-agentv.ps1`, implementing the exact task 2 instruction arguments; control-plane instructions use independent task 2 release settings. Reuse exchange/verify/commit enrollment protocol with target OS binding. Keep existing Linux install command byte-for-byte stable. Explicit read-only Windows config under ProgramData, dedicated low-privilege service identity, actual SCM host.
 
 - [x] Record and independently review the native service-host choice, including SCM recovery, observed whole-job teardown and runtime shutdown seam. Selected repository-owned .NET4.8 host; see [reviewed service host design](../../design-docs/windows-service-host.md). Implementation and native evidence remain pending.
+- [x] Independently review installer recovery ordering, ambiguous backend outcomes and queued SCM restart ownership; see [Windows installer recovery design](../../design-docs/windows-installer-recovery.md). Native interruption qualification remains required.
 - [ ] Write installer state/failure tests covering new install, repair, credential replacement, interrupted exchange/verification/commit, lost commit response, upgrade, cleanup and uninstall. Never restore a revoked credential and claim rollback. Configuration deletion/revocation is explicit, not implicit uninstall behavior.
 - [ ] Implement checksummed package/build/bootstrap, trusted paths and ACLs, sanitized service environment, graceful process tree stop and crash recovery. Scripts accept arguments as data, avoid command interpolation, and do not log credentials.
 - [ ] Add CI on `windows-2022` and `windows-2025` with Node 22/24, plus native collector and disposable SCM install/recovery tests. Retain Ubuntu systemd release gates unchanged. Reboot qualification is separate from service restart.
@@ -156,3 +157,20 @@ Task 2 passed independent review after one fix round. Control-plane `3985774` an
 Pre-runtime native Linux qualification at AgentV `32da905` passed both Ubuntu24.04/systemd Node22 and Node24 jobs, including install/restart/upgrade/rollback/uninstall. [CI run](https://github.com/acornops/agentv/actions/runs/41209224807) and [draft PR](https://github.com/acornops/agentv/pull/8) preserve evidence. This run qualifies the baseline, not future runtime changes.
 
 User selected hosted Windows CI for now. Actual Windows reboot and Core/Desktop Experience coverage remain separate unexecuted gates; no disposable Windows VM was supplied. Baselines and environment-specific failures are recorded in [assessment](windows-vm-assessment.md). Per-task reports and reviewer evidence are kept in the local ignored plan workspace; durable conclusions are copied here before handoff.
+
+Task 3 passed independent review after one fix round. AgentV `754afa8` through
+`b468f7b` add isolated read collectors, a native snapshot, explicit OS dispatch,
+synthetic mock and service bootstrap seam. Review corrected incomplete Running
+service evidence. Hosted CI exposed broad PowerShell command lookup taking
+23–29 seconds; fixed module-qualified commands removed that delay without
+raising the eight-second collector limit or inheriting ambient environment.
+Local validation passed 159 tests; frozen Linux behavior remains intact.
+
+[Windows collector CI](https://github.com/acornops/agentv/actions/runs/41217103762)
+passed all Windows Server 2022/2025 × Node 22/24 jobs. Artifacts identify PR merge
+`52cff0b3`; all six script hashes match reviewed feature commit `b468f7b`. First
+host collection took 4.69–6.58 seconds; full collections and boundary checks
+passed. [Matching Linux CI](https://github.com/acornops/agentv/actions/runs/41217103832)
+passed validation and both Ubuntu systemd lifecycle jobs. Native service identity,
+ACLs, packaging and recovery remain task 5 gates. A minor mock-filter discrepancy
+is tracked for task 7 and final review; synthetic evidence does not qualify a VM.
