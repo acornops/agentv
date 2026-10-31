@@ -5,6 +5,29 @@ import { collectorEnvironment, collectorCommand, parseCollectorResult, WindowsCo
 import { isFailedService } from './service-health.js';
 import { WindowsLiveHost } from './live.js';
 
+// Fixed-program lexical guard: ignore data strings, then inspect command positions.
+// Reject aliases/dynamic invocation too, so adding a new bare command cannot
+// silently reintroduce module-wide command discovery.
+const commandModules: Record<string, string> = {
+  'ConvertFrom-Json': 'Microsoft.PowerShell.Utility', 'ConvertTo-Json': 'Microsoft.PowerShell.Utility',
+  'Select-Object': 'Microsoft.PowerShell.Utility', 'Measure-Object': 'Microsoft.PowerShell.Utility', 'Get-Date': 'Microsoft.PowerShell.Utility',
+  'Where-Object': 'Microsoft.PowerShell.Core', 'ForEach-Object': 'Microsoft.PowerShell.Core',
+  'Get-CimInstance': 'CimCmdlets', 'Get-NetTCPConnection': 'NetTCPIP', 'Get-NetUDPEndpoint': 'NetTCPIP', 'Get-WinEvent': 'Microsoft.PowerShell.Diagnostics',
+};
+const language = new Set(['try', 'catch', 'if', 'else', 'elseif', 'foreach', 'throw', 'break', 'continue', 'exit']);
+function unqualifiedCommands(program: string): string[] {
+  const code = program.replace(/'(?:''|[^'])*'|"(?:`.|[^"])*"/g, ' ');
+  const invalid: string[] = [];
+  if (/(?:^|[;|])\s*[%?](?:\s|[{])|[&]/.test(code)) invalid.push('dynamic-or-alias-invocation');
+  for (const match of code.matchAll(/(?:^|[;|=({}])\s*([A-Za-z][A-Za-z0-9_.-]*(?:\\[A-Za-z][A-Za-z0-9-]*)?)(?=\s|[;|(){}]|$)/g)) {
+    const token = match[1];
+    if (language.has(token.toLowerCase()) || code.slice(match.index! + match[0].length).trimStart().startsWith('=')) continue;
+    const [module, command] = token.split('\\');
+    if (!command || commandModules[command] !== module) invalid.push(token);
+  }
+  return invalid;
+}
+
 describe('fixed Windows collectors', () => {
   it('keeps hostile Unicode filter text solely in stdin and clears preload/credential environment', () => {
     const data = { query: "日本語';$(Start-Process x);`\n" };
@@ -15,6 +38,17 @@ describe('fixed Windows collectors', () => {
     expect(command.args.join(' ').length).toBeLessThan(30000);
     expect(collectorEnvironment('C:\\Windows\\System32')).toEqual({ SystemRoot: 'C:\\Windows', WINDIR: 'C:\\Windows', PATH: 'C:\\Windows\\System32;C:\\Windows\\System32\\WindowsPowerShell\\v1.0', PSModulePath: 'C:\\Windows\\System32\\WindowsPowerShell\\v1.0\\Modules' });
     for (const script of Object.values(scripts)) expect(script).not.toMatch(/Invoke-Expression|iex |-Command \$/i);
+  });
+  it('qualifies every native command with its reviewed module and rejects discovery regressions', () => {
+    for (const program of Object.values(scripts)) expect(unqualifiedCommands(program)).toEqual([]);
+    for (const [command, module] of Object.entries(commandModules)) {
+      const qualified = `${module}\\${command}`;
+      const program = Object.values(scripts).find((script) => script.includes(qualified));
+      expect(program, command).toBeDefined();
+      expect(unqualifiedCommands(program!.replace(qualified, command)), command).toContain(command);
+    }
+    expect(unqualifiedCommands('$p=gc file')).toContain('gc');
+    expect(unqualifiedCommands('$p=Get-UnknownThing')).toContain('Get-UnknownThing');
   });
   it('uses only .NET primitives before explicitly reading JSON stdin', () => {
     for (const id of Object.keys(scripts) as Array<keyof typeof scripts>) {

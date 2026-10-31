@@ -157,10 +157,10 @@ only allowlisted stage names, elapsed time, byte counts and stdin/spawn flags
 are reported. Raw stderr and input values are excluded. Collector time/output
 budgets remain unchanged while native timeout causes are investigated.
 
-If native collection fails, CI runs separate fixed PowerShell initialization
-probes after the failed production gate. Each diagnostic observation is capped
-at 30 seconds and 32 KiB, comparing core/Utility command loading, explicit input,
-module cache and OS-discovered LocalAppData individually. These diagnostic
-windows do not change the production eight-second collector ceiling or turn a
-failed collector gate into a pass. Results contain only fixed markers and
-counts in `startup-probes.json`; no environment/path/value dumps are retained.
+All native collector cmdlets use fixed, documented module qualification. Native
+causal measurements showed unqualified command discovery took 22–29 seconds,
+while module-qualified Utility commands completed in 0.22–0.27 seconds across
+the hosted 2022/2025 × Node 22/24 matrix. This avoids broad command discovery
+without adding ambient environment variables or increasing the eight-second
+collector budget. The temporary 30-second diagnostic probes were removed after
+that measurement; fixed sanitized failure stages remain available.
