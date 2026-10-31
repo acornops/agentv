@@ -42,6 +42,7 @@ jobs:
         shell: powershell
         run: ./scripts/windows-tests/durable-state-tests.ps1 -AllowDisposableCi
   installation:
+    needs: recovery-state
     name: Transactional installation (${{ matrix.os }}, Node ${{ matrix.node }}, ${{ matrix.scenario }})
     runs-on: ${{ matrix.os }}
     timeout-minutes: 30
