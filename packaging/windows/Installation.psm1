@@ -222,6 +222,15 @@ function Set-AgentVMaintenance {
     }
     Write-AgentVDurableJson -Path (Join-Path $script:Paths.Maintenance 'worker.json') -Value @{ version=$Version; ownerId=$OwnerId; manifestSha256=(Get-FileHash (Join-Path $release 'package-manifest.json') -Algorithm SHA256).Hash.ToLowerInvariant() }
 }
+function Get-AgentVTaskCompletionDecision {
+    param([DateTime]$PriorRunUtc,[DateTime]$MinimumRunUtc,[DateTime]$ObservedRunUtc,[int]$State,[long]$Result,[int]$Instances)
+    if($PriorRunUtc.Kind -ne [DateTimeKind]::Utc -or $MinimumRunUtc.Kind -ne [DateTimeKind]::Utc -or $ObservedRunUtc.Kind -ne [DateTimeKind]::Utc){return 'pending'}
+    # Task Scheduler records whole seconds. Require a changed run at or after
+    # this request's whole-second boundary, never a previous successful result.
+    if($ObservedRunUtc -le $PriorRunUtc -or $ObservedRunUtc -lt $MinimumRunUtc -or $State -ne 3 -or $Instances -ne 0){return 'pending'}
+    if($Result -ne 0){return 'failed'}
+    return 'ready'
+}
 function Get-AgentVTaskObservation {
     param($Task,$Info,$Scheduler)
     $instances=-1;$comLastRun=$null;$comLastResult=$null
@@ -247,21 +256,28 @@ function Ensure-AgentVRecoveryTask {
     $task=ScheduledTasks\Get-ScheduledTask -TaskName $script:Paths.Task
     $info=ScheduledTasks\Get-ScheduledTaskInfo -TaskName $script:Paths.Task
     $probe=[ordered]@{schema='acornops.agentv-usability-probe.v1';id=[Guid]::NewGuid().ToString();registrationState=[string]$registration.State;before=(Get-AgentVTaskObservation $task $info $scheduler);first=$null;final=$null;elapsedMs=0;observedFreshRun=$false}
-    $before=(Get-Date).AddSeconds(-1);$probe.requestedUtc=[DateTimeOffset]::UtcNow.ToString('o');$probe.thresholdLocal=$before.ToString('o')
+    $priorRunUtc=$scheduler.GetFolder('\').GetTask($script:Paths.Task).LastRunTime.ToUniversalTime()
+    $requestUtc=[DateTime]::UtcNow;$minimumRunUtc=$requestUtc.AddTicks(-($requestUtc.Ticks % [TimeSpan]::TicksPerSecond))
+    $probe.requestedUtc=$requestUtc.ToString('o');$probe.thresholdLocal=$minimumRunUtc.ToLocalTime().ToString('o')
     try{Write-AgentVDurableJson -Path $probePath -Value $probe}catch{}
     ScheduledTasks\Start-ScheduledTask -TaskName $script:Paths.Task
-    $clock=[Diagnostics.Stopwatch]::StartNew()
+    $clock=[Diagnostics.Stopwatch]::StartNew();$decision='pending'
     try {
         do {
             Start-Sleep -Milliseconds 250
             $task=ScheduledTasks\Get-ScheduledTask -TaskName $script:Paths.Task
             $info=ScheduledTasks\Get-ScheduledTaskInfo -TaskName $script:Paths.Task
             if($null -eq $probe.first){$probe.first=Get-AgentVTaskObservation $task $info $scheduler}
-            if ($info.LastRunTime -ge $before -and $task.State -ne 'Running') { if ($info.LastTaskResult -ne 0) { throw 'SYSTEM recovery launcher failed its usability check.' }; break }
+            # The Server2022 CIM provider can retain an earlier LastRunTime.
+            # Query the registered task's COM state/result directly instead.
+            $registered=$scheduler.GetFolder('\').GetTask($script:Paths.Task)
+            $decision=Get-AgentVTaskCompletionDecision -PriorRunUtc $priorRunUtc -MinimumRunUtc $minimumRunUtc -ObservedRunUtc $registered.LastRunTime.ToUniversalTime() -State ([int]$registered.State) -Result ([long]$registered.LastTaskResult) -Instances ([int]$registered.GetInstances(0).Count)
+            if($decision -eq 'failed'){[Console]::Error.WriteLine('AgentV recovery task failure stage=usability native='+[long]$registered.LastTaskResult);throw 'SYSTEM recovery launcher failed its usability check.'}
+            if($decision -eq 'ready'){break}
             if ($clock.Elapsed.TotalSeconds -gt 30) { throw 'SYSTEM recovery task did not complete its usability check.' }
         } while ($true)
     } finally {
-        $probe.final=Get-AgentVTaskObservation $task $info $scheduler;$probe.elapsedMs=$clock.ElapsedMilliseconds;$probe.observedFreshRun=$info.LastRunTime -ge $before
+        $probe.final=Get-AgentVTaskObservation $task $info $scheduler;$probe.elapsedMs=$clock.ElapsedMilliseconds;$probe.observedFreshRun=$decision -eq 'ready'
         # Observational only, never ownership/readiness authority.
         try{Write-AgentVDurableJson -Path $probePath -Value $probe}catch{}
     }
