@@ -7,15 +7,40 @@ $script:Paths = Get-AgentVPaths
 $script:Sc = Join-Path ([Environment]::SystemDirectory) 'sc.exe'
 $script:PowerShell = Join-Path ([Environment]::SystemDirectory) 'WindowsPowerShell\v1.0\powershell.exe'
 
+function ConvertTo-AgentVNativeArgument {
+    param([string]$Value)
+    # Serialize one argument for the Windows native argv parser. There is no
+    # shell; embedded quotes and trailing backslashes must survive PS5.1.
+    $text=[Text.StringBuilder]::new();$null=$text.Append('"');$slashes=0
+    foreach($character in $Value.ToCharArray()) {
+        if($character -eq '\'){$slashes++;continue}
+        if($character -eq '"'){$null=$text.Append(('\' * ($slashes*2+1)));$null=$text.Append('"')}
+        else {$null=$text.Append(('\' * $slashes));$null=$text.Append($character)}
+        $slashes=0
+    }
+    $null=$text.Append(('\' * ($slashes*2)));$null=$text.Append('"')
+    return $text.ToString()
+}
 function Invoke-AgentVSc {
     param([string[]]$Arguments)
-    & $script:Sc @Arguments | Out-Null
-    if ($LASTEXITCODE -ne 0) {
-        $code=$LASTEXITCODE;$verb=$Arguments[0]
-        if ($verb -notin @('create','config','description','sidtype','failure','failureflag','delete')) { $verb='other' }
-        [Console]::Error.WriteLine('AgentV SCM failure operation='+$verb+' native='+[int]$code)
-        throw 'AgentV SCM operation failed.'
-    }
+    if($Arguments.Count -lt 2 -or $Arguments[1] -cne 'AcornOpsAgentV' -or $Arguments[0] -notin @('create','config','description','sidtype','failure','failureflag','delete')) { throw 'Unsupported fixed AgentV SCM operation.' }
+    $start=[Diagnostics.ProcessStartInfo]::new()
+    $start.FileName=$script:Sc
+    $start.Arguments=(@($Arguments | ForEach-Object {ConvertTo-AgentVNativeArgument $_}) -join ' ')
+    $start.UseShellExecute=$false;$start.CreateNoWindow=$true
+    $start.RedirectStandardOutput=$true;$start.RedirectStandardError=$true
+    $process=[Diagnostics.Process]::Start($start)
+    try {
+        $stdout=$process.StandardOutput.ReadToEndAsync();$stderr=$process.StandardError.ReadToEndAsync()
+        if(-not $process.WaitForExit(15000)){$process.Kill();$process.WaitForExit(5000)|Out-Null;throw 'AgentV SCM operation exceeded its deadline.'}
+        $output=$stdout.GetAwaiter().GetResult();$errors=$stderr.GetAwaiter().GetResult()
+        if($output.Length -gt 65536 -or $errors.Length -gt 65536){throw 'AgentV SCM diagnostic output exceeded its bound.'}
+        $code=$process.ExitCode
+        if ($code -ne 0) {
+            [Console]::Error.WriteLine('AgentV SCM failure operation='+$Arguments[0]+' native='+[int]$code)
+            throw 'AgentV SCM operation failed.'
+        }
+    } finally {$process.Dispose()}
 }
 function Assert-AgentVAdministrator {
     $identity = [Security.Principal.WindowsIdentity]::GetCurrent()
