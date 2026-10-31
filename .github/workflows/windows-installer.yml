@@ -34,6 +34,9 @@ jobs:
       - name: Preserve ownership across concurrent fresh initialization
         shell: powershell
         run: ./scripts/windows-tests/installation-ownership-tests.ps1 -AllowDisposableCi
+      - name: Resolve fixed service SID without SCM registration
+        shell: powershell
+        run: ./scripts/windows-tests/service-sid-tests.ps1 -AllowDisposableCi
       - name: Exercise recovery state decisions
         shell: powershell
         run: ./scripts/windows-tests/recovery-decision-tests.ps1
