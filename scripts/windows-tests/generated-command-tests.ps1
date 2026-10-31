@@ -21,7 +21,7 @@ foreach($case in $fixture.cases){
     $agentvInstaller={
         [CmdletBinding()]
         param([string]$ReleaseBaseUrl,[string]$PlatformUrl,[string]$TargetId,[string]$EnrollmentToken,[switch]$ReplaceCredential)
-        [pscustomobject]@{releaseBaseUrl=$ReleaseBaseUrl;platformUrl=$PlatformUrl;targetId=$TargetId;enrollmentToken=$EnrollmentToken;replaceCredential=[bool]$ReplaceCredential}
+        [pscustomobject]@{releaseBaseUrl=$ReleaseBaseUrl;platformUrl=$PlatformUrl;targetId=$TargetId;enrollmentToken=[string]$EnrollmentToken;replaceCredential=[bool]$ReplaceCredential}
     }
     $bound=& ([ScriptBlock]::Create($invocations[0].Extent.Text))
     foreach($field in @('releaseBaseUrl','platformUrl','targetId','enrollmentToken','replaceCredential')){
