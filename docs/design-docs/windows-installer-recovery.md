@@ -39,6 +39,11 @@ Source: control-plane `src/controllers/agentv-installation-controller.ts` and
 - One exclusive installer/recovery lock under a protected fixed parent; no lock
   or recovery authority in user-controlled temp. Refuse an unrelated existing
   service/task; do not commandeer it. Revalidate durable input on recovery.
+- Publish a new owner identity only while holding that lock and only if no owner
+  exists. Read and validate the authoritative owner under the same lock. A stale
+  absent-root observation cannot authorize replacing a concurrent winner's owner,
+  even after the winner releases its lock. Initialization failure releases the
+  lock without changing an existing owner; an unowned existing root is refused.
 - Stage immutable versioned runtime beneath Program Files. Keep protected JSON
   config, transaction journal and bounded state/logs beneath ProgramData.
   Filesystem roots come from OS folder APIs, not caller environment overrides.

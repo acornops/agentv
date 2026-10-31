@@ -41,6 +41,19 @@ try{
     if(-not $winner.WaitForExit(10000) -or $null -eq $winner.ExitCode -or $winner.ExitCode -ne 0){throw 'Winning owner did not complete.'}
     if((Invoke-AgentVRecovery) -cne 'prepared'){throw 'Subsequent recovery did not retain consistent prepared ownership.'}
     Write-Output 'Concurrent fresh installation preserves owner and journal identity; actual prepared recovery accepts ownership.'
+    # A validation failure after acquiring ownership must release the lock and
+    # preserve the rejected owner, never repair or replace it implicitly.
+    Write-AgentVDurableJson -Path $paths.Owner -Value @{schema='invalid';id=$owner.id}
+    $rejected=$false
+    try{& $module {$lease=Enter-AgentVInstallationOwner;$lease.Lock.Dispose()}}catch{$rejected=$true}
+    if(-not $rejected -or (Read-AgentVJson -Path $paths.Owner -Secret).schema -cne 'invalid'){throw 'Invalid owner was accepted or changed.'}
+    $released=Enter-AgentVLock -Path $paths.Lock;$released.Dispose()
+    Remove-Item -LiteralPath $paths.Owner -Force
+    $before=(Get-FileHash $paths.Journal -Algorithm SHA256).Hash
+    $rejected=$false
+    try{& $module {$lease=Enter-AgentVInstallationOwner;$lease.Lock.Dispose()}}catch{$rejected=$true}
+    if(-not $rejected -or (Test-Path $paths.Owner) -or (Get-FileHash $paths.Journal -Algorithm SHA256).Hash -cne $before){throw 'Unowned existing root was adopted or changed.'}
+    Write-Output 'Initialization validation releases its lock and refuses an existing root without ownership.'
 }finally{
     foreach($process in $script:CiProcesses){if(-not $process.HasExited){$process.Kill();$process.WaitForExit(5000)|Out-Null};$process.Dispose()}
     if($owned){if(Test-Path $paths.Root){Remove-Item -LiteralPath $paths.Root -Recurse -Force};if(-not $parentExisted -and (Test-Path $parent)){[IO.Directory]::Delete($parent)};Remove-Item -LiteralPath $work -Recurse -Force}

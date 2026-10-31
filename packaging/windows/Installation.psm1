@@ -432,12 +432,16 @@ function Enter-AgentVInstallationOwner {
         if (Get-Service AcornOpsAgentV -ErrorAction SilentlyContinue) { throw 'Refusing an unrelated preexisting service.' }
         if (ScheduledTasks\Get-ScheduledTask -TaskName $script:Paths.Task -ErrorAction SilentlyContinue) { throw 'Refusing an unrelated preexisting recovery task.' }
         New-AgentVProtectedDirectory $script:Paths.Root
-        Write-AgentVDurableJson -Path $script:Paths.Owner -Value @{schema='acornops.agentv-windows-owner.v1';id=[Guid]::NewGuid().ToString()}
     }
-    $owner=Read-AgentVJson -Path $script:Paths.Owner -Secret
-    if ($owner.schema -cne 'acornops.agentv-windows-owner.v1' -or $owner.id -notmatch '^[0-9a-f-]{36}$') { throw 'Invalid installation ownership marker.' }
     $lock=Enter-AgentVLock -Path $script:Paths.Lock
-    return [pscustomobject]@{ Owner=$owner; Lock=$lock }
+    try {
+        # Another initializer may have published its identity after our absent
+        # root check, even if it has already released the lock. Never replace it.
+        if (-not (Test-Path -LiteralPath $script:Paths.Owner)) { Write-AgentVDurableJson -Path $script:Paths.Owner -Value @{schema='acornops.agentv-windows-owner.v1';id=[Guid]::NewGuid().ToString()} }
+        $owner=Read-AgentVJson -Path $script:Paths.Owner -Secret
+        if ($owner.schema -cne 'acornops.agentv-windows-owner.v1' -or $owner.id -notmatch '^[0-9a-f-]{36}$') { throw 'Invalid installation ownership marker.' }
+        return [pscustomobject]@{ Owner=$owner; Lock=$lock }
+    } catch { $lock.Dispose(); throw }
 }
 function Invoke-AgentVInstallation {
     param([string]$PackageDirectory,[string]$Version,[string]$PlatformUrl,[string]$TargetId,[string]$EnrollmentToken,[switch]$ReplaceCredential,[string]$NodePath,[string]$AdditionalCaBundleFile)
