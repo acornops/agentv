@@ -16,6 +16,16 @@ describe('fixed Windows collectors', () => {
     expect(collectorEnvironment('C:\\Windows\\System32')).toEqual({ SystemRoot: 'C:\\Windows', WINDIR: 'C:\\Windows', PATH: 'C:\\Windows\\System32;C:\\Windows\\System32\\WindowsPowerShell\\v1.0', PSModulePath: 'C:\\Windows\\System32\\WindowsPowerShell\\v1.0\\Modules' });
     for (const script of Object.values(scripts)) expect(script).not.toMatch(/Invoke-Expression|iex |-Command \$/i);
   });
+  it('uses only .NET primitives before explicitly reading JSON stdin', () => {
+    for (const id of Object.keys(scripts) as Array<keyof typeof scripts>) {
+      const command = collectorCommand(id, {});
+      const program = Buffer.from(command.args.at(-1)!, 'base64').toString('utf16le');
+      const initialization = program.slice(0, program.indexOf('[Console]::In.ReadToEnd()'));
+      expect(initialization).not.toContain('New-Object');
+      expect(initialization).toContain('[System.Text.UTF8Encoding]::new($false)');
+      expect(program.indexOf('ConvertFrom-Json')).toBeGreaterThan(program.indexOf('[Console]::In.ReadToEnd()'));
+    }
+  });
   it('rejects malformed results and reports denied/partial data without manufacturing healthy evidence', () => {
     expect(() => parseCollectorResult('not json')).toThrow('invalid');
     expect(() => parseCollectorResult('{"items":[],"truncated":false,"status":"unexpected"}')).toThrow('invalid');
