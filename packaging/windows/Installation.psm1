@@ -231,12 +231,6 @@ function Get-AgentVTaskCompletionDecision {
     if($Result -ne 0){return 'failed'}
     return 'ready'
 }
-function Get-AgentVTaskObservation {
-    param($Task,$Info,$Scheduler)
-    $instances=-1;$comLastRun=$null;$comLastResult=$null
-    try{$registered=$Scheduler.GetFolder('\').GetTask($script:Paths.Task);$instances=[int]$registered.GetInstances(0).Count;$comLastRun=$registered.LastRunTime.ToString('o');$comLastResult=[long]$registered.LastTaskResult}catch{}
-    return [ordered]@{state=[string]$Task.State;lastResult=[long]$Info.LastTaskResult;lastRun=$Info.LastRunTime.ToString('o');lastKind=[string]$Info.LastRunTime.Kind;instances=$instances;comLastRun=$comLastRun;comLastResult=$comLastResult}
-}
 function Ensure-AgentVRecoveryTask {
     param($Journal)
     $null = Assert-AgentVOwnedTask -OwnerId $Journal.ownerId
@@ -247,40 +241,25 @@ function Ensure-AgentVRecoveryTask {
     $retry = ScheduledTasks\New-ScheduledTaskTrigger -Once -At ((Get-Date).AddMinutes(5)) -RepetitionInterval ([TimeSpan]::FromMinutes(5))
     $principal = ScheduledTasks\New-ScheduledTaskPrincipal -UserId 'SYSTEM' -LogonType ServiceAccount -RunLevel Highest
     $settings = ScheduledTasks\New-ScheduledTaskSettingsSet -MultipleInstances IgnoreNew -StartWhenAvailable -ExecutionTimeLimit ([TimeSpan]::FromMinutes(10))
-    $registration = ScheduledTasks\Register-ScheduledTask -TaskName $script:Paths.Task -Action $action -Trigger @($startup,$retry) -Principal $principal -Settings $settings -Description ('AcornOps AgentV recovery '+$Journal.ownerId) -Force
+    $null = ScheduledTasks\Register-ScheduledTask -TaskName $script:Paths.Task -Action $action -Trigger @($startup,$retry) -Principal $principal -Settings $settings -Description ('AcornOps AgentV recovery '+$Journal.ownerId) -Force
     $scheduler = New-Object -ComObject Schedule.Service; $scheduler.Connect()
     $scheduler.GetFolder('\').GetTask($script:Paths.Task).SetSecurityDescriptor('D:P(A;;FA;;;SY)(A;;FA;;;BA)',0)
     $null = Assert-AgentVOwnedTask -OwnerId $Journal.ownerId
     # No active marker exists yet: a real SYSTEM run must load the fixed launcher and no-op safely.
-    $probePath=Join-Path $script:Paths.Maintenance 'usability-probe.json'
-    $task=ScheduledTasks\Get-ScheduledTask -TaskName $script:Paths.Task
-    $info=ScheduledTasks\Get-ScheduledTaskInfo -TaskName $script:Paths.Task
-    $probe=[ordered]@{schema='acornops.agentv-usability-probe.v1';id=[Guid]::NewGuid().ToString();registrationState=[string]$registration.State;before=(Get-AgentVTaskObservation $task $info $scheduler);first=$null;final=$null;elapsedMs=0;observedFreshRun=$false}
     $priorRunUtc=$scheduler.GetFolder('\').GetTask($script:Paths.Task).LastRunTime.ToUniversalTime()
     $requestUtc=[DateTime]::UtcNow;$minimumRunUtc=$requestUtc.AddTicks(-($requestUtc.Ticks % [TimeSpan]::TicksPerSecond))
-    $probe.requestedUtc=$requestUtc.ToString('o');$probe.thresholdLocal=$minimumRunUtc.ToLocalTime().ToString('o')
-    try{Write-AgentVDurableJson -Path $probePath -Value $probe}catch{}
     ScheduledTasks\Start-ScheduledTask -TaskName $script:Paths.Task
     $clock=[Diagnostics.Stopwatch]::StartNew();$decision='pending'
-    try {
-        do {
-            Start-Sleep -Milliseconds 250
-            $task=ScheduledTasks\Get-ScheduledTask -TaskName $script:Paths.Task
-            $info=ScheduledTasks\Get-ScheduledTaskInfo -TaskName $script:Paths.Task
-            if($null -eq $probe.first){$probe.first=Get-AgentVTaskObservation $task $info $scheduler}
-            # The Server2022 CIM provider can retain an earlier LastRunTime.
-            # Query the registered task's COM state/result directly instead.
-            $registered=$scheduler.GetFolder('\').GetTask($script:Paths.Task)
-            $decision=Get-AgentVTaskCompletionDecision -PriorRunUtc $priorRunUtc -MinimumRunUtc $minimumRunUtc -ObservedRunUtc ($registered.LastRunTime.ToUniversalTime()) -State ([int]$registered.State) -Result ([long]$registered.LastTaskResult) -Instances ([int]$registered.GetInstances(0).Count)
-            if($decision -eq 'failed'){[Console]::Error.WriteLine('AgentV recovery task failure stage=usability native='+[long]$registered.LastTaskResult);throw 'SYSTEM recovery launcher failed its usability check.'}
-            if($decision -eq 'ready'){break}
-            if ($clock.Elapsed.TotalSeconds -gt 30) { throw 'SYSTEM recovery task did not complete its usability check.' }
-        } while ($true)
-    } finally {
-        $probe.final=Get-AgentVTaskObservation $task $info $scheduler;$probe.elapsedMs=$clock.ElapsedMilliseconds;$probe.observedFreshRun=$decision -eq 'ready'
-        # Observational only, never ownership/readiness authority.
-        try{Write-AgentVDurableJson -Path $probePath -Value $probe}catch{}
-    }
+    do {
+        Start-Sleep -Milliseconds 250
+        # The Server2022 CIM provider can retain an earlier LastRunTime.
+        # Query the registered task's COM state/result directly instead.
+        $registered=$scheduler.GetFolder('\').GetTask($script:Paths.Task)
+        $decision=Get-AgentVTaskCompletionDecision -PriorRunUtc $priorRunUtc -MinimumRunUtc $minimumRunUtc -ObservedRunUtc ($registered.LastRunTime.ToUniversalTime()) -State ([int]$registered.State) -Result ([long]$registered.LastTaskResult) -Instances ([int]$registered.GetInstances(0).Count)
+        if($decision -eq 'failed'){[Console]::Error.WriteLine('AgentV recovery task failure stage=usability native='+[long]$registered.LastTaskResult);throw 'SYSTEM recovery launcher failed its usability check.'}
+        if($decision -eq 'ready'){break}
+        if ($clock.Elapsed.TotalSeconds -gt 30) { throw 'SYSTEM recovery task did not complete its usability check.' }
+    } while ($true)
     Save-AgentVJournal -Journal $Journal -Phase 'recovery-owner-ready'
 }
 function Finish-AgentVTransaction {

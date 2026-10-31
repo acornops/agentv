@@ -93,41 +93,6 @@ try {
         if($null -ne $task) {
             $info=ScheduledTasks\Get-ScheduledTaskInfo -TaskName AcornOpsAgentVRecovery
             $evidence.taskAtFailure=@{state=[string]$task.State;lastResult=[long]$info.LastTaskResult}
-            # Diagnostic ceiling only. Preserve the original failed assertion and
-            # let the actual SYSTEM task finish before owned-resource cleanup.
-            $diagnosticClock=[Diagnostics.Stopwatch]::StartNew()
-            while($task.State -eq 'Running' -and $diagnosticClock.Elapsed.TotalSeconds -lt 60){Start-Sleep -Milliseconds 250;$task=ScheduledTasks\Get-ScheduledTask -TaskName AcornOpsAgentVRecovery}
-            $info=ScheduledTasks\Get-ScheduledTaskInfo -TaskName AcornOpsAgentVRecovery
-            $evidence.taskAfterDiagnostic=@{state=[string]$task.State;lastResult=[long]$info.LastTaskResult;waitMs=$diagnosticClock.ElapsedMilliseconds}
-        }
-        $requestedProbe=$null
-        $probePath=Join-Path $paths.Maintenance 'usability-probe.json'
-        if(Test-Path -LiteralPath $probePath){try{
-            $probe=Read-AgentVJson -Path $probePath -Limit 8192 -Secret
-            if($probe.schema -ceq 'acornops.agentv-usability-probe.v1'){
-                $requestedProbe=[DateTimeOffset]::Parse($probe.requestedUtc)
-                $safeProbe=@{requestedUtc=$requestedProbe.ToString('o');thresholdLocal=[DateTime]::Parse($probe.thresholdLocal).ToString('o');elapsedMs=[long]$probe.elapsedMs;observedFreshRun=($probe.observedFreshRun -eq $true)}
-                foreach($name in @('before','first','final')){
-                    $entry=$probe.$name
-                    if($null -ne $entry -and $entry.state -in @('Unknown','Disabled','Queued','Ready','Running') -and $entry.lastKind -in @('Unspecified','Utc','Local')){
-                        $safeProbe[$name]=@{state=$entry.state;lastKind=$entry.lastKind;lastRun=[DateTime]::Parse($entry.lastRun).ToString('o');lastResult=[long]$entry.lastResult;instances=[int]$entry.instances}
-                        if($null -ne $entry.comLastRun){$safeProbe[$name].comLastRun=[DateTime]::Parse($entry.comLastRun).ToString('o');$safeProbe[$name].comLastResult=[long]$entry.comLastResult}
-                    }
-                }
-                if($probe.registrationState -in @('Unknown','Disabled','Queued','Ready','Running')){$safeProbe.registrationState=$probe.registrationState}
-                $evidence.usabilityProbe=$safeProbe
-            }
-        }catch{}}
-        $timingPath=Join-Path $paths.Maintenance 'launcher-timing.json'
-        if(Test-Path -LiteralPath $timingPath){
-            try {
-                $timing=Read-AgentVJson -Path $timingPath -Limit 2048 -Secret
-                if($null -ne $task -and [DateTimeOffset]::Parse($timing.startedAt).UtcDateTime -ge $info.LastRunTime.ToUniversalTime().AddSeconds(-2) -and $timing.schema -ceq 'acornops.agentv-recovery-timing.v1' -and $timing.stage -in @('bootstrap','release-tree','package','worker','finished')){
-                    $safe=@{stage=$timing.stage;workerSucceeded=($timing.workerSucceeded -eq $true);startedUtc=[DateTimeOffset]::Parse($timing.startedAt).ToString('o');matchesRequestedProbe=($null -ne $requestedProbe -and [DateTimeOffset]::Parse($timing.startedAt) -ge $requestedProbe.AddSeconds(-1))}
-                    foreach($name in @('bootstrapMs','treeMs','packageMs','workerMs','totalMs')){if($timing.$name -isnot [ValueType] -or $timing.$name -lt 0 -or $timing.$name -gt 900000){throw 'Invalid diagnostic duration'};$safe[$name]=[long]$timing.$name}
-                    $evidence.launcherTiming=$safe
-                }
-            }catch{}
         }
     }
     Json-Ci (Join-Path $artifact 'native-evidence.json') $evidence
