@@ -257,3 +257,31 @@ systemctl stop acornops-agentv-actions.service
 The action socket remains enabled and starts the selected helper on the next
 request. Configuration, action policy, ledger, and prior releases are preserved
 by both upgrade and uninstall.
+
+## Windows read runtime boundary
+
+Windows uses an explicit Windows/SCM configuration; Linux/systemd remains the
+default. Windows writes are disabled locally regardless of remote policy.
+Read-only native collection is currently limited to Windows Server 2022/2025
+x64 and Node 22/24. Synthetic mock data is development-only and does not qualify
+host permissions or service installation. See the
+[Windows read runtime contract](contracts/windows-read-runtime.md).
+
+`dist/windows-service-entry.js --config <absolute protected JSON path>` is a
+private child entrypoint for the separately reviewed native SCM host. It waits
+for strict newline JSON `{"command":"START","trustedSystemDirectory":"C:\\Windows\\System32"}`
+before importing runtime/config modules. The host supplies the trusted directory
+from OS APIs only after assigning the child to its Job Object. It sends
+`{"command":"STOP"}` for shutdown. STOP during asynchronous startup is retained;
+EOF after START requests shutdown. START has a 10-second deadline, runtime
+startup/shutdown each have a 15-second deadline, lines are capped at 4096 bytes
+and total control input at 8192 bytes. Runtime shutdown is idempotent.
+
+The config is at most 64 KiB and has the strict shape
+`{"version":1,"settings":{"ACORNOPS_AGENT_PLATFORM_URL":"https://...","ACORNOPS_TARGET_ID":"...","ACORNOPS_AGENT_KEY":"..."}}`.
+Only named AgentV settings are projected. The service entry enforces
+Windows/SCM/live/read-only settings; conflicting values, arbitrary keys and
+non-string values fail. Node/runtime/system-directory paths are outside config.
+Protected ACLs, trusted native launch paths, readiness-marker storage, SCM
+hosting and package transactions belong to the native host/installer, which is
+not implemented or qualified by this runtime entry seam.

@@ -49,6 +49,16 @@ describe('loadConfig', () => {
   it('rejects unsupported log levels', () => {
     base({ ACORNOPS_AGENT_LOG_LEVEL: 'verbose' }); expect(() => loadConfig()).toThrow('must be debug, info, warn, or error');
   });
+  it('selects an explicit Windows mock independently of the current OS and refuses writes', () => {
+    base({ ACORNOPS_VM_OS_FAMILY: 'windows', ACORNOPS_VM_SERVICE_MANAGER: 'scm', ACORNOPS_VM_COLLECTOR_MODE: 'mock' });
+    expect(loadConfig()).toMatchObject({ osFamily: 'windows', serviceManager: 'scm', allowedLogChannels: [] });
+    process.env.ACORNOPS_AGENT_WRITE_ENABLED = 'true'; expect(() => loadConfig()).toThrow('Windows runtime is read-only');
+  });
+  it('validates explicit OS/manager pairs and local Windows channel allowlists', () => {
+    base(); expect(loadConfig()).toMatchObject({ osFamily: 'linux', serviceManager: 'systemd' });
+    base({ ACORNOPS_VM_OS_FAMILY: 'windows' }); expect(() => loadConfig()).toThrow('OS/service-manager');
+    base({ ACORNOPS_VM_OS_FAMILY: 'windows', ACORNOPS_VM_SERVICE_MANAGER: 'scm', ACORNOPS_VM_ALLOWED_LOG_CHANNELS: 'Security' }); expect(() => loadConfig()).toThrow('Application/System');
+  });
   it('redacts credentials without exposing short values', () => {
     expect(redact('')).toBe('<redacted>'); expect(redact('short')).toBe('<redacted>'); expect(redact('agent-key-12345678')).toBe('agen...5678');
   });

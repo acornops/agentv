@@ -5,6 +5,7 @@ const SERVICE_UNIT = /^[A-Za-z0-9][A-Za-z0-9_.@:-]{0,254}\.service$/;
 export type CollectorMode = 'live' | 'mock';
 
 export interface AgentConfig {
+  osFamily: 'linux' | 'windows'; serviceManager: 'systemd' | 'scm'; allowedLogChannels: Array<'Application' | 'System'>;
   platformUrl: string; targetId: string; agentKey: string; targetType: 'virtual_machine'; connectorVersion: string;
   snapshotIntervalMs: number; minSnapshotIntervalMs: number; maxSnapshotIntervalMs: number;
   maxSnapshotBytes: number; minSnapshotBytes: number; maxRemoteSnapshotBytes: number;
@@ -69,8 +70,12 @@ export function loadConfig(): AgentConfig {
   const allowInsecureTransport = boolEnv('ACORNOPS_AGENT_ALLOW_INSECURE_TRANSPORT');
   const targetType = env('ACORNOPS_AGENT_TARGET_TYPE', 'virtual_machine');
   if (targetType !== 'virtual_machine') throw new Error('ACORNOPS_AGENT_TARGET_TYPE must be virtual_machine');
-  if (env('ACORNOPS_VM_OS_FAMILY', 'linux') !== 'linux') throw new Error('Only Linux hosts are supported');
-  if (env('ACORNOPS_VM_SERVICE_MANAGER', 'systemd') !== 'systemd') throw new Error('Only systemd hosts are supported');
+  const osFamily = env('ACORNOPS_VM_OS_FAMILY', 'linux');
+  const serviceManager = env('ACORNOPS_VM_SERVICE_MANAGER', 'systemd');
+  if (!((osFamily === 'linux' && serviceManager === 'systemd') || (osFamily === 'windows' && serviceManager === 'scm'))) throw new Error('Invalid OS/service-manager pair');
+  const channels = csvEnv('ACORNOPS_VM_ALLOWED_LOG_CHANNELS');
+  if (channels.some((channel) => channel !== 'Application' && channel !== 'System')) throw new Error('Only Application/System log channels are supported');
+  const allowedLogChannels = channels as Array<'Application' | 'System'>;
   const collectorMode = env('ACORNOPS_VM_COLLECTOR_MODE', 'live');
   if (collectorMode !== 'live' && collectorMode !== 'mock') throw new Error('ACORNOPS_VM_COLLECTOR_MODE must be live or mock');
   const additionalCaBundleFile = process.env.ACORNOPS_AGENT_ADDITIONAL_CA_BUNDLE_FILE?.trim() || undefined;
@@ -89,6 +94,7 @@ export function loadConfig(): AgentConfig {
   const agentKey = env('ACORNOPS_AGENT_KEY');
   const writeEnabled = boolEnv('ACORNOPS_AGENT_WRITE_ENABLED');
   const mockActionsEnabled = boolEnv('ACORNOPS_AGENT_MOCK_ACTIONS_ENABLED');
+  if (osFamily === 'windows' && (writeEnabled || mockActionsEnabled)) throw new Error('Windows runtime is read-only');
   if (mockActionsEnabled && (collectorMode !== 'mock' || !writeEnabled)) {
     throw new Error('ACORNOPS_AGENT_MOCK_ACTIONS_ENABLED requires mock collector mode and ACORNOPS_AGENT_WRITE_ENABLED=true');
   }
@@ -97,6 +103,7 @@ export function loadConfig(): AgentConfig {
   if (agentKey.length > 4096) throw new Error('ACORNOPS_AGENT_KEY exceeds 4096 characters');
   if (!helperSocketPath.startsWith('/') || helperSocketPath.length > 4096) throw new Error('ACORNOPS_AGENT_ACTIONS_SOCKET must be an absolute path');
   return {
+    osFamily, serviceManager, allowedLogChannels,
     platformUrl: platformUrl(allowInsecureTransport), targetId, agentKey, targetType, connectorVersion: packageVersion(),
     snapshotIntervalMs: intEnv('ACORNOPS_AGENT_SNAPSHOT_INTERVAL_MS', 60_000, minSnapshotIntervalMs, maxSnapshotIntervalMs), minSnapshotIntervalMs, maxSnapshotIntervalMs,
     maxSnapshotBytes: intEnv('ACORNOPS_AGENT_MAX_SNAPSHOT_BYTES', 1024 * 1024, minSnapshotBytes, maxRemoteSnapshotBytes), minSnapshotBytes, maxRemoteSnapshotBytes,

@@ -47,3 +47,5 @@ This `docs/` tree is the repository-local system of record for agent-readable de
 - [Security Model](/docs/security-model.md)
 - [References](/docs/references/index.md)
 - [Generated Artifacts](/docs/generated/README.md)
+
+- [Windows read runtime contract](contracts/windows-read-runtime.md): isolated native schemas, snapshot and collector qualification.

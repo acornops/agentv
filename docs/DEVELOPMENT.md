@@ -126,3 +126,27 @@ Update these docs when their surfaces change:
 Keep `README.md`, `AGENTS.md`, `ARCHITECTURE.md`, `docs/index.md`, this file,
 and `docs/OPERATIONS.md` in sync when changing repo behavior.
 `npm run harness:check` enforces the required structure.
+
+## Windows read runtime development
+
+Select `ACORNOPS_VM_OS_FAMILY=windows` and
+`ACORNOPS_VM_SERVICE_MANAGER=scm` together. `ACORNOPS_VM_COLLECTOR_MODE=mock`
+uses deterministic synthetic Windows data on any OS; it is not native evidence.
+Writes and mock actions are rejected for Windows. Optional
+`ACORNOPS_VM_ALLOWED_LOG_CHANNELS=Application,System` enables only those local
+event channels; the default is no logs. Linux environment defaults are unchanged.
+
+On a disposable Windows Server 2022/2025 x64 runner with Node 22/24:
+
+```powershell
+npm ci
+npm run build
+npx vitest run src/config.spec.ts src/windows-runtime.spec.ts src/windows-service-entry.spec.ts src/windows
+node scripts/windows-collector-smoke.mjs
+```
+
+The additive native collector workflow preserves the existing Ubuntu gates and
+uploads only sanitized structures and provenance. See the
+[Windows read contract](contracts/windows-read-runtime.md) for supported native
+paths, schemas and qualification limits. Packaging and actual service hosting
+remain separate tasks; collector CI does not establish either.
