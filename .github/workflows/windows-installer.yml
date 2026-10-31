@@ -31,6 +31,9 @@ jobs:
       - name: Refuse active marker without its protected journal
         shell: powershell
         run: ./scripts/windows-tests/missing-journal-tests.ps1 -AllowDisposableCi
+      - name: Preserve ownership across concurrent fresh initialization
+        shell: powershell
+        run: ./scripts/windows-tests/installation-ownership-tests.ps1 -AllowDisposableCi
       - name: Exercise recovery state decisions
         shell: powershell
         run: ./scripts/windows-tests/recovery-decision-tests.ps1

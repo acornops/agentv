@@ -425,17 +425,7 @@ function Restore-AgentVPreviousMaintenance {
         $null=Assert-AgentVOwnedTask -OwnerId $Journal.ownerId
     } elseif (-not $Journal.hadTask) { ScheduledTasks\Unregister-ScheduledTask -TaskName $script:Paths.Task -Confirm:$false -ErrorAction SilentlyContinue }
 }
-function Invoke-AgentVInstallation {
-    param([string]$PackageDirectory,[string]$Version,[string]$PlatformUrl,[string]$TargetId,[string]$EnrollmentToken,[switch]$ReplaceCredential,[string]$NodePath,[string]$AdditionalCaBundleFile)
-    Assert-AgentVAdministrator; Assert-AgentVVersion $Version; Assert-AgentVHttpsUrl $PlatformUrl
-    $PlatformUrl=$PlatformUrl.TrimEnd('/')
-    if ($TargetId -notmatch '^[A-Za-z0-9_.-]{1,128}$' -or ($ReplaceCredential -and -not $EnrollmentToken)) { throw 'Invalid Windows installation request.' }
-    $enrollmentId=$null
-    if ($EnrollmentToken) { if ($EnrollmentToken -notmatch '^aev_([0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12})_[A-Za-z0-9_-]{43}$') { throw 'Invalid enrollment token encoding.' }; $enrollmentId=$Matches[1] }
-    $null=Assert-AgentVPackage -Directory $PackageDirectory -Version $Version
-    if (-not $NodePath) { $NodePath=Join-Path ([Environment]::GetFolderPath('ProgramFiles')) 'nodejs\node.exe' }
-    $NodePath=[IO.Path]::GetFullPath($NodePath); Assert-AgentVNode $NodePath
-    if ($AdditionalCaBundleFile) { $AdditionalCaBundleFile=[IO.Path]::GetFullPath($AdditionalCaBundleFile); Assert-AgentVTrustedPath $AdditionalCaBundleFile; Assert-AgentVServiceReadable -Path $AdditionalCaBundleFile }
+function Enter-AgentVInstallationOwner {
     if (Test-Path -LiteralPath $script:Paths.Root) { Assert-AgentVTrustedPath $script:Paths.Root; if (-not (Test-Path -LiteralPath $script:Paths.Owner)) { throw 'Refusing an unrelated preexisting AgentV data directory.' } }
     else {
         if (Test-Path -LiteralPath $script:Paths.Program) { throw 'Refusing an unrelated preexisting AgentV program directory.' }
@@ -447,6 +437,21 @@ function Invoke-AgentVInstallation {
     $owner=Read-AgentVJson -Path $script:Paths.Owner -Secret
     if ($owner.schema -cne 'acornops.agentv-windows-owner.v1' -or $owner.id -notmatch '^[0-9a-f-]{36}$') { throw 'Invalid installation ownership marker.' }
     $lock=Enter-AgentVLock -Path $script:Paths.Lock
+    return [pscustomobject]@{ Owner=$owner; Lock=$lock }
+}
+function Invoke-AgentVInstallation {
+    param([string]$PackageDirectory,[string]$Version,[string]$PlatformUrl,[string]$TargetId,[string]$EnrollmentToken,[switch]$ReplaceCredential,[string]$NodePath,[string]$AdditionalCaBundleFile)
+    Assert-AgentVAdministrator; Assert-AgentVVersion $Version; Assert-AgentVHttpsUrl $PlatformUrl
+    $PlatformUrl=$PlatformUrl.TrimEnd('/')
+    if ($TargetId -notmatch '^[A-Za-z0-9_.-]{1,128}$' -or ($ReplaceCredential -and -not $EnrollmentToken)) { throw 'Invalid Windows installation request.' }
+    $enrollmentId=$null
+    if ($EnrollmentToken) { if ($EnrollmentToken -notmatch '^aev_([0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12})_[A-Za-z0-9_-]{43}$') { throw 'Invalid enrollment token encoding.' }; $enrollmentId=$Matches[1] }
+    $null=Assert-AgentVPackage -Directory $PackageDirectory -Version $Version
+    if (-not $NodePath) { $NodePath=Join-Path ([Environment]::GetFolderPath('ProgramFiles')) 'nodejs\node.exe' }
+    $NodePath=[IO.Path]::GetFullPath($NodePath); Assert-AgentVNode $NodePath
+    if ($AdditionalCaBundleFile) { $AdditionalCaBundleFile=[IO.Path]::GetFullPath($AdditionalCaBundleFile); Assert-AgentVTrustedPath $AdditionalCaBundleFile; Assert-AgentVServiceReadable -Path $AdditionalCaBundleFile }
+    $ownership=Enter-AgentVInstallationOwner
+    $owner=$ownership.Owner; $lock=$ownership.Lock
     try {
         $service=Assert-AgentVOwnedService -OwnerId $owner.id; $task=Assert-AgentVOwnedTask -OwnerId $owner.id
         if (Test-Path -LiteralPath $script:Paths.Marker) { throw 'An unresolved AgentV transaction requires recovery before another installation.' }
