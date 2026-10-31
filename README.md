@@ -193,3 +193,9 @@ against real systemd, journald, procfs, socket inspection, and the privileged
 helper. It covers install, doctor, allowlisted restart, idempotent replay,
 upgrade, rollback, and uninstall preservation. The script intentionally refuses
 to run unless both `CI=true` and `AGENTV_SYSTEMD_SMOKE_ALLOW=true` are present.
+
+Windows read-only runtime development uses explicit Windows/SCM configuration
+and separate native schemas; synthetic mock mode runs on any OS. See the
+[Windows read runtime contract](docs/contracts/windows-read-runtime.md) and
+[development checks](docs/DEVELOPMENT.md). Hosted native collector CI does not
+yet qualify service packaging, reboot recovery or Core/Desktop Experience.

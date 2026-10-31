@@ -10,6 +10,12 @@ import { toolRegistry } from '../tools/registry.js';
 import { WebSocketClient } from '../transport/websocket-client.js';
 import { SnapshotManager } from './snapshot-manager.js';
 
+export interface SnapshotLifecycle { start(intervalMs: number, maxBytes: number): void; stop(): void; }
+export interface RuntimeComposition {
+  kind: 'windows'; logsEnabled: boolean;
+  createSnapshots(send: (payload: Buffer) => boolean): SnapshotLifecycle;
+}
+
 const HANDSHAKE_ID = 'agentv-handshake-v2';
 
 function text(data: WebSocket.RawData): string {
@@ -22,7 +28,9 @@ function text(data: WebSocket.RawData): string {
 /** Authenticate each connection generation before exposing AgentV functionality. */
 export class LifecycleManager {
   private readonly transport: WebSocketClient;
-  private readonly snapshots: SnapshotManager;
+  private readonly snapshots: SnapshotLifecycle;
+  private readonly runtime: RuntimeComposition | undefined;
+  private readonly actions: ActionClient | undefined;
   private running = false;
   private ready = false;
   private generation = 0;
@@ -31,18 +39,26 @@ export class LifecycleManager {
   private helperReady = false;
 
   constructor(
-    private readonly config: AgentConfig, private readonly host: HostAdapter, private readonly actions: ActionClient,
+    private readonly config: AgentConfig, host: HostAdapter | RuntimeComposition, actions: ActionClient | null,
     private readonly router: McpRouter, private readonly logger: Logger, metrics: Observability,
     private readonly sessionState: { authenticated: () => void; disconnected: () => void } = {
       authenticated: () => undefined, disconnected: () => undefined
     },
   ) {
+    this.runtime = 'kind' in host ? host : undefined;
+    this.actions = actions || undefined;
+    if (!this.runtime && !this.actions) throw new Error('Linux lifecycle requires host and actions');
     this.transport = new WebSocketClient(config, logger, metrics);
-    this.snapshots = new SnapshotManager(host, (payload) => this.ready && this.transport.send(payload), logger, metrics);
+    this.snapshots = 'kind' in host ? host.createSnapshots((payload) => this.ready && this.transport.send(payload)) : new SnapshotManager(host, (payload) => this.ready && this.transport.send(payload), logger, metrics);
     this.transport.on('open', () => void this.open());
     this.transport.on('message', (data) => void this.message(data));
     this.transport.on('close', () => this.closed());
     this.transport.on('error', (error) => this.logger.error({ error: error instanceof Error ? error.message : String(error) }, 'WebSocket error'));
+  }
+
+  /** Compose native Windows snapshots while preserving the Linux constructor defaults. */
+  static forWindows(config: AgentConfig, runtime: RuntimeComposition, router: McpRouter, logger: Logger, metrics: Observability, sessionState?: { authenticated: () => void; disconnected: () => void }): LifecycleManager {
+    return new LifecycleManager(config, runtime, null, router, logger, metrics, sessionState);
   }
 
   start(): void { if (this.running) return; this.running = true; this.generation++; this.clearSession(); this.transport.connect(); }
@@ -54,7 +70,7 @@ export class LifecycleManager {
     const generation = this.generation;
     let helperServices: string[] = [];
     let helperReady = false;
-    if (this.config.writeEnabled) {
+    if (!this.runtime && this.config.writeEnabled && this.actions) {
       try {
         const capabilities = await this.actions.capabilities();
         helperReady = capabilities.protocol_version === 1 && capabilities.policy_valid && capabilities.restart_services.length > 0;
@@ -63,8 +79,8 @@ export class LifecycleManager {
     }
     if (!this.running || generation !== this.generation || !this.transport.isOpen()) return;
     this.helperReady = helperReady;
-    const supportedCapabilities = ['read', 'mcp', 'systemd', 'linux'];
-    if (this.config.allowedLogUnits.length > 0) supportedCapabilities.push('logs');
+    const supportedCapabilities = this.runtime ? ['read', 'mcp', 'scm', 'windows'] : ['read', 'mcp', 'systemd', 'linux'];
+    if (this.runtime ? this.runtime.logsEnabled : this.config.allowedLogUnits.length > 0) supportedCapabilities.push('logs');
     if (this.helperReady) supportedCapabilities.push('write', 'restart_service');
     const advertisedTools = toolRegistry.getAll()
       .filter((tool) => tool.capability === 'read' || this.helperReady)
@@ -72,7 +88,7 @@ export class LifecycleManager {
     const handshake = createRequest('lifecycle/handshake', {
       targetId: this.config.targetId, targetType: 'virtual_machine', agentType: 'agentv',
       supportedCapabilities, advertisedTools,
-      hostFeatures: { osFamily: 'linux', serviceManager: 'systemd', helperReachable: this.helperReady, restartServices: helperServices },
+      hostFeatures: this.runtime ? { osFamily: 'windows', serviceManager: 'scm' } : { osFamily: 'linux', serviceManager: 'systemd', helperReachable: this.helperReady, restartServices: helperServices },
     }, HANDSHAKE_ID);
     if (!this.transport.send(JSON.stringify(handshake))) { this.transport.forceReconnect(); return; }
     this.handshakeDeadline = setTimeout(() => { this.logger.warn({}, 'Handshake deadline exceeded'); this.transport.forceReconnect(); }, 10_000);
@@ -123,7 +139,7 @@ export class LifecycleManager {
     }
     const compiled = new Set(toolRegistry.getAll().map((tool) => tool.name));
     const allowed = new Set<string>(policy.allowedTools.filter((name: string) => compiled.has(name)));
-    if (this.config.allowedLogUnits.length === 0) allowed.delete('query_logs');
+    if (this.runtime ? !this.runtime.logsEnabled : this.config.allowedLogUnits.length === 0) allowed.delete('query_logs');
     if (!this.config.writeEnabled || !this.helperReady || !policy.writeEnabled) allowed.delete('restart_service');
     this.router.setSessionPolicy({ allowedTools: allowed, writeEnabled: Boolean(policy.writeEnabled && this.helperReady && this.config.writeEnabled), generation: this.generation, targetId: this.config.targetId });
     this.ready = true; this.transport.markReady(); this.snapshots.start(intervalMs, maxBytes); this.startHeartbeat();

@@ -1,0 +1,44 @@
+name: Windows native collectors
+
+on:
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: windows-collectors-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  native-collectors:
+    name: Native collectors (${{ matrix.os }}, Node ${{ matrix.node }})
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [windows-2022, windows-2025]
+        node: [22, 24]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ matrix.node }}
+          cache: npm
+      - run: npm ci
+      - run: npm run build
+      - name: Verify Windows read runtime and service entry gate
+        run: npx vitest run src/config.spec.ts src/windows-runtime.spec.ts src/windows-service-entry.spec.ts src/windows
+      - name: Read native collectors and capture sanitized structural evidence
+        run: node scripts/windows-collector-smoke.mjs
+      - name: Upload structural evidence and runner provenance
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: windows-collectors-${{ matrix.os }}-node${{ matrix.node }}
+          path: artifacts/windows-collectors/native-structure.json
+          if-no-files-found: warn
+          retention-days: 14

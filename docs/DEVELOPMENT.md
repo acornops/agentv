@@ -126,3 +126,60 @@ Update these docs when their surfaces change:
 Keep `README.md`, `AGENTS.md`, `ARCHITECTURE.md`, `docs/index.md`, this file,
 and `docs/OPERATIONS.md` in sync when changing repo behavior.
 `npm run harness:check` enforces the required structure.
+
+## Windows read runtime development
+
+Select `ACORNOPS_VM_OS_FAMILY=windows` and
+`ACORNOPS_VM_SERVICE_MANAGER=scm` together. `ACORNOPS_VM_COLLECTOR_MODE=mock`
+uses deterministic synthetic Windows data on any OS; it is not native evidence.
+Writes and mock actions are rejected for Windows. Optional
+`ACORNOPS_VM_ALLOWED_LOG_CHANNELS=Application,System` enables only those local
+event channels; the default is no logs. Linux environment defaults are unchanged.
+
+On a disposable Windows Server 2022/2025 x64 runner with Node 22/24:
+
+```powershell
+npm ci
+npm run build
+npx vitest run src/config.spec.ts src/windows-runtime.spec.ts src/windows-service-entry.spec.ts src/windows
+node scripts/windows-collector-smoke.mjs
+```
+
+The additive native collector workflow preserves the existing Ubuntu gates and
+uploads only sanitized structures and provenance. See the
+[Windows read contract](contracts/windows-read-runtime.md) for supported native
+paths, schemas and qualification limits. Packaging and actual service hosting
+remain separate tasks; collector CI does not establish either.
+
+Native collector failures retain a sanitized artifact too. Fixed stage markers
+identify PowerShell startup, encoding, stdin decoding and host CIM boundaries;
+only allowlisted stage names, elapsed time, byte counts and stdin/spawn flags
+are reported. Raw stderr and input values are excluded. Collector time/output
+budgets remain unchanged while native timeout causes are investigated.
+
+All native collector cmdlets use fixed, documented module qualification. Native
+causal measurements showed unqualified command discovery took 22–29 seconds,
+while module-qualified Utility commands completed in 0.22–0.27 seconds across
+the hosted 2022/2025 × Node 22/24 matrix. This avoids broad command discovery
+without adding ambient environment variables or increasing the eight-second
+collector budget. The temporary 30-second diagnostic probes were removed after
+that measurement; fixed sanitized failure stages remain available.
+
+## Windows service-host qualification
+
+The additive `Windows native service host` workflow compiles the repository C#
+host with the Windows Framework 4.8 compiler (no NuGet) and exercises SCM on
+Server 2022/2025 x64 with Node 22/24. `scripts/build-windows-host.ps1` writes a
+manifest binding source revision, source checksum, target and binary checksum.
+`scripts/windows-service-host-smoke.ps1 -AllowDisposableCi` requires an elevated,
+disposable GitHub-hosted runner and refuses preexisting service names, users or
+installation roots. It changes real SCM services, ACLs and process trees; never
+run it on a workstation or persistent host. It uses synthetic fixture config,
+then removes only the resources it created. Structural evidence is uploaded as
+`windows-service-host-<runner>-node<major>`.
+
+The suite covers SID access, kernel containment, crash recovery, bounded stop
+and logs, unsafe ACLs and reparse paths. Compilation and native qualification are
+pending until a matching hosted run passes. Transactional installer packaging,
+real reboot and Core/Desktop Experience qualification are separate gates;
+Windows rollout remains disabled.

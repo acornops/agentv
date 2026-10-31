@@ -20,7 +20,7 @@ verify the archive checksum before invoking the packaged systemd installer.
 AgentV connects with `x-connector-version: agentv/<package-version>` and sends
 the fixed-ID `lifecycle/handshake` request with `targetId`,
 `targetType = "virtual_machine"`, `agentType = "agentv"`, supported
-capabilities, and Linux/systemd host features. It exposes no
+capabilities, and required explicit OS/service-manager host features. It exposes no
 tools, snapshots, or heartbeats until the response matches the target and
 contains a non-empty `workspaceId` plus a complete `sessionPolicy`.
 
@@ -109,7 +109,7 @@ enforced by the agent. `get_process` requires a positive integer PID, not zero.
 
 - AgentV remains network-outbound-only and unprivileged.
 - Host commands use fixed executables and structured arguments; caller-supplied shell is prohibited.
-- Journald is the only production log backend, and process environments are never collected.
+- Linux uses journald; Windows uses locally allowlisted Application/System events. Process environments are never collected.
 - Reads and writes are separately bounded; ambiguous writes return `outcome = "unknown"` and are never retryable.
 - `restart_service` crosses privilege only through `/run/acornops-agentv/actions.sock` and an exact root-owned policy.
 
@@ -117,3 +117,33 @@ enforced by the agent. `get_process` requires a positive integer PID, not zero.
 
 Run `npm run validate`, the packaging smoke, live systemd smoke where available,
 and the parent workspace platform contract validation for every contract change.
+
+## Windows backend boundary
+
+The control plane defaults omitted registration/stored identity to Linux/systemd.
+Both handshake identity fields remain required and must match immutable stored
+identity before provisional credential verification. Windows uses
+`osFamily: windows`, `serviceManager: scm`; it is independently gated by
+`AGENTV_WINDOWS_ENABLED` (default false), a pinned
+`AGENTV_WINDOWS_RELEASE_VERSION`, and an HTTPS
+`AGENTV_WINDOWS_RELEASE_BASE_URL`.
+
+Windows enrollment and policy updates permit read-only access. Its backend tool
+ceiling is the eight existing read names: `get_host_summary`, `list_filesystems`,
+`list_processes`, `get_process`, `list_services`, `get_service`, `query_logs`,
+`list_listeners`. Discovery, synchronization, and local/remote-owner dispatch
+reject other names, including `restart_service` falsely advertised as read.
+Linux tool schemas, helper rules, and install commands remain unchanged.
+
+The Windows bootstrap contract is `v<version>/install-agentv.ps1` with
+`-ReleaseBaseUrl`, `-PlatformUrl`, `-TargetId`, optional `-EnrollmentToken` and
+`-ReplaceCredential`. Repair reuses the protected credential. Commands download
+to a fresh temporary `.ps1` file and remove it in `finally`. Native packaging,
+telemetry and host qualification remain prerequisites for enabling rollout.
+
+## Windows native read producer
+
+The additive [Windows read runtime contract](windows-read-runtime.md) defines
+exact native schemas, the separate snapshot discriminator, conservative SCM
+failure evidence and hosted collector qualification. Optional helper/restart
+handshake fields remain optional; both OS identity fields remain required.

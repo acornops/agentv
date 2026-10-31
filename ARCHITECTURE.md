@@ -65,3 +65,15 @@ The main agent is stateless. The helper intentionally persists bounded operation
 ## Validation
 
 Run `npm run validate` before handoff. For contract-sensitive changes, also run `npm run contracts:check` and the workspace platform contract check from the parent workspace when available.
+
+## Windows runtime composition
+
+`src/windows-runtime.ts` selects isolated native or explicitly synthetic Windows
+adapters and eight read tools. `LifecycleManager.forWindows` composes the shared
+authenticated transport with a separate cancellable Windows snapshot lifecycle;
+the Linux constructor, HostAdapter, SnapshotManager, runner and tool contracts
+retain their existing behavior. `src/windows-service-entry.ts` waits for the
+native host's private START gate before dynamic runtime import and retains STOP
+during startup. Native SCM hosting and installer transactions are separate.
+The [Windows contract](docs/contracts/windows-read-runtime.md) specifies native
+fields, conservative service evidence and unqualified platform boundaries.

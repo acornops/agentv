@@ -1,0 +1,15 @@
+{
+  "provenance": { "source": "synthetic", "native_qualification": false, "purpose": "SCM evidence semantics only; not captured from Windows" },
+  "result": {
+    "status": "ok",
+    "truncated": false,
+    "items": [
+      { "name": "SyntheticDemandStopped", "display_name": "Synthetic demand start", "state": "Stopped", "start_mode": "Manual", "process_id": 0, "exit_code": 0, "service_specific_exit_code": null },
+      { "name": "SyntheticNeverStarted", "display_name": "Synthetic never started", "state": "Stopped", "start_mode": "Manual", "process_id": 0, "exit_code": 1077, "service_specific_exit_code": null },
+      { "name": "SyntheticDisabled", "display_name": "Synthetic disabled", "state": "Stopped", "start_mode": "Disabled", "process_id": 0, "exit_code": 1067, "service_specific_exit_code": null },
+      { "name": "SyntheticAborted", "display_name": "Synthetic process aborted", "state": "Stopped", "start_mode": "Auto", "process_id": 0, "exit_code": 1067, "service_specific_exit_code": null },
+      { "name": "SyntheticSpecific", "display_name": "Synthetic service specific", "state": "Stopped", "start_mode": "Manual", "process_id": 0, "exit_code": 1066, "service_specific_exit_code": 42 },
+      { "name": "SyntheticUnknown", "display_name": "Synthetic unknown evidence", "state": "Stopped", "start_mode": null, "process_id": null, "exit_code": null, "service_specific_exit_code": null }
+    ]
+  }
+}

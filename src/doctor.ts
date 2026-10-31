@@ -37,3 +37,11 @@ export async function runDoctor(
   checks.push({ name: 'tls', status: config.platformUrl.startsWith('https://') ? 'ok' : 'degraded', message: config.platformUrl.startsWith('https://') ? 'Secure platform transport configured' : 'Insecure local-development transport configured' });
   return { ok: !checks.some((check) => check.status === 'failed'), checks };
 }
+
+/** Check native Windows evidence without network or write-helper access. */
+export async function runWindowsDoctor(config: AgentConfig, host: import('./windows/types.js').WindowsHost): Promise<{ ok: boolean; checks: Check[] }> {
+  const checks: Check[] = [];
+  try { await host.getHostSummary(); checks.push({ name: 'windows_host', status: 'ok', message: config.collectorMode === 'mock' ? 'Synthetic Windows mock; no native qualification' : 'Windows Server host facts readable' }); } catch { checks.push({ name: 'windows_host', status: 'failed', message: 'Native Windows Server evidence unavailable' }); }
+  checks.push({ name: 'writes', status: config.writeEnabled ? 'failed' : 'ok', message: 'Windows supports read-only access' });
+  return { ok: checks.every((check) => check.status !== 'failed'), checks };
+}
