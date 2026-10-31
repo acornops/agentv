@@ -261,3 +261,25 @@ Shared-configuration review also reproduced a narrow Linux regression: the new
 Windows log-channel parser rejects a Windows-only environment setting that the
 released Linux runtime ignored. Task 7 must fix this with characterization tests
 before final qualification; it is not an accepted residual risk.
+
+The basic native Windows installer lifecycle passed at `25063fb`:
+[installer CI](https://github.com/acornops/agentv/actions/runs/41231100923)
+completed all Server 2022/2025 × Node 22/24 cells, with 12 assertions each and
+artifact revision `e6508339`. Fresh installation, authenticated activation,
+repair preserving credentials and CA, lost-commit replacement, and uninstall
+retaining configuration passed. Native diagnostics isolated a stale Server 2022
+CIM task timestamp; direct COM completion observation corrected the check while
+retaining freshness, successful completion and the 30-second deadline. Expanded
+interruption/recovery cases and independent task 5 review remain pending.
+
+Matching Linux CI and native service-host CI passed. The separate cold collector
+matrix failed both Server 2022 cells at the unchanged eight-second ceiling;
+identical subsequent diagnostic trials ranged from 1.43 to 6.59 seconds. This
+remains unresolved reliability evidence, despite the installer success.
+
+A concurrent full-catalog integration probe completed all 24 read calls across
+the three targets. Explicit schema validation passed 22 results, including all
+eight Windows reads. Both released and updated Linux mocks return full service
+details for `list_services`, exceeding their frozen summary schema. The source
+is unchanged from the release; record this pre-existing mock gap separately
+instead of changing Linux behavior or claiming every schema check passed.
