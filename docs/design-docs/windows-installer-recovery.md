@@ -131,3 +131,24 @@ API outcomes separately from parser mocks. Kill installer/recovery processes at
 durable checkpoints, invoke actual recovery entrypoint, and verify selected
 config/runtime and backend credential generation. Actual machine reboot remains
 unqualified under the user's hosted-CI-only choice.
+
+## Implemented package boundary under qualification
+
+The fixed maintenance launcher is admin/SYSTEM-only, with a protected pointer
+containing constrained immutable version, owner UUID and package-manifest
+SHA-256. It validates bootstrap modules and all selected worker/runtime
+files/ancestors before importing or executing them. Readiness files never supply
+privileged paths. The journal preserves prior maintenance selection and owned
+task XML before replacement; task registration and an actual SYSTEM no-op run
+are required before publishing cutover authority. The versioned worker handles
+enrollment and recovery, while the service host remains unchanged.
+
+A small precompiled installer-only Framework4.8 `AgentV.InstallerNative.dll`
+provides locale-independent operations solely for fixed `AcornOpsAgentV`.
+Package/native manifests bind source and binary hashes before LoadFrom. It uses
+bounded SCM query buffers, validates exact owned account/type/startup/recovery
+policy, and closes native handles deterministically. It is not a service or a
+runtime privilege helper. The worker never compiles code or installs global
+prerequisites. When adopting a previously stopped trusted host, PID0 plus the
+full disabled drain may carry historical crash1067; a stop requested by the
+current owner must instead return clean observable shutdown.

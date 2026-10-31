@@ -183,3 +183,22 @@ and logs, unsafe ACLs and reparse paths. Compilation and native qualification ar
 pending until a matching hosted run passes. Transactional installer packaging,
 real reboot and Core/Desktop Experience qualification are separate gates;
 Windows rollout remains disabled.
+
+## Windows transactional package qualification
+
+`scripts/build-windows-archive.ps1` builds a separate pinned
+`agentv-<version>-windows-x64.zip`, SHA-256 sidecar and version-embedded
+`install-agentv.ps1`. It compiles the host and installer-only Framework4.8 SCM
+interop DLL, stages production dependencies without lifecycle scripts, and
+records source revision and every runtime file checksum. It does not publish a
+release or install Node/.NET prerequisites. Linux release scripts are unchanged.
+
+The additive `Windows installer recovery` workflow runs PowerShell5.1 parsing,
+recovery decision tests, native SCM policy and durable-file tests. Its separate
+Server2022/2025 × Node22/24 installation matrix uses an explicitly authorized
+disposable runner, synthetic credentials, a loopback HTTPS/WebSocket fixture and
+the real packaged host. Initial coverage exercises bootstrap, repair, lost
+replacement commit response and uninstall. Full interruption and upgrade
+qualification is still in progress; do not interpret those initial cases as
+reboot or production rollout qualification. Evidence contains fixed stages,
+assertion names and sanitized numeric failure details, never fixture secrets.

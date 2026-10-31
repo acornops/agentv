@@ -301,3 +301,40 @@ within a further 5 seconds. Child stdout/stderr use 5 MiB current files and thre
 retained rotations each. Sink failure drains/discards data. Hosted native results,
 transactional installation and reboot qualification remain required before any
 Windows onboarding activation.
+
+## Windows installer preview (rollout disabled)
+
+The versioned Windows bootstrap accepts `-ReleaseBaseUrl`, `-PlatformUrl`,
+`-TargetId`, optional `-EnrollmentToken` and `-ReplaceCredential`, matching the
+Windows control-plane instruction builder. Optional `-NodePath` selects an
+already installed trusted Node22/24 x64 runtime; `-AdditionalCaBundleFile`
+selects a trusted readable CA bundle for HTTPS and service transport. Elevated
+x64 PowerShell5.1, Windows Server2022/2025 and enabled Framework4.8 are required.
+No machine prerequisites are installed automatically.
+
+The installer validates prerequisites, archive/package hashes and trusted paths,
+then runs an outbound-free candidate doctor before exchange. Immutable releases
+live under Program Files; protected configuration, journal and lock live under
+ProgramData. The unique service SID can read configuration and write only its
+state/log directories. The fixed `AcornOpsAgentVRecovery` SYSTEM task owns
+interrupted installation recovery; its protected launcher and version/checksum
+selection are installed and exercised before cutover. Transaction secrets and
+backups remain Administrators/SYSTEM-only.
+
+After restoring connectivity, an administrator can invoke the installed fixed
+`%ProgramFiles%\AcornOps\AgentV\maintenance\recover.ps1` using elevated
+PowerShell. Pending/unknown outcomes retain protected recovery state. Automatic
+recovery is limited to twelve attempts, with five-minute triggers plus startup;
+manual recovery resets that bounded attempt count. Each reentry disables the
+owned service and drains queued SCM restarts for a full monotonic65seconds
+before selecting a runtime. A lost exchange response cannot recover the lost
+credential from the existing protocol; the original configuration remains and
+a new token may be needed. Lost commit/rollback responses are resolved through
+authenticated backend status and fresh local authentication evidence.
+
+The same protected launcher accepts `-Uninstall` after transactions are
+resolved. It stops/removes the owned service and recovery task, retaining durable
+configuration and credentials; it does not revoke a backend key. Do not remove
+or edit a pending journal to force progress. Native packaging interruption and
+real reboot qualification remain incomplete; these scripts are preview assets,
+not an enabled installation offer.

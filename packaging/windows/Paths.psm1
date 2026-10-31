@@ -66,10 +66,15 @@ function New-AgentVProtectedDirectory {
 }
 function Write-AgentVDurableJson {
     param([string]$Path, $Value, [string]$ServiceReadSid)
-    $parent = Split-Path $Path -Parent; Assert-AgentVTrustedPath -Path $parent
-    if (Test-Path -LiteralPath $Path) { Assert-AgentVTrustedPath -Path $Path -Secret -ServiceReadSid $ServiceReadSid }
     $bytes = [Text.UTF8Encoding]::new($false).GetBytes(($Value | ConvertTo-Json -Depth 16 -Compress))
     if ($bytes.Length -gt 262144) { throw 'AgentV durable state exceeds its bound.' }
+    Write-AgentVDurableBytes -Path $Path -Bytes $bytes -ServiceReadSid $ServiceReadSid
+}
+function Write-AgentVDurableBytes {
+    param([string]$Path, [byte[]]$Bytes, [string]$ServiceReadSid)
+    $parent = Split-Path $Path -Parent; Assert-AgentVTrustedPath -Path $parent
+    if (Test-Path -LiteralPath $Path) { Assert-AgentVTrustedPath -Path $Path -Secret -ServiceReadSid $ServiceReadSid }
+    if ($Bytes.Length -gt 4194304) { throw 'AgentV durable file exceeds its bound.' }
     $temporary = Join-Path $parent ('.pending-' + [Guid]::NewGuid().ToString('N'))
     try {
         $empty = [IO.File]::Open($temporary,[IO.FileMode]::CreateNew,[IO.FileAccess]::Write,[IO.FileShare]::None); $empty.Dispose()
@@ -107,4 +112,4 @@ function Assert-AgentVHttpsUrl {
     $uri = $null
     if ($Value -notmatch '^[\x21-\x7e]+$' -or $Value -match '[\x22\x27\x60\\]' -or -not [Uri]::TryCreate($Value,[UriKind]::Absolute,[ref]$uri) -or $uri.Scheme -ne 'https' -or $uri.UserInfo -or $uri.Fragment -or $uri.Query) { throw 'AgentV requires a literal HTTPS URL without credentials, query or fragment.' }
 }
-Export-ModuleMember -Function Get-AgentVPaths,Get-AgentVServiceSid,Set-AgentVAcl,Assert-AgentVTrustedPath,New-AgentVProtectedDirectory,Write-AgentVDurableJson,Read-AgentVJson,Enter-AgentVLock,Assert-AgentVHttpsUrl
+Export-ModuleMember -Function Get-AgentVPaths,Get-AgentVServiceSid,Set-AgentVAcl,Assert-AgentVTrustedPath,New-AgentVProtectedDirectory,Write-AgentVDurableJson,Write-AgentVDurableBytes,Read-AgentVJson,Enter-AgentVLock,Assert-AgentVHttpsUrl
