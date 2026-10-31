@@ -348,7 +348,6 @@ function Invoke-AgentVInstallation {
     $enrollmentId=$null
     if ($EnrollmentToken) { if ($EnrollmentToken -notmatch '^aev_([0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12})_[A-Za-z0-9_-]{43}$') { throw 'Invalid enrollment token encoding.' }; $enrollmentId=$Matches[1] }
     $null=Assert-AgentVPackage -Directory $PackageDirectory -Version $Version
-    Import-AgentVInstallerNative -Directory $PackageDirectory -Version $Version
     if (-not $NodePath) { $NodePath=Join-Path ([Environment]::GetFolderPath('ProgramFiles')) 'nodejs\node.exe' }
     $NodePath=[IO.Path]::GetFullPath($NodePath); Assert-AgentVNode $NodePath
     if ($AdditionalCaBundleFile) { $AdditionalCaBundleFile=[IO.Path]::GetFullPath($AdditionalCaBundleFile); Assert-AgentVTrustedPath $AdditionalCaBundleFile; Assert-AgentVServiceReadable -Path $AdditionalCaBundleFile }
@@ -372,6 +371,24 @@ function Invoke-AgentVInstallation {
             Restore-AgentVPreviousMaintenance -Journal $abandoned
             Remove-Item -LiteralPath $script:Paths.Journal -Force
         }
+        New-AgentVProtectedDirectory $script:Paths.Releases
+        $release=Join-Path $script:Paths.Releases $Version
+        if (Test-Path -LiteralPath $release) {
+            $null=Assert-AgentVPackage -Directory $release -Version $Version
+            if ((Get-FileHash (Join-Path $release 'package-manifest.json')).Hash -cne (Get-FileHash (Join-Path $PackageDirectory 'package-manifest.json')).Hash) { throw 'An immutable release cannot be overwritten.' }
+        } else {
+            $staging=Join-Path $script:Paths.Releases ('.stage-'+[Guid]::NewGuid().ToString('N'))
+            try {
+                New-AgentVProtectedDirectory $staging
+                Get-ChildItem -LiteralPath $PackageDirectory -Force | Copy-Item -Destination $staging -Recurse
+                foreach ($file in Get-ChildItem -LiteralPath $staging -Recurse -Force) { Set-AgentVAcl $file.FullName }
+                $null=Assert-AgentVPackage -Directory $staging -Version $Version
+                [IO.Directory]::Move($staging,$release)
+            } finally { if (Test-Path -LiteralPath $staging) { Remove-Item -LiteralPath $staging -Recurse -Force } }
+        }
+        # Framework assemblies stay loaded until process exit. Load only the
+        # validated immutable copy; bootstrap staging must remain removable.
+        Import-AgentVInstallerNative -Directory $release -Version $Version
         $previous=$null; $previousStartType=2; $previousRunning=$true
         if (Test-Path -LiteralPath $script:Paths.Config) {
             if ($null -eq $service -or -not (Test-Path -LiteralPath $script:Paths.Selection)) { throw 'Owned configuration requires explicit service recovery.' }
@@ -388,21 +405,6 @@ function Invoke-AgentVInstallation {
         if ($AdditionalCaBundleFile) { $settings | Add-Member -NotePropertyName ACORNOPS_AGENT_ADDITIONAL_CA_BUNDLE_FILE -NotePropertyValue $AdditionalCaBundleFile -Force }
         $candidate=[pscustomobject]@{version=$Version;node=$NodePath;manifestSha256=(Get-FileHash (Join-Path $PackageDirectory 'package-manifest.json') -Algorithm SHA256).Hash.ToLowerInvariant();config=[pscustomobject]@{version=1;settings=$settings}}
         Assert-AgentVConfig $candidate.config $TargetId $PlatformUrl
-        New-AgentVProtectedDirectory $script:Paths.Releases
-        $release=Join-Path $script:Paths.Releases $Version
-        if (Test-Path -LiteralPath $release) {
-            $null=Assert-AgentVPackage -Directory $release -Version $Version
-            if ((Get-FileHash (Join-Path $release 'package-manifest.json')).Hash -cne (Get-FileHash (Join-Path $PackageDirectory 'package-manifest.json')).Hash) { throw 'An immutable release cannot be overwritten.' }
-        } else {
-            $staging=Join-Path $script:Paths.Releases ('.stage-'+[Guid]::NewGuid().ToString('N'))
-            try {
-                New-AgentVProtectedDirectory $staging
-                Get-ChildItem -LiteralPath $PackageDirectory -Force | Copy-Item -Destination $staging -Recurse
-                foreach ($file in Get-ChildItem -LiteralPath $staging -Recurse -Force) { Set-AgentVAcl $file.FullName }
-                $null=Assert-AgentVPackage -Directory $staging -Version $Version
-                [IO.Directory]::Move($staging,$release)
-            } finally { if (Test-Path -LiteralPath $staging) { Remove-Item -LiteralPath $staging -Recurse -Force } }
-        }
         Test-AgentVCandidateDoctor -Release $release -NodePath $NodePath -Config $candidate.config
         $previousMaintenance=$null
         if (Test-Path -LiteralPath (Join-Path $script:Paths.Maintenance 'worker.json')) { $previousMaintenance=Read-AgentVJson -Path (Join-Path $script:Paths.Maintenance 'worker.json') -Secret }
