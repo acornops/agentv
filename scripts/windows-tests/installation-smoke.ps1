@@ -88,6 +88,30 @@ try {
     if($owned){$svc=CimCmdlets\Get-CimInstance Win32_Service -Filter "Name='AcornOpsAgentV'";if($null -ne $svc){$evidence.service=@{state=$svc.State;exitCode=$svc.ExitCode;serviceExitCode=$svc.ServiceSpecificExitCode}}}
     $hostLog=Join-Path $paths.Logs 'host.log'
     if($owned -and (Test-Path -LiteralPath $hostLog)){ $evidence.hostDiagnostics=@(Get-Content -LiteralPath $hostLog -Tail 32 | Where-Object { $_ -match '^Service startup failed stage=[a-z-]{1,32} hresult=-?[0-9]{1,12} native=-?[0-9]{1,12} trust=[0-9]{1,2} depth=-?[0-9]{1,3} rights=-?[0-9]{1,12} propagation=[0-9]{1,2} principal=[0-9]{1,2}$' }) }
+    if($owned -and $evidence.Contains('failure')) {
+        $task=ScheduledTasks\Get-ScheduledTask -TaskName AcornOpsAgentVRecovery -ErrorAction SilentlyContinue
+        if($null -ne $task) {
+            $info=ScheduledTasks\Get-ScheduledTaskInfo -TaskName AcornOpsAgentVRecovery
+            $evidence.taskAtFailure=@{state=[string]$task.State;lastResult=[long]$info.LastTaskResult}
+            # Diagnostic ceiling only. Preserve the original failed assertion and
+            # let the actual SYSTEM task finish before owned-resource cleanup.
+            $diagnosticClock=[Diagnostics.Stopwatch]::StartNew()
+            while($task.State -eq 'Running' -and $diagnosticClock.Elapsed.TotalSeconds -lt 60){Start-Sleep -Milliseconds 250;$task=ScheduledTasks\Get-ScheduledTask -TaskName AcornOpsAgentVRecovery}
+            $info=ScheduledTasks\Get-ScheduledTaskInfo -TaskName AcornOpsAgentVRecovery
+            $evidence.taskAfterDiagnostic=@{state=[string]$task.State;lastResult=[long]$info.LastTaskResult;waitMs=$diagnosticClock.ElapsedMilliseconds}
+        }
+        $timingPath=Join-Path $paths.Maintenance 'launcher-timing.json'
+        if(Test-Path -LiteralPath $timingPath){
+            try {
+                $timing=Read-AgentVJson -Path $timingPath -Limit 2048 -Secret
+                if($timing.schema -ceq 'acornops.agentv-recovery-timing.v1' -and $timing.stage -in @('bootstrap','release-tree','package','worker','finished')){
+                    $safe=@{stage=$timing.stage;workerSucceeded=($timing.workerSucceeded -eq $true)}
+                    foreach($name in @('bootstrapMs','treeMs','packageMs','workerMs','totalMs')){if($timing.$name -isnot [ValueType] -or $timing.$name -lt 0 -or $timing.$name -gt 900000){throw 'Invalid diagnostic duration'};$safe[$name]=[long]$timing.$name}
+                    $evidence.launcherTiming=$safe
+                }
+            }catch{}
+        }
+    }
     Json-Ci (Join-Path $artifact 'native-evidence.json') $evidence
     if($owned){
         ScheduledTasks\Unregister-ScheduledTask -TaskName AcornOpsAgentVRecovery -Confirm:$false -ErrorAction SilentlyContinue
