@@ -18,8 +18,9 @@ export async function buildWindowsSnapshot(host: WindowsHost, signal?: AbortSign
   const [summary, volumes, services, processes, listeners] = await Promise.all([
     safe('windows_host', () => host.getHostSummary(signal)), safe('windows_volumes', () => host.listFilesystems({ limit: 1000 }, signal)), safe('windows_services', () => host.listServices({ limit: 1000, state: 'all' }, signal)), safe('windows_processes', () => host.listProcesses({ limit: 20 }, signal)), safe('windows_listeners', () => host.listListeners({ limit: 50 }, signal)),
   ]);
-  if (summary) health.push(...summary.collector_health);
-  for (const section of [volumes, services, processes, listeners]) if (section) health.push(section.health);
+  // Redaction tracks object identity: aggregate copies must not alias host health.
+  if (summary) health.push(...summary.collector_health.map((entry) => ({ ...entry })));
+  for (const section of [volumes, services, processes, listeners]) if (section) health.push({ ...section.health });
   const failures = (services?.items || []).filter(isFailedService);
   const findings: Array<Record<string, unknown>> = failures.map((item) => ({ severity: 'critical', code: 'SERVICE_FAILED', name: item.name, summary: `Windows service ${item.name} stopped with exit code ${item.exit_code}` }));
   if (summary && summary.memory.used_percent >= 90) findings.push({ severity: 'critical', code: 'MEMORY_PRESSURE', summary: `Memory use is ${summary.memory.used_percent}%` });
