@@ -92,8 +92,11 @@ namespace AcornOps.AgentV {
         readonly string node;
         Process child;
         Job job;
-        int stopping;
-        internal Host(string nodePath) { node = nodePath; ServiceName = Program.Name; CanStop = true; CanShutdown = true; AutoLog = false; }
+        readonly TreeTeardown teardown;
+        internal Host(string nodePath) {
+            node = nodePath; ServiceName = Program.Name; CanStop = true; CanShutdown = true; AutoLog = false;
+            teardown = new TreeTeardown(GracefulStop, TerminateTree, DisposeTree, UnexpectedExit);
+        }
         protected override void OnStart(string[] args) {
             string stage = "node-trust";
             try {
@@ -130,7 +133,7 @@ namespace AcornOps.AgentV {
                 child.StandardInput.Flush();
                 Thread watcher = new Thread(Watch); watcher.IsBackground = true; watcher.Start();
             } catch (Exception error) {
-                Interlocked.Exchange(ref stopping, 1);
+                teardown.StartupFailed();
                 if (job != null) { job.TerminateAndWait(); job.Dispose(); }
                 Win32Exception native = error as Win32Exception;
                 TrustFailure trust = error as TrustFailure;
@@ -149,10 +152,8 @@ namespace AcornOps.AgentV {
             if (value.IndexOf('"') >= 0 || value.EndsWith("\\")) throw new IOException("Invalid launch path");
             return "\"" + value + "\"";
         }
-        void Watch() {
-            child.WaitForExit();
-            if (Interlocked.CompareExchange(ref stopping, 2, 0) != 0) return;
-            job.TerminateAndWait(); job.Dispose();
+        void Watch() { child.WaitForExit(); teardown.ChildExited(); }
+        void UnexpectedExit() {
             Diagnostic("Agent process exited unexpectedly");
             // An unexpected host exit, without SERVICE_STOPPED, invokes SCM crash recovery.
             Environment.Exit(1);
@@ -160,18 +161,17 @@ namespace AcornOps.AgentV {
         protected override void OnStop() { StopTree(); }
         protected override void OnShutdown() { StopTree(); }
         void StopTree() {
-            if (Interlocked.Exchange(ref stopping, 1) != 0) return;
             RequestAdditionalTime(22000);
-            try {
-                if (child != null && !child.HasExited) {
-                    try { child.StandardInput.WriteLine("{\"command\":\"STOP\"}"); child.StandardInput.Flush(); } catch (IOException) { }
-                    child.WaitForExit(15000);
-                }
-                bool empty = job == null || job.TerminateAndWait();
-                if (!empty) { ExitCode = 1; Diagnostic("Process tree termination could not be confirmed"); }
-            } catch { ExitCode = 1; Diagnostic("Service stop failed"); }
-            finally { if (job != null) job.Dispose(); }
+            if (!teardown.Stop()) { ExitCode = 1; Diagnostic("Process tree termination could not be confirmed"); }
         }
+        void GracefulStop() {
+            if (child != null && !child.HasExited) {
+                try { child.StandardInput.WriteLine("{\"command\":\"STOP\"}"); child.StandardInput.Flush(); } catch (IOException) { }
+                child.WaitForExit(15000);
+            }
+        }
+        bool TerminateTree() { return job == null || job.TerminateAndWait(); }
+        void DisposeTree() { if (job != null) job.Dispose(); }
         static void Drain(Stream source, string name) {
             Thread drain = new Thread(delegate() {
                 byte[] buffer = new byte[16384];
@@ -195,6 +195,28 @@ namespace AcornOps.AgentV {
             Thread thread = new Thread(delegate() {
                 try { using (RotatingSink sink = new RotatingSink(Path.Combine(Program.Logs, "host.log"))) { byte[] bytes = Encoding.UTF8.GetBytes(message + "\r\n"); sink.Write(bytes, bytes.Length); } } catch { }
             }); thread.IsBackground = true; thread.Start(); if (wait) thread.Join(500);
+        }
+    }
+
+    // Internal arbitration only. Production delegates always use the owned
+    // child, native Job and unexpected host exit; no runtime fault switches.
+    internal sealed class TreeTeardown {
+        readonly Action graceful, dispose, unexpectedExit;
+        readonly Func<bool> terminate;
+        int stopping;
+        internal TreeTeardown(Action gracefulStop, Func<bool> terminateAndObserve, Action disposeJob, Action crash) {
+            graceful = gracefulStop; terminate = terminateAndObserve; dispose = disposeJob; unexpectedExit = crash;
+        }
+        internal void StartupFailed() { Interlocked.Exchange(ref stopping, 1); }
+        internal void ChildExited() {
+            if (Interlocked.CompareExchange(ref stopping, 2, 0) != 0) return;
+            terminate(); dispose(); unexpectedExit();
+        }
+        internal bool Stop() {
+            if (Interlocked.Exchange(ref stopping, 1) != 0) return true;
+            try { graceful(); return terminate(); }
+            catch { return false; }
+            finally { dispose(); }
         }
     }
 

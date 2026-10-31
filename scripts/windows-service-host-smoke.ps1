@@ -198,3 +198,5 @@ try {
     $artifact = Join-Path $repo 'artifacts\windows-service-host'; $null = New-Item -ItemType Directory -Path $artifact -Force
     $evidence | ConvertTo-Json -Depth 6 | Set-Content (Join-Path $artifact 'native-evidence.json') -Encoding UTF8
 }
+# Separate synthetic SCM fault evidence follows the real release-host gates.
+& (Join-Path $PSScriptRoot 'windows-tests\host-teardown-race.ps1') -AllowDisposableCi:$AllowDisposableCi
