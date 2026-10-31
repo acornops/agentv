@@ -117,3 +117,26 @@ enforced by the agent. `get_process` requires a positive integer PID, not zero.
 
 Run `npm run validate`, the packaging smoke, live systemd smoke where available,
 and the parent workspace platform contract validation for every contract change.
+
+## Windows backend boundary
+
+The control plane defaults omitted registration/stored identity to Linux/systemd.
+Both handshake identity fields remain required and must match immutable stored
+identity before provisional credential verification. Windows uses
+`osFamily: windows`, `serviceManager: scm`; it is independently gated by
+`AGENTV_WINDOWS_ENABLED` (default false), a pinned
+`AGENTV_WINDOWS_RELEASE_VERSION`, and an HTTPS
+`AGENTV_WINDOWS_RELEASE_BASE_URL`.
+
+Windows enrollment and policy updates permit read-only access. Its backend tool
+ceiling is the eight existing read names: `get_host_summary`, `list_filesystems`,
+`list_processes`, `get_process`, `list_services`, `get_service`, `query_logs`,
+`list_listeners`. Discovery, synchronization, and local/remote-owner dispatch
+reject other names, including `restart_service` falsely advertised as read.
+Linux tool schemas, helper rules, and install commands remain unchanged.
+
+The Windows bootstrap contract is `v<version>/install-agentv.ps1` with
+`-ReleaseBaseUrl`, `-PlatformUrl`, `-TargetId`, optional `-EnrollmentToken` and
+`-ReplaceCredential`. Repair reuses the protected credential. Commands download
+to a fresh temporary `.ps1` file and remove it in `finally`. Native packaging,
+telemetry and host qualification remain prerequisites for enabling rollout.
