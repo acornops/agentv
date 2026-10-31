@@ -1,0 +1,1657 @@
+[
+  {
+    "name": "get_host_summary",
+    "description": "Return bounded Linux host identity, load, CPU, memory, swap, pressure availability, and collector health.",
+    "capability": "read",
+    "inputSchema": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "type": "object",
+      "properties": {},
+      "additionalProperties": false
+    },
+    "outputSchema": {
+      "type": "object",
+      "required": [
+        "schemaVersion",
+        "data"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "schemaVersion": {
+          "const": "acornops.full-tool-result.v1"
+        },
+        "data": {
+          "oneOf": [
+            {
+              "type": "object",
+              "required": [
+                "hostname",
+                "distro",
+                "kernel",
+                "architecture",
+                "boot_id",
+                "uptime_seconds",
+                "load",
+                "cpu",
+                "memory",
+                "swap",
+                "pressure_available",
+                "collector_health"
+              ],
+              "properties": {
+                "hostname": {
+                  "type": "string"
+                },
+                "distro": {
+                  "type": "object",
+                  "required": [
+                    "id",
+                    "version",
+                    "pretty_name"
+                  ],
+                  "properties": {
+                    "id": {
+                      "type": "string"
+                    },
+                    "version": {
+                      "type": "string"
+                    },
+                    "pretty_name": {
+                      "type": "string"
+                    }
+                  },
+                  "additionalProperties": false
+                },
+                "kernel": {
+                  "type": "string"
+                },
+                "architecture": {
+                  "type": "string"
+                },
+                "boot_id": {
+                  "type": "string"
+                },
+                "uptime_seconds": {
+                  "type": "number",
+                  "minimum": 0
+                },
+                "load": {
+                  "type": "object",
+                  "required": [
+                    "one",
+                    "five",
+                    "fifteen"
+                  ],
+                  "properties": {
+                    "one": {
+                      "type": "number"
+                    },
+                    "five": {
+                      "type": "number"
+                    },
+                    "fifteen": {
+                      "type": "number"
+                    }
+                  },
+                  "additionalProperties": false
+                },
+                "cpu": {
+                  "type": "object",
+                  "required": [
+                    "usage_percent",
+                    "sampled_ms"
+                  ],
+                  "properties": {
+                    "usage_percent": {
+                      "type": [
+                        "number",
+                        "null"
+                      ]
+                    },
+                    "sampled_ms": {
+                      "type": "integer",
+                      "minimum": 0
+                    }
+                  },
+                  "additionalProperties": false
+                },
+                "memory": {
+                  "type": "object",
+                  "required": [
+                    "total_bytes",
+                    "available_bytes",
+                    "used_bytes",
+                    "used_percent"
+                  ],
+                  "properties": {
+                    "total_bytes": {
+                      "type": "number"
+                    },
+                    "available_bytes": {
+                      "type": "number"
+                    },
+                    "used_bytes": {
+                      "type": "number"
+                    },
+                    "used_percent": {
+                      "type": "number"
+                    }
+                  },
+                  "additionalProperties": false
+                },
+                "swap": {
+                  "type": "object",
+                  "required": [
+                    "total_bytes",
+                    "free_bytes",
+                    "used_bytes",
+                    "used_percent"
+                  ],
+                  "properties": {
+                    "total_bytes": {
+                      "type": "number"
+                    },
+                    "free_bytes": {
+                      "type": "number"
+                    },
+                    "used_bytes": {
+                      "type": "number"
+                    },
+                    "used_percent": {
+                      "type": "number"
+                    }
+                  },
+                  "additionalProperties": false
+                },
+                "pressure_available": {
+                  "type": "boolean"
+                },
+                "collector_health": {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "required": [
+                      "collector",
+                      "status",
+                      "duration_ms"
+                    ],
+                    "properties": {
+                      "collector": {
+                        "type": "string"
+                      },
+                      "status": {
+                        "enum": [
+                          "ok",
+                          "partial",
+                          "unavailable",
+                          "permission_denied",
+                          "timed_out",
+                          "unsupported"
+                        ]
+                      },
+                      "message": {
+                        "type": "string"
+                      },
+                      "duration_ms": {
+                        "type": "integer",
+                        "minimum": 0
+                      }
+                    },
+                    "additionalProperties": false
+                  }
+                }
+              },
+              "additionalProperties": false
+            },
+            {
+              "type": "object",
+              "required": [
+                "code",
+                "message",
+                "retryable"
+              ],
+              "properties": {
+                "code": {
+                  "type": "string"
+                },
+                "message": {
+                  "type": "string"
+                },
+                "retryable": {
+                  "type": "boolean"
+                }
+              },
+              "additionalProperties": true
+            }
+          ]
+        }
+      }
+    },
+    "artifactPolicy": "if_detailed",
+    "timeout_ms": 5000,
+    "version": "2.0.0",
+    "deprecated": false
+  },
+  {
+    "name": "list_filesystems",
+    "description": "List bounded mounted filesystem byte and inode capacity with read-only state.",
+    "capability": "read",
+    "inputSchema": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "type": "object",
+      "properties": {
+        "mount": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 4096
+        },
+        "include_pseudo": {
+          "default": false,
+          "type": "boolean"
+        },
+        "limit": {
+          "default": 50,
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 100
+        }
+      },
+      "additionalProperties": false
+    },
+    "outputSchema": {
+      "type": "object",
+      "required": [
+        "schemaVersion",
+        "data"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "schemaVersion": {
+          "const": "acornops.full-tool-result.v1"
+        },
+        "data": {
+          "oneOf": [
+            {
+              "type": "object",
+              "required": [
+                "items",
+                "original_count",
+                "omitted_count",
+                "health",
+                "truncated"
+              ],
+              "properties": {
+                "items": {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "required": [
+                      "filesystem",
+                      "mount",
+                      "type",
+                      "total_bytes",
+                      "used_bytes",
+                      "free_bytes",
+                      "used_percent",
+                      "inode_used_percent",
+                      "read_only"
+                    ],
+                    "properties": {
+                      "filesystem": {
+                        "type": "string"
+                      },
+                      "mount": {
+                        "type": "string"
+                      },
+                      "type": {
+                        "type": "string"
+                      },
+                      "total_bytes": {
+                        "type": "number",
+                        "minimum": 0
+                      },
+                      "used_bytes": {
+                        "type": "number",
+                        "minimum": 0
+                      },
+                      "free_bytes": {
+                        "type": "number",
+                        "minimum": 0
+                      },
+                      "used_percent": {
+                        "type": "number"
+                      },
+                      "inode_used_percent": {
+                        "type": [
+                          "number",
+                          "null"
+                        ]
+                      },
+                      "read_only": {
+                        "type": "boolean"
+                      }
+                    },
+                    "additionalProperties": false
+                  }
+                },
+                "original_count": {
+                  "type": "integer",
+                  "minimum": 0
+                },
+                "omitted_count": {
+                  "type": "integer",
+                  "minimum": 0
+                },
+                "health": {
+                  "type": "object",
+                  "required": [
+                    "collector",
+                    "status",
+                    "duration_ms"
+                  ],
+                  "properties": {
+                    "collector": {
+                      "type": "string"
+                    },
+                    "status": {
+                      "enum": [
+                        "ok",
+                        "partial",
+                        "unavailable",
+                        "permission_denied",
+                        "timed_out",
+                        "unsupported"
+                      ]
+                    },
+                    "message": {
+                      "type": "string"
+                    },
+                    "duration_ms": {
+                      "type": "integer",
+                      "minimum": 0
+                    }
+                  },
+                  "additionalProperties": false
+                },
+                "truncated": {
+                  "type": "boolean"
+                }
+              },
+              "additionalProperties": false
+            },
+            {
+              "type": "object",
+              "required": [
+                "code",
+                "message",
+                "retryable"
+              ],
+              "properties": {
+                "code": {
+                  "type": "string"
+                },
+                "message": {
+                  "type": "string"
+                },
+                "retryable": {
+                  "type": "boolean"
+                }
+              },
+              "additionalProperties": true
+            }
+          ]
+        }
+      }
+    },
+    "artifactPolicy": "if_detailed",
+    "timeout_ms": 8000,
+    "version": "2.0.0",
+    "deprecated": false
+  },
+  {
+    "name": "list_processes",
+    "description": "List bounded redacted Linux process summaries with exact sorting and filters.",
+    "capability": "read",
+    "inputSchema": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "type": "object",
+      "properties": {
+        "sort_by": {
+          "default": "cpu",
+          "type": "string",
+          "enum": [
+            "cpu",
+            "memory",
+            "pid",
+            "start_time"
+          ]
+        },
+        "order": {
+          "default": "desc",
+          "type": "string",
+          "enum": [
+            "asc",
+            "desc"
+          ]
+        },
+        "user": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128
+        },
+        "query": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 256
+        },
+        "limit": {
+          "default": 50,
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 100
+        }
+      },
+      "additionalProperties": false
+    },
+    "outputSchema": {
+      "type": "object",
+      "required": [
+        "schemaVersion",
+        "data"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "schemaVersion": {
+          "const": "acornops.full-tool-result.v1"
+        },
+        "data": {
+          "oneOf": [
+            {
+              "type": "object",
+              "required": [
+                "items",
+                "original_count",
+                "omitted_count",
+                "health"
+              ],
+              "properties": {
+                "items": {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "required": [
+                      "pid",
+                      "ppid",
+                      "user",
+                      "state",
+                      "name",
+                      "cpu_percent",
+                      "memory_bytes",
+                      "memory_percent",
+                      "start_time",
+                      "executable",
+                      "command_line"
+                    ],
+                    "properties": {
+                      "pid": {
+                        "type": "integer",
+                        "minimum": 1
+                      },
+                      "ppid": {
+                        "type": "integer",
+                        "minimum": 0
+                      },
+                      "user": {
+                        "type": "string"
+                      },
+                      "state": {
+                        "type": "string"
+                      },
+                      "name": {
+                        "type": "string"
+                      },
+                      "cpu_percent": {
+                        "type": "number",
+                        "minimum": 0
+                      },
+                      "memory_bytes": {
+                        "type": "number",
+                        "minimum": 0
+                      },
+                      "memory_percent": {
+                        "type": "number",
+                        "minimum": 0
+                      },
+                      "start_time": {
+                        "type": [
+                          "string",
+                          "null"
+                        ]
+                      },
+                      "executable": {
+                        "type": [
+                          "string",
+                          "null"
+                        ]
+                      },
+                      "command_line": {
+                        "type": "string"
+                      }
+                    },
+                    "additionalProperties": false
+                  }
+                },
+                "original_count": {
+                  "type": "integer",
+                  "minimum": 0
+                },
+                "omitted_count": {
+                  "type": "integer",
+                  "minimum": 0
+                },
+                "health": {
+                  "type": "object",
+                  "required": [
+                    "collector",
+                    "status",
+                    "duration_ms"
+                  ],
+                  "properties": {
+                    "collector": {
+                      "type": "string"
+                    },
+                    "status": {
+                      "enum": [
+                        "ok",
+                        "partial",
+                        "unavailable",
+                        "permission_denied",
+                        "timed_out",
+                        "unsupported"
+                      ]
+                    },
+                    "message": {
+                      "type": "string"
+                    },
+                    "duration_ms": {
+                      "type": "integer",
+                      "minimum": 0
+                    }
+                  },
+                  "additionalProperties": false
+                }
+              },
+              "additionalProperties": false
+            },
+            {
+              "type": "object",
+              "required": [
+                "code",
+                "message",
+                "retryable"
+              ],
+              "properties": {
+                "code": {
+                  "type": "string"
+                },
+                "message": {
+                  "type": "string"
+                },
+                "retryable": {
+                  "type": "boolean"
+                }
+              },
+              "additionalProperties": true
+            }
+          ]
+        }
+      }
+    },
+    "artifactPolicy": "if_detailed",
+    "timeout_ms": 8000,
+    "version": "2.0.0",
+    "deprecated": false
+  },
+  {
+    "name": "get_process",
+    "description": "Get one exact process by positive PID without collecting environment variables.",
+    "capability": "read",
+    "inputSchema": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "type": "object",
+      "properties": {
+        "pid": {
+          "type": "integer",
+          "exclusiveMinimum": 0,
+          "maximum": 9007199254740991
+        }
+      },
+      "required": [
+        "pid"
+      ],
+      "additionalProperties": false
+    },
+    "outputSchema": {
+      "type": "object",
+      "required": [
+        "schemaVersion",
+        "data"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "schemaVersion": {
+          "const": "acornops.full-tool-result.v1"
+        },
+        "data": {
+          "oneOf": [
+            {
+              "type": "object",
+              "required": [
+                "pid",
+                "ppid",
+                "user",
+                "state",
+                "name",
+                "cpu_percent",
+                "memory_bytes",
+                "memory_percent",
+                "start_time",
+                "executable",
+                "command_line"
+              ],
+              "properties": {
+                "pid": {
+                  "type": "integer",
+                  "minimum": 1
+                },
+                "ppid": {
+                  "type": "integer",
+                  "minimum": 0
+                },
+                "user": {
+                  "type": "string"
+                },
+                "state": {
+                  "type": "string"
+                },
+                "name": {
+                  "type": "string"
+                },
+                "cpu_percent": {
+                  "type": "number",
+                  "minimum": 0
+                },
+                "memory_bytes": {
+                  "type": "number",
+                  "minimum": 0
+                },
+                "memory_percent": {
+                  "type": "number",
+                  "minimum": 0
+                },
+                "start_time": {
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                },
+                "executable": {
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                },
+                "command_line": {
+                  "type": "string"
+                }
+              },
+              "additionalProperties": false
+            },
+            {
+              "type": "object",
+              "required": [
+                "code",
+                "message",
+                "retryable"
+              ],
+              "properties": {
+                "code": {
+                  "type": "string"
+                },
+                "message": {
+                  "type": "string"
+                },
+                "retryable": {
+                  "type": "boolean"
+                }
+              },
+              "additionalProperties": true
+            }
+          ]
+        }
+      }
+    },
+    "artifactPolicy": "never",
+    "timeout_ms": 5000,
+    "version": "2.0.0",
+    "deprecated": false
+  },
+  {
+    "name": "list_services",
+    "description": "List bounded systemd service unit summaries by state and query.",
+    "capability": "read",
+    "inputSchema": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "type": "object",
+      "properties": {
+        "state": {
+          "default": "all",
+          "type": "string",
+          "enum": [
+            "all",
+            "active",
+            "failed",
+            "inactive"
+          ]
+        },
+        "query": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 256
+        },
+        "limit": {
+          "default": 100,
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 200
+        }
+      },
+      "additionalProperties": false
+    },
+    "outputSchema": {
+      "type": "object",
+      "required": [
+        "schemaVersion",
+        "data"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "schemaVersion": {
+          "const": "acornops.full-tool-result.v1"
+        },
+        "data": {
+          "oneOf": [
+            {
+              "type": "object",
+              "required": [
+                "items",
+                "original_count",
+                "omitted_count",
+                "health"
+              ],
+              "properties": {
+                "items": {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "required": [
+                      "unit",
+                      "description",
+                      "load_state",
+                      "active_state",
+                      "sub_state"
+                    ],
+                    "properties": {
+                      "unit": {
+                        "type": "string"
+                      },
+                      "description": {
+                        "type": "string"
+                      },
+                      "load_state": {
+                        "type": "string"
+                      },
+                      "active_state": {
+                        "type": "string"
+                      },
+                      "sub_state": {
+                        "type": "string"
+                      }
+                    },
+                    "additionalProperties": false
+                  }
+                },
+                "original_count": {
+                  "type": "integer",
+                  "minimum": 0
+                },
+                "omitted_count": {
+                  "type": "integer",
+                  "minimum": 0
+                },
+                "health": {
+                  "type": "object",
+                  "required": [
+                    "collector",
+                    "status",
+                    "duration_ms"
+                  ],
+                  "properties": {
+                    "collector": {
+                      "type": "string"
+                    },
+                    "status": {
+                      "enum": [
+                        "ok",
+                        "partial",
+                        "unavailable",
+                        "permission_denied",
+                        "timed_out",
+                        "unsupported"
+                      ]
+                    },
+                    "message": {
+                      "type": "string"
+                    },
+                    "duration_ms": {
+                      "type": "integer",
+                      "minimum": 0
+                    }
+                  },
+                  "additionalProperties": false
+                }
+              },
+              "additionalProperties": false
+            },
+            {
+              "type": "object",
+              "required": [
+                "code",
+                "message",
+                "retryable"
+              ],
+              "properties": {
+                "code": {
+                  "type": "string"
+                },
+                "message": {
+                  "type": "string"
+                },
+                "retryable": {
+                  "type": "boolean"
+                }
+              },
+              "additionalProperties": true
+            }
+          ]
+        }
+      }
+    },
+    "artifactPolicy": "if_detailed",
+    "timeout_ms": 10000,
+    "version": "2.0.0",
+    "deprecated": false
+  },
+  {
+    "name": "get_service",
+    "description": "Get one exact systemd service and capability-safe restart preconditions.",
+    "capability": "read",
+    "inputSchema": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "type": "object",
+      "properties": {
+        "unit": {
+          "type": "string",
+          "minLength": 9,
+          "maxLength": 263,
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9_.@:-]{0,254}\\.service$"
+        }
+      },
+      "required": [
+        "unit"
+      ],
+      "additionalProperties": false
+    },
+    "outputSchema": {
+      "type": "object",
+      "required": [
+        "schemaVersion",
+        "data"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "schemaVersion": {
+          "const": "acornops.full-tool-result.v1"
+        },
+        "data": {
+          "oneOf": [
+            {
+              "type": "object",
+              "required": [
+                "unit",
+                "description",
+                "load_state",
+                "active_state",
+                "sub_state",
+                "unit_file_state",
+                "main_pid",
+                "result",
+                "exec_main_status",
+                "restart_count",
+                "invocation_id",
+                "fragment_path",
+                "active_enter_timestamp",
+                "inactive_enter_timestamp",
+                "restart_preconditions"
+              ],
+              "properties": {
+                "unit": {
+                  "type": "string"
+                },
+                "description": {
+                  "type": "string"
+                },
+                "load_state": {
+                  "type": "string"
+                },
+                "active_state": {
+                  "type": "string"
+                },
+                "sub_state": {
+                  "type": "string"
+                },
+                "unit_file_state": {
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                },
+                "main_pid": {
+                  "type": [
+                    "integer",
+                    "null"
+                  ]
+                },
+                "result": {
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                },
+                "exec_main_status": {
+                  "type": [
+                    "integer",
+                    "null"
+                  ]
+                },
+                "restart_count": {
+                  "type": "integer",
+                  "minimum": 0
+                },
+                "invocation_id": {
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                },
+                "fragment_path": {
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                },
+                "active_enter_timestamp": {
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                },
+                "inactive_enter_timestamp": {
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                },
+                "restart_preconditions": {
+                  "type": "object",
+                  "required": [
+                    "active_state",
+                    "sub_state"
+                  ],
+                  "properties": {
+                    "active_state": {
+                      "type": "string"
+                    },
+                    "sub_state": {
+                      "type": "string"
+                    },
+                    "invocation_id": {
+                      "type": "string"
+                    }
+                  },
+                  "additionalProperties": false
+                }
+              },
+              "additionalProperties": false
+            },
+            {
+              "type": "object",
+              "required": [
+                "code",
+                "message",
+                "retryable"
+              ],
+              "properties": {
+                "code": {
+                  "type": "string"
+                },
+                "message": {
+                  "type": "string"
+                },
+                "retryable": {
+                  "type": "boolean"
+                }
+              },
+              "additionalProperties": true
+            }
+          ]
+        }
+      }
+    },
+    "artifactPolicy": "never",
+    "timeout_ms": 8000,
+    "version": "2.0.0",
+    "deprecated": false
+  },
+  {
+    "name": "query_logs",
+    "description": "Query bounded normalized journald entries from locally allowed service units.",
+    "capability": "read",
+    "inputSchema": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "type": "object",
+      "properties": {
+        "unit": {
+          "type": "string",
+          "minLength": 9,
+          "maxLength": 263,
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9_.@:-]{0,254}\\.service$"
+        },
+        "priority": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 7
+        },
+        "since": {
+          "type": "string",
+          "format": "date-time",
+          "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z|([+-](?:[01]\\d|2[0-3]):[0-5]\\d)))$"
+        },
+        "until": {
+          "type": "string",
+          "format": "date-time",
+          "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z|([+-](?:[01]\\d|2[0-3]):[0-5]\\d)))$"
+        },
+        "query": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 512
+        },
+        "cursor": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 4096
+        },
+        "limit": {
+          "default": 100,
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 500
+        },
+        "byte_limit": {
+          "default": 262144,
+          "type": "integer",
+          "minimum": 1024,
+          "maximum": 1048576
+        }
+      },
+      "additionalProperties": false
+    },
+    "outputSchema": {
+      "type": "object",
+      "required": [
+        "schemaVersion",
+        "data"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "schemaVersion": {
+          "const": "acornops.full-tool-result.v1"
+        },
+        "data": {
+          "oneOf": [
+            {
+              "type": "object",
+              "required": [
+                "entries",
+                "next_cursor",
+                "returned_count",
+                "original_count",
+                "byte_count",
+                "truncated",
+                "health"
+              ],
+              "properties": {
+                "entries": {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "required": [
+                      "cursor",
+                      "timestamp",
+                      "priority",
+                      "unit",
+                      "pid",
+                      "identifier",
+                      "message"
+                    ],
+                    "properties": {
+                      "cursor": {
+                        "type": [
+                          "string",
+                          "null"
+                        ]
+                      },
+                      "timestamp": {
+                        "type": "string"
+                      },
+                      "priority": {
+                        "type": [
+                          "integer",
+                          "null"
+                        ],
+                        "minimum": 0,
+                        "maximum": 7
+                      },
+                      "unit": {
+                        "type": [
+                          "string",
+                          "null"
+                        ]
+                      },
+                      "pid": {
+                        "type": [
+                          "integer",
+                          "null"
+                        ]
+                      },
+                      "identifier": {
+                        "type": [
+                          "string",
+                          "null"
+                        ]
+                      },
+                      "message": {
+                        "type": "string"
+                      }
+                    },
+                    "additionalProperties": false
+                  }
+                },
+                "next_cursor": {
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                },
+                "returned_count": {
+                  "type": "integer",
+                  "minimum": 0
+                },
+                "original_count": {
+                  "type": "integer",
+                  "minimum": 0
+                },
+                "byte_count": {
+                  "type": "integer",
+                  "minimum": 0
+                },
+                "truncated": {
+                  "type": "boolean"
+                },
+                "health": {
+                  "type": "object",
+                  "required": [
+                    "collector",
+                    "status",
+                    "duration_ms"
+                  ],
+                  "properties": {
+                    "collector": {
+                      "type": "string"
+                    },
+                    "status": {
+                      "enum": [
+                        "ok",
+                        "partial",
+                        "unavailable",
+                        "permission_denied",
+                        "timed_out",
+                        "unsupported"
+                      ]
+                    },
+                    "message": {
+                      "type": "string"
+                    },
+                    "duration_ms": {
+                      "type": "integer",
+                      "minimum": 0
+                    }
+                  },
+                  "additionalProperties": false
+                }
+              },
+              "additionalProperties": false
+            },
+            {
+              "type": "object",
+              "required": [
+                "code",
+                "message",
+                "retryable"
+              ],
+              "properties": {
+                "code": {
+                  "type": "string"
+                },
+                "message": {
+                  "type": "string"
+                },
+                "retryable": {
+                  "type": "boolean"
+                }
+              },
+              "additionalProperties": true
+            }
+          ]
+        }
+      }
+    },
+    "artifactPolicy": "if_detailed",
+    "timeout_ms": 12000,
+    "version": "2.0.0",
+    "deprecated": false
+  },
+  {
+    "name": "list_listeners",
+    "description": "List bounded TCP or UDP listeners with partial ownership represented explicitly.",
+    "capability": "read",
+    "inputSchema": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "type": "object",
+      "properties": {
+        "protocol": {
+          "type": "string",
+          "enum": [
+            "tcp",
+            "udp"
+          ]
+        },
+        "port": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 65535
+        },
+        "address": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 256
+        },
+        "process_query": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 256
+        },
+        "limit": {
+          "default": 100,
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 200
+        }
+      },
+      "additionalProperties": false
+    },
+    "outputSchema": {
+      "type": "object",
+      "required": [
+        "schemaVersion",
+        "data"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "schemaVersion": {
+          "const": "acornops.full-tool-result.v1"
+        },
+        "data": {
+          "oneOf": [
+            {
+              "type": "object",
+              "required": [
+                "items",
+                "original_count",
+                "omitted_count",
+                "health",
+                "partial"
+              ],
+              "properties": {
+                "items": {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "required": [
+                      "protocol",
+                      "address",
+                      "port",
+                      "pid",
+                      "process",
+                      "ownership_status"
+                    ],
+                    "properties": {
+                      "protocol": {
+                        "enum": [
+                          "tcp",
+                          "udp"
+                        ]
+                      },
+                      "address": {
+                        "type": "string"
+                      },
+                      "port": {
+                        "type": "integer",
+                        "minimum": 1,
+                        "maximum": 65535
+                      },
+                      "pid": {
+                        "type": [
+                          "integer",
+                          "null"
+                        ]
+                      },
+                      "process": {
+                        "type": [
+                          "string",
+                          "null"
+                        ]
+                      },
+                      "ownership_status": {
+                        "enum": [
+                          "available",
+                          "permission_denied",
+                          "unavailable"
+                        ]
+                      }
+                    },
+                    "additionalProperties": false
+                  }
+                },
+                "original_count": {
+                  "type": "integer",
+                  "minimum": 0
+                },
+                "omitted_count": {
+                  "type": "integer",
+                  "minimum": 0
+                },
+                "health": {
+                  "type": "object",
+                  "required": [
+                    "collector",
+                    "status",
+                    "duration_ms"
+                  ],
+                  "properties": {
+                    "collector": {
+                      "type": "string"
+                    },
+                    "status": {
+                      "enum": [
+                        "ok",
+                        "partial",
+                        "unavailable",
+                        "permission_denied",
+                        "timed_out",
+                        "unsupported"
+                      ]
+                    },
+                    "message": {
+                      "type": "string"
+                    },
+                    "duration_ms": {
+                      "type": "integer",
+                      "minimum": 0
+                    }
+                  },
+                  "additionalProperties": false
+                },
+                "partial": {
+                  "type": "boolean"
+                }
+              },
+              "additionalProperties": false
+            },
+            {
+              "type": "object",
+              "required": [
+                "code",
+                "message",
+                "retryable"
+              ],
+              "properties": {
+                "code": {
+                  "type": "string"
+                },
+                "message": {
+                  "type": "string"
+                },
+                "retryable": {
+                  "type": "boolean"
+                }
+              },
+              "additionalProperties": true
+            }
+          ]
+        }
+      }
+    },
+    "artifactPolicy": "if_detailed",
+    "timeout_ms": 8000,
+    "version": "2.0.0",
+    "deprecated": false
+  },
+  {
+    "name": "restart_service",
+    "description": "Restart one exact locally allowlisted systemd service through the privileged helper. First call get_service for the same unit and copy its restart_preconditions exactly into the expected_* fields. After PRECONDITION_FAILED, call get_service again before requesting a new restart; never guess the preconditions.",
+    "capability": "write",
+    "inputSchema": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "type": "object",
+      "properties": {
+        "unit": {
+          "type": "string",
+          "minLength": 9,
+          "maxLength": 263,
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9_.@:-]{0,254}\\.service$"
+        },
+        "reason": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 512
+        },
+        "expected_active_state": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 64,
+          "description": "Copy restart_preconditions.active_state exactly from the latest get_service response for this unit, e.g. \"active\". A display value such as \"active (running)\" is accepted only when its substate matches expected_sub_state."
+        },
+        "expected_sub_state": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 64,
+          "description": "Copy restart_preconditions.sub_state exactly from the same get_service response, e.g. \"running\"."
+        },
+        "expected_invocation_id": {
+          "description": "Copy restart_preconditions.invocation_id exactly from the same get_service response. Never invent an ID or use the tool call ID. Omit only when invocation_id is absent from restart_preconditions.",
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128
+        }
+      },
+      "required": [
+        "unit",
+        "reason",
+        "expected_active_state",
+        "expected_sub_state"
+      ],
+      "additionalProperties": false
+    },
+    "outputSchema": {
+      "type": "object",
+      "required": [
+        "schemaVersion",
+        "data"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "schemaVersion": {
+          "const": "acornops.full-tool-result.v1"
+        },
+        "data": {
+          "oneOf": [
+            {
+              "type": "object",
+              "required": [
+                "operation_id",
+                "unit",
+                "outcome",
+                "before",
+                "after",
+                "started_at",
+                "completed_at",
+                "systemd_job_result"
+              ],
+              "properties": {
+                "operation_id": {
+                  "type": "string"
+                },
+                "unit": {
+                  "type": "string"
+                },
+                "outcome": {
+                  "enum": [
+                    "success",
+                    "failed",
+                    "not_started",
+                    "unknown"
+                  ]
+                },
+                "before": {
+                  "type": "object",
+                  "required": [
+                    "active_state",
+                    "sub_state",
+                    "invocation_id"
+                  ],
+                  "properties": {
+                    "active_state": {
+                      "type": "string"
+                    },
+                    "sub_state": {
+                      "type": "string"
+                    },
+                    "invocation_id": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    }
+                  },
+                  "additionalProperties": false
+                },
+                "after": {
+                  "oneOf": [
+                    {
+                      "type": "object",
+                      "required": [
+                        "active_state",
+                        "sub_state",
+                        "invocation_id"
+                      ],
+                      "properties": {
+                        "active_state": {
+                          "type": "string"
+                        },
+                        "sub_state": {
+                          "type": "string"
+                        },
+                        "invocation_id": {
+                          "type": [
+                            "string",
+                            "null"
+                          ]
+                        }
+                      },
+                      "additionalProperties": false
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                },
+                "started_at": {
+                  "type": "string"
+                },
+                "completed_at": {
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                },
+                "systemd_job_result": {
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                }
+              },
+              "additionalProperties": false
+            },
+            {
+              "type": "object",
+              "required": [
+                "code",
+                "message",
+                "retryable"
+              ],
+              "properties": {
+                "code": {
+                  "type": "string"
+                },
+                "message": {
+                  "type": "string"
+                },
+                "retryable": {
+                  "type": "boolean"
+                }
+              },
+              "additionalProperties": true
+            }
+          ]
+        }
+      }
+    },
+    "artifactPolicy": "always",
+    "timeout_ms": 30000,
+    "version": "2.0.0",
+    "deprecated": false
+  }
+]
