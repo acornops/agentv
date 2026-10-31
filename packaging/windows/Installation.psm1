@@ -224,9 +224,9 @@ function Set-AgentVMaintenance {
 }
 function Get-AgentVTaskObservation {
     param($Task,$Info,$Scheduler)
-    $instances=-1
-    try{$instances=[int]$Scheduler.GetFolder('\').GetTask($script:Paths.Task).GetInstances(0).Count}catch{}
-    return [ordered]@{state=[string]$Task.State;lastResult=[long]$Info.LastTaskResult;lastRun=$Info.LastRunTime.ToString('o');lastKind=[string]$Info.LastRunTime.Kind;instances=$instances}
+    $instances=-1;$comLastRun=$null;$comLastResult=$null
+    try{$registered=$Scheduler.GetFolder('\').GetTask($script:Paths.Task);$instances=[int]$registered.GetInstances(0).Count;$comLastRun=$registered.LastRunTime.ToString('o');$comLastResult=[long]$registered.LastTaskResult}catch{}
+    return [ordered]@{state=[string]$Task.State;lastResult=[long]$Info.LastTaskResult;lastRun=$Info.LastRunTime.ToString('o');lastKind=[string]$Info.LastRunTime.Kind;instances=$instances;comLastRun=$comLastRun;comLastResult=$comLastResult}
 }
 function Ensure-AgentVRecoveryTask {
     param($Journal)

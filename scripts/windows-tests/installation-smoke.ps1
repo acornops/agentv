@@ -111,6 +111,7 @@ try {
                     $entry=$probe.$name
                     if($null -ne $entry -and $entry.state -in @('Unknown','Disabled','Queued','Ready','Running') -and $entry.lastKind -in @('Unspecified','Utc','Local')){
                         $safeProbe[$name]=@{state=$entry.state;lastKind=$entry.lastKind;lastRun=[DateTime]::Parse($entry.lastRun).ToString('o');lastResult=[long]$entry.lastResult;instances=[int]$entry.instances}
+                        if($null -ne $entry.comLastRun){$safeProbe[$name].comLastRun=[DateTime]::Parse($entry.comLastRun).ToString('o');$safeProbe[$name].comLastResult=[long]$entry.comLastResult}
                     }
                 }
                 if($probe.registrationState -in @('Unknown','Disabled','Queued','Ready','Running')){$safeProbe.registrationState=$probe.registrationState}
