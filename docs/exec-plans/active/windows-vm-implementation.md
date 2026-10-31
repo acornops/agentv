@@ -12,14 +12,16 @@
 
 Status: approved for implementation by the user on 2026-10-31. Work in progress.
 
-Execution status (2026-11-01): task 5 is complete at `2a69373`; all 18 hosted
-installer jobs, four native service-host cells and Linux matrices pass. Task 6's
-source and integration review are clean at console `6c77dbc`; local validation
-passes and the final hosted browser fixture shard is pending. Task 7 may proceed
-in the separate AgentV/backend/docs worktrees while that result is collected.
-There is one implementation owner. If console CI exposes a source failure, pause
-task 7 before resuming the console implementer. Final qualification still requires
-all reported gates, and hosted service restart does not qualify real reboot.
+Execution status (2026-11-01): tasks 1–6 and Task 7 source/integration work
+are complete. Task 7 initial review and fix re-review are clean at control-plane
+`37c62d69f8aae157480a0502142bc662ee8bd816` and AgentV
+`f86bd5ab7040c9372f6160383ef7620091f821ea`. Final hosted backend CI is pending.
+Task 8's [qualification decision](../../design-docs/windows-qualification-decision.md)
+is complete: Windows rollout and writes remain unqualified and disabled.
+Unexplained native failures, real reboot/Core/Desktop coverage, and the full
+generated-download lifecycle remain gates. The single broad review and final
+coordinated PR handoff follow Task 8 and remain pending. The wider Windows
+program is incomplete; this plan stays active.
 
 ## Global constraints
 
@@ -133,9 +135,9 @@ Provisional authentication remains distinct from active authentication: it must 
 
 **Interfaces:** Consume backend OS pair and task 4 registration-options availability; Linux default stays unchanged. Windows is read-only, uses Application/System channels and PowerShell install instructions. Show unavailable Linux-only metrics accurately. Server remains authority for feature/release gating.
 
-- [ ] Write failing tests for Linux default/unchanged install and allowlist validation, explicit Windows selection/read-only policy, OS-immutable settings, Windows log channel filters and absent metrics.
-- [ ] Implement small changes in existing VM components; preserve layout and Linux copy/validation. Do not expose mock/collector implementation settings in production UI.
-- [ ] Run affected UI tests, full console validation, contract checks and browser flow checks in control-plane mode. Commit and report any unavailable backend/native test dependency.
+- [x] Write failing tests for Linux default/unchanged install and allowlist validation, explicit Windows selection/read-only policy, OS-immutable settings, Windows log channel filters and absent metrics.
+- [x] Implement small changes in existing VM components; preserve layout and Linux copy/validation. Do not expose mock/collector implementation settings in production UI.
+- [x] Run affected UI tests, full console validation, contract checks and browser flow checks in control-plane mode. Commit and report any unavailable backend/native test dependency.
 
 ### Task 7: Mixed-version qualification and final review
 
@@ -143,14 +145,16 @@ Provisional authentication remains distinct from active authentication: it must 
 
 **Interfaces:** Released Linux experimental.14 → updated backend; updated Linux → updated backend; Windows mock/live → updated backend; concurrent targets in one workspace. Preserve exact target scoping through gateway and execution engine.
 
-- [ ] Integrate pinned current upstream into the feature branches before final compatibility validation: control-plane `7b38c5f` and docs-website `1afbed2`, following console `54f7e12`. Preserve both upstream and Windows contracts, review overlapping tool-schema changes, apply upstream migrations only to disposable test databases, and keep original checkouts unchanged. These are base updates, not new Windows migrations.
-- [ ] Resolve deferred qualification findings: make synthetic Windows service-state, listener-protocol and process-query filters match the published native contract; assert target-specific output schemas during control-plane target switches and through actual gateway integration. Keep fixes isolated to those contracts.
-- [ ] Preserve Linux ignoring Windows-only `ACORNOPS_VM_ALLOWED_LOG_CHANNELS`: a released Linux process accepts an otherwise valid configuration containing `Security`, while the new unconditional Windows channel parser rejects it. Restrict Windows channel parsing/validation to Windows configuration and add a failing Linux characterization plus Windows rejection tests before the fix. Preserve Linux unit validation and Windows Application/System restrictions.
-- [ ] Correct the pre-existing Kubernetes-only disconnect reconciliation in a separate scoped commit: update VM status and event identity through the VM boundary, retain Linux/Windows OS metadata, and preserve existing Kubernetes behavior. Characterize released Linux disconnect/reconnect, stale-socket replacement and owner/draining races before changing the handler; a departing connection must never mark its replacement offline.
-- [ ] Exercise old-agent/new-backend enrollment, reconnect, snapshots, log reads and approved Linux restart handling; replay legacy optional-field omissions and bad Windows claims. Use disposable services, never existing databases or VMs.
-- [ ] Run complete affected-repo validation, Linux package/bootstrap/curl and real Ubuntu systemd CI, Windows CI and mixed-target integration. Test only justified changes after prior passing runs; collect exact commands/results and inspect every failure.
-- [ ] Complete independent task review and prepare the whole-branch review package. Run the single broad review after task 8 records the write-qualification decision; fix important findings with targeted regression checks and re-review fixes before handoff. Record all unexecuted native/reboot/real-host acceptance criteria without claiming zero-regression proof.
-- [ ] Update linked docs/change set and task status. Prepare coordinated draft PRs on the feature branches if remote publishing is available; retain disabled Windows rollout until native qualification. Do not merge/release/deploy.
+- [x] Integrate pinned current upstream into the feature branches before final compatibility validation: control-plane `7b38c5f` and docs-website `1afbed2`, following console `54f7e12`. Preserve both upstream and Windows contracts, review overlapping tool-schema changes, apply upstream migrations only to disposable test databases, and keep original checkouts unchanged. These are base updates, not new Windows migrations.
+- [x] Resolve deferred qualification findings: make synthetic Windows service-state, listener-protocol and process-query filters match the published native contract; assert target-specific output schemas during control-plane target switches and through actual gateway integration. Keep fixes isolated to those contracts.
+- [x] Preserve Linux ignoring Windows-only `ACORNOPS_VM_ALLOWED_LOG_CHANNELS`: a released Linux process accepts an otherwise valid configuration containing `Security`, while the new unconditional Windows channel parser rejects it. Restrict Windows channel parsing/validation to Windows configuration and add a failing Linux characterization plus Windows rejection tests before the fix. Preserve Linux unit validation and Windows Application/System restrictions.
+- [x] Correct the pre-existing Kubernetes-only disconnect reconciliation in a separate scoped commit: update VM status and event identity through the VM boundary, retain Linux/Windows OS metadata, and preserve existing Kubernetes behavior. Characterize released Linux disconnect/reconnect, stale-socket replacement and owner/draining races before changing the handler; a departing connection must never mark its replacement offline.
+- [x] Exercise old-agent/new-backend enrollment, reconnect, snapshots, log reads and approved Linux restart handling; replay legacy optional-field omissions and bad Windows claims. Use disposable services, never existing databases or VMs.
+- [x] Run complete affected-repo validation, Linux package/bootstrap/curl and real Ubuntu systemd CI, Windows CI and mixed-target integration. Test only justified changes after prior passing runs; collect exact commands/results and inspect every failure.
+- [x] Complete independent Task 7 review and fix re-review; record unexecuted native/reboot/real-host criteria in the qualification decision without claiming zero-regression proof.
+- [ ] Collect final hosted backend CI [41246730821](https://github.com/acornops/control-plane/actions/runs/41246730821); pending at Task 8 decision.
+- [ ] Run the single broad review after Task 8; fix important findings with targeted regression checks and independently re-review fixes before handoff.
+- [ ] Finalize linked docs/change set, task status and coordinated draft PR handoff after broad review and final CI. Existing drafts are linked below; their creation does not complete this handoff. Retain disabled Windows rollout until native qualification. Do not merge/release/deploy.
 
 ### Task 8: Windows writes qualification gate
 
@@ -158,8 +162,8 @@ Provisional authentication remains distinct from active authentication: it must 
 
 **Interfaces:** Only begin Windows restart implementation after task 7 read-only qualification evidence passes. Define exact service allowlist/protected service policy, native low-privilege boundary, ACL-separated helper, durable idempotency receipts, state preconditions, cancellation/uncertain outcomes and post-action verification before enabling it.
 
-- [ ] At completion of task 7, evaluate and document native qualification evidence and residual blockers.
-- [ ] If qualified, create and independently review a focused native-action design and implementation plan, then implement and test it on Windows feature branches. If not qualified, keep Windows writes denied and record the concrete unmet gates; never call the entire Windows program complete.
+- [x] At completion of Task 7 source/integration work, evaluate native qualification evidence and residual blockers in the [qualification decision](../../design-docs/windows-qualification-decision.md). Final hosted CI and broad review remain separate handoff gates.
+- [x] **Not qualified:** keep Windows writes denied and record concrete unmet gates. No native-action implementation is authorized by this decision. A future qualified stage requires a focused, independently reviewed native-action design and implementation plan before implementation/testing. The wider Windows program remains incomplete.
 
 ## Rollout and rollback
 
@@ -335,3 +339,32 @@ remain unexecuted. The generated command is native parsed and argument-bound;
 its outer download/temp-file lifecycle has not been tested end to end. Completed
 grace/revoked credentials and invalid retained keys remain documented manual
 support cases. Windows activation and writes remain disabled.
+
+Task 6 is complete at console `6c77dbc`, including pinned main `54f7e12`. Initial
+source review and scoped integration review are clean. Linux remains the default,
+Windows selection follows backend availability, Windows host policy stays
+read-only, and Application/System logs use explicit channel-scoped requests.
+Shared run approval permissions retain their existing semantics. Local validation
+passed 1,266 tests across 237 files, plus actual backend/browser flows and bounded
+synthetic race fixtures. [Hosted console CI](https://github.com/acornops/management-console/actions/runs/41242199107)
+passed Node 22 preflight and all eight browser jobs. Actual Windows log responses
+were empty; populated log/race and 409 rejection cases were intercepted fixtures.
+
+Task 7 source/integration is complete at AgentV
+`f86bd5ab7040c9372f6160383ef7620091f821ea`, control-plane
+`37c62d69f8aae157480a0502142bc662ee8bd816`, and API docs `4586d5e`.
+The initial review's same-socket disconnect-cleanup race was fixed and independent
+fix re-review is clean. Exact-runtime integration passed three automatic and three
+controlled reconnects, metadata/policy/credential retention, 12 scoped reads,
+10 scope checks, four invalid-OS rejects, six registry switches, nine own/other-OS
+schema checks, eight Windows filters and 14 Linux approval checks. Host data and
+actions were synthetic. All 24 catalog reads succeeded; 22 schema validations
+passed, while both Linux mock `list_services` results reproduce baseline debt.
+Final backend hosted CI and the broad review/PR handoff remain pending.
+
+Task 8's [qualification decision](../../design-docs/windows-qualification-decision.md)
+keeps Windows rollout and writes disabled. Hosted native package/host success does
+not resolve the unexplained cold-collector and service-identity failures or execute
+the reboot, Core/Desktop Experience and full generated-download gates. Future
+native-action controls are design requirements only. No merge, release,
+deployment or activation is authorized; the wider program remains incomplete.

@@ -30,3 +30,10 @@ installed hosts are not automatically updated.
 Experimental `.8` release evidence (2026-10-25): both hosted Node 22/24 systemd
 gates, published checksums and signed provenance passed. See the
 [runtime-selection completion record](exec-plans/completed/node-runtime-selection-implementation.md#published-experimental-release--2026-10-25).
+
+Windows qualification (2026-11-01): the read-only source/integration stage is
+complete, but [rollout and writes remain unqualified](design-docs/windows-qualification-decision.md).
+Unexplained collector/service-identity failures and unexecuted reboot,
+Core/Desktop Experience and full generated-download gates remain open. Hosted
+passing samples do not resolve those limits; the historical scores are not Windows
+release approval.

@@ -10,3 +10,4 @@ Record durable design decisions here. Keep transient task notes in execution pla
 - [Windows VM support with Linux compatibility](windows-vm-linux-compatibility.md) — Approved; preserves Linux contracts and stages Windows qualification.
 - [Windows service host](windows-service-host.md) — Reviewed native host boundary; packaging and qualification pending.
 - [Windows installer recovery](windows-installer-recovery.md) — Reviewed transaction and SCM ordering; native interruption qualification pending.
+- [Windows qualification decision](windows-qualification-decision.md) — Unqualified for rollout or writes; native evidence, unmet gates and future action-design requirements.
