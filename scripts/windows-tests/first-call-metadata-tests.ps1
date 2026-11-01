@@ -44,3 +44,14 @@ if ($status.cleanup_complete -or -not $status.collector_passed) { throw 'Worker 
 $report.worker.Remove('cleanup_failure'); $report.worker_exit_code = 1
 if ((Get-FirstCallStatus $report).cleanup_complete) { throw 'Nonzero worker exit passed cleanup gate.' }
 Write-Output 'Native diagnostic observation and watchdog regression checks passed.'
+# A string assignment of both Source values produced a nonexistent executable
+# on the hosted images. Exercise the actual selector used by the launch path.
+$commandMatches = @([pscustomobject]@{ Source = 'C:\first-node\node.exe' }, [pscustomobject]@{ Source = 'C:\later-node\node.exe' })
+$start = [Diagnostics.ProcessStartInfo]::new()
+$start.FileName = Select-FirstCallExecutable $commandMatches
+if ($start.FileName -cne 'C:\first-node\node.exe') { throw 'Multiple command matches did not select first precedence.' }
+$start.FileName = Select-FirstCallExecutable @($commandMatches[1], $commandMatches[0])
+if ($start.FileName -cne 'C:\later-node\node.exe') { throw 'Executable selection reordered command precedence.' }
+$start.FileName = Select-FirstCallExecutable @($commandMatches[0])
+if ($start.FileName -cne 'C:\first-node\node.exe') { throw 'Single command selection changed.' }
+Write-Output 'Native diagnostic executable precedence checks passed.'

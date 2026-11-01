@@ -25,7 +25,7 @@ try {
     $info = [Diagnostics.ProcessStartInfo]::new()
     $commands = Get-Command node -CommandType Application
     $report.worker_start_shape = @{ selected_command_count = @($commands).Count }
-    $info.FileName = $commands.Source
+    $info.FileName = Select-FirstCallExecutable @($commands)
     $info.UseShellExecute = $false; $info.CreateNoWindow = $true
     $info.RedirectStandardInput = $true; $info.RedirectStandardOutput = $true; $info.RedirectStandardError = $true
     $info.WorkingDirectory = $repo

@@ -36,3 +36,9 @@ function Get-FirstCallStatus([System.Collections.IDictionary]$Report) {
     if ($watchdog) { $watchdog = $Report.watchdog_pre_cleanup.worker_exited -and $Report.watchdog_pre_cleanup.target_exited -and $Report.watchdog_pre_cleanup.job_empty }
     return @{ collector_passed = [bool]$collector; measurement_complete = [bool]$measurement; cleanup_complete = [bool]$cleanup; watchdog_proven = [bool]$watchdog }
 }
+
+function Select-FirstCallExecutable([object[]]$Commands) {
+    # Get-Command can return multiple application matches. Preserve its order;
+    # assigning all Source values to a string would create an invalid path.
+    return [string]$Commands[0].Source
+}
