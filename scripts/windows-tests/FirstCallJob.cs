@@ -8,6 +8,7 @@ public sealed class FirstCallJob : IDisposable {
     Timer watchdog;
     readonly object gate = new object();
     public volatile bool WatchdogFired;
+    public volatile bool WatchdogTerminationSucceeded;
     [StructLayout(LayoutKind.Sequential)] struct Basic {
         public long ProcessTime, JobTime; public uint Flags;
         public UIntPtr Minimum, Maximum; public uint Active; public UIntPtr Affinity;
@@ -32,7 +33,7 @@ public sealed class FirstCallJob : IDisposable {
         bool contained; return IsProcessInJob(process, handle, out contained) && contained;
     }
     public void StartWatchdog() {
-        watchdog = new Timer(delegate(object state) { WatchdogFired = true; Terminate(); }, null, 12000, Timeout.Infinite);
+        watchdog = new Timer(delegate(object state) { WatchdogFired = true; WatchdogTerminationSucceeded = Terminate(); }, null, 12000, Timeout.Infinite);
     }
     public void StopWatchdog() { if (watchdog != null) watchdog.Dispose(); }
     public bool Terminate() { lock (gate) { return handle != IntPtr.Zero && TerminateJobObject(handle, 1); } }

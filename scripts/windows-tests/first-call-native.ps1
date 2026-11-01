@@ -6,22 +6,26 @@ if (-not $AllowDisposableCi -or $env:CI -ne 'true' -or $env:GITHUB_ACTIONS -ne '
 # No ETW session is started: available tooling does not establish a validated,
 # bounded, allowlisted headless scheduling/stack summarizer.
 Add-Type -Path (Join-Path $PSScriptRoot 'FirstCallJob.cs')
+. (Join-Path $PSScriptRoot 'first-call-metadata.ps1')
 $repo = Split-Path (Split-Path $PSScriptRoot -Parent) -Parent
 $artifact = Join-Path $repo 'artifacts/windows-collectors'
 $report = [ordered]@{
     schema_version = 'acornops.first-call-native.v1'; diagnostic_only = $true
+    fixture_kind = $(if ($TestWatchdog) { 'watchdog_negative' } else { 'first_call' })
     diagnostic_watchdog_ms = 12000; sampling_interval_ms = 100
     etw = 'unavailable_no_validated_bounded_summarizer'; warm_control = 'not_run'
     provenance = @{ revision = $env:GITHUB_SHA; run_id = $env:GITHUB_RUN_ID; run_attempt = $env:GITHUB_RUN_ATTEMPT; image = $env:ImageOS; image_version = $env:ImageVersion }
     tooling = @{ wpr_present = (Test-Path (Join-Path ([Environment]::SystemDirectory) 'wpr.exe')); wpaexporter_present = (Test-Path "${env:ProgramFiles(x86)}\Windows Kits\10\Windows Performance Toolkit\wpaexporter.exe") }
-    watchdog_fired = $false; cleanup_confirmed = $false; worker = $null
+    watchdog_fired = $false; supervisor_deadline_reached = $false; watchdog_termination_succeeded = $false; cleanup_confirmed = $false; worker = $null
     native = @{ samples = 0; sample_failures = 0; thread_states = @(0,0,0,0,0,0,0,0); wait_reasons = @(0,0,0,0,0,0,0,0,0,0,0,0,0,0); thread_sample_truncated = $false; cpu_samples = @() }
 }
 $job = $null; $worker = $null; $target = $null; $assigned = $false; $pending = $null; $bytes = 0; $operation = 'setup'
 try {
     $job = [FirstCallJob]::new()
     $info = [Diagnostics.ProcessStartInfo]::new()
-    $info.FileName = (Get-Command node -CommandType Application).Source
+    $commands = Get-Command node -CommandType Application
+    $report.worker_start_shape = @{ selected_command_count = @($commands).Count }
+    $info.FileName = $commands.Source
     $info.UseShellExecute = $false; $info.CreateNoWindow = $true
     $info.RedirectStandardInput = $true; $info.RedirectStandardOutput = $true; $info.RedirectStandardError = $true
     $info.WorkingDirectory = $repo
@@ -31,6 +35,10 @@ try {
         $info.ArgumentList.Add('-e')
         $info.ArgumentList.Add('process.stdin.once("data",()=>{const c=require("child_process").spawn(process.execPath,["-e","setInterval(()=>{},1000)"],{stdio:"ignore"});console.log("PID:"+c.pid);setInterval(()=>{},1000)});')
     } else { $info.ArgumentList.Add((Join-Path $PSScriptRoot 'first-call-worker.mjs')) }
+    $report.worker_start_shape.file_exists = [IO.File]::Exists($info.FileName)
+    $report.worker_start_shape.directory_exists = [IO.Directory]::Exists($info.WorkingDirectory)
+    $report.worker_start_shape.argument_count = $info.ArgumentList.Count
+    $report.worker_start_shape.legacy_arguments_empty = [string]::IsNullOrEmpty($info.Arguments)
     $operation = 'worker_start'
     $worker = [Diagnostics.Process]::Start($info)
     # Worker is inert until GO, so no descendant can escape pre-assignment.
@@ -53,6 +61,10 @@ try {
                 if ($null -ne $target) { throw 'DUPLICATE_TARGET' }
                 $target = [Diagnostics.Process]::GetProcessById([int]$Matches[1])
                 if (-not $job.Contains($target.Handle)) { $target.Dispose(); $target = $null; throw 'TARGET_NOT_OWNED' }
+                if ($TestWatchdog) {
+                    # Freeze this observing thread across the independent 12s deadline.
+                    [Threading.Thread]::Sleep([int][math]::Max(0, 12500 - $clock.ElapsedMilliseconds))
+                }
             } else {
                 # Input comes only from the fixed allowlisting worker; never copy
                 # process stdout or stderr from the production PowerShell child.
@@ -81,20 +93,28 @@ try {
         }
         Start-Sleep -Milliseconds 10
     }
-    if ($clock.ElapsedMilliseconds -ge 12000 -or $job.WatchdogFired) { $report.watchdog_fired = $true }
-} catch { $report.diagnostic_failure = 'NATIVE_MEASUREMENT_UNAVAILABLE'; $report.diagnostic_failure_stage = $operation }
+    $report.supervisor_deadline_reached = $clock.ElapsedMilliseconds -ge 12000
+} catch { $report.diagnostic_failure = 'NATIVE_MEASUREMENT_UNAVAILABLE'; $report.diagnostic_failure_stage = $operation; $report.exception = @(Get-FirstCallFailureMetadata $_.Exception) }
 finally {
     if ($null -ne $target) {
         try { if ($target.HasExited -and -not $report.native.ContainsKey('exit_observed_by_supervisor_ms')) { $report.native.exit_observed_by_supervisor_ms = $clock.ElapsedMilliseconds } } catch { }
     }
     # Always terminate only this invocation's owned job, including success. No
     # system-wide taskkill, trace cancellation, or PID-based termination.
+    if ($assigned) {
+        $report.watchdog_fired = $job.WatchdogFired
+        $report.watchdog_termination_succeeded = $job.WatchdogTerminationSucceeded
+        # Snapshot before ordinary termination; fallback can never turn this true.
+        $report.watchdog_pre_cleanup = @{ worker_exited = $false; target_exited = $false; job_empty = $false }
+        try { $report.watchdog_pre_cleanup = @{ worker_exited = $worker.HasExited; target_exited = ($null -ne $target -and $target.HasExited); job_empty = $job.Empty() } } catch { $report.watchdog_pre_cleanup.unavailable = $true }
+    }
     if ($null -ne $job) { $job.StopWatchdog() }
     try {
-    if ($assigned) { $report.watchdog_fired = $report.watchdog_fired -or $job.WatchdogFired; $report.termination_requested = $job.Terminate() }
+    if ($assigned) { $report.termination_requested = $job.Terminate() }
     elseif ($null -ne $worker -and -not $worker.HasExited) { $worker.Kill() }
     if ($null -ne $worker) {
         $report.cleanup_confirmed = $worker.WaitForExit(2000)
+        if ($report.cleanup_confirmed) { $report.worker_exit_code = $worker.ExitCode }
     }
     if ($null -ne $target) {
         try {
@@ -115,12 +135,13 @@ finally {
     if ($null -ne $worker) { $worker.Dispose() }
     $null = New-Item -ItemType Directory -Path $artifact -Force
     $name = if ($TestWatchdog) { 'first-call-watchdog-test.json' } else { 'first-call-diagnostic.json' }
+    $report.status = Get-FirstCallStatus $report
     $json = $report | ConvertTo-Json -Depth 12
     if ([Text.Encoding]::UTF8.GetByteCount($json) -gt 65536) { throw 'Sanitized diagnostic exceeded 64 KiB.' }
     [IO.File]::WriteAllText((Join-Path $artifact $name), $json)
 }
 if ($TestWatchdog) {
-    if (-not $report.watchdog_fired -or -not $report.cleanup_confirmed -or $null -eq $target) { throw 'Owned watchdog cleanup test failed.' }
-} elseif ($report.Contains('diagnostic_failure') -or $report.watchdog_fired -or -not $report.cleanup_confirmed -or $null -eq $report.worker -or -not $report.worker.ContainsKey('completed') -or -not $report.worker.gate_passed) {
+    if (-not $report.status.watchdog_proven -or -not $report.cleanup_confirmed -or $null -eq $target) { throw 'Owned watchdog cleanup test failed.' }
+} elseif ($report.Contains('diagnostic_failure') -or $report.watchdog_fired -or $report.supervisor_deadline_reached -or -not $report.status.collector_passed -or -not $report.status.measurement_complete -or -not $report.status.cleanup_complete) {
     throw 'First call failed or diagnostic unavailable; inspect sanitized evidence.'
 }

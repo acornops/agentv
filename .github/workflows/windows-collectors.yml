@@ -51,6 +51,7 @@ jobs:
         run: |
           node --test scripts/windows-tests/first-call-evidence.test.mjs
           if ($LASTEXITCODE -ne 0) { throw 'Diagnostic redaction checks failed.' }
+          ./scripts/windows-tests/first-call-metadata-tests.ps1
           ./scripts/windows-tests/first-call-native.ps1 -AllowDisposableCi -TestWatchdog
       - name: Read native collectors and capture sanitized structural evidence
         if: github.event_name != 'workflow_dispatch' || !inputs.first_call_diagnostic
