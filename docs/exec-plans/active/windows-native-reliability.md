@@ -47,6 +47,20 @@ is incremental: the exact repair is specified only after causal evidence exists.
 - [ ] Run one explicitly identified diagnostic matrix on Server 2022/2025 and Node 22/24, inspect every failure and preserve provenance. Do not repeatedly dispatch unchanged experiments merely to obtain a pass.
 - [ ] Independently review the diagnostic change and record the causal conclusion or remaining uncertainty. Specify any production repair as the next bounded task before implementing it.
 
+### Task 2: Execute the generated outer HTTPS wrapper
+
+**Files:** `scripts/windows-tests/generated-command-tests.ps1`, `scripts/windows-tests/generated-command-fixtures.json`, `.github/workflows/windows-installer.yml`; narrowly scoped companion fixture scripts under `scripts/windows-tests/` as needed. No production installer, backend or Linux changes.
+
+**Interfaces:** Preserve the current parser/binding check. Add a disposable hosted test that executes the complete command emitted by the actual pinned control-plane builder. Use loopback HTTPS and an explicitly synthetic downloaded parameter-capture bootstrap, so this qualifies the outer wrapper boundary without claiming real-backend enrollment or a complete native deployment.
+
+- [ ] Regenerate the three fixture commands from the current actual control-plane builder at `3a1b969d5a4782880b615d1f12c38c8dc1f62b6f`; record the source SHA-256 and exact generation inputs. Use `https://localhost:18443/releases`, a synthetic target and one-use-format synthetic token. Do not reimplement or rewrite the generated wrapper inside the fixture.
+- [ ] On disposable hosted CI only, create an owned loopback HTTPS server, short-lived self-signed certificate and private scratch directory. Trust only this generated certificate in the Windows root store for the test; remove only its exact thumbprint in `finally`. Fail rather than replace any preexisting resource or listener. Do not alter production TLS or installer trust behavior.
+- [ ] Execute the entire initial/repair/replacement commands under native PowerShell 5.1 and the OS `curl.exe`. Compare every bound value against the generated expected fixture, preserving apostrophe-safe literal inputs and `ReplaceCredential` semantics. Capture sensitive test details locally only; publish booleans and bounded provenance.
+- [ ] Exercise untrusted TLS before installing the owned root, HTTP download failure, and downloaded bootstrap failure. Each must report failure, never invoke a bootstrap after a failed download, and remove both temporary paths. The three success paths must also remove both paths. Keep an unrelated sentinel file intact.
+- [ ] Bound owned server readiness and each child command, wait for owned processes to exit, and clean all owned paths/certificates on failure. Never terminate by image name or delete another fixture's resources. Do not upload raw commands, arguments, stdout or stderr.
+- [ ] Reuse the existing short Windows installer verification jobs for Server 2022/2025; avoid an additional full installation matrix just for this PowerShell wrapper boundary. Run focused local validation plus the repository-required validation; record unavailable local PowerShell execution honestly.
+- [ ] Inspect hosted results and independently review the task. Update qualification evidence to distinguish complete outer-wrapper execution with a synthetic bootstrap from the existing real package/SCM installation tests and the still-unqualified combined native-agent/real-backend deployment.
+
 ## Follow-on work
 
 After Task 1, add a focused repair task with the exact failing regression and
