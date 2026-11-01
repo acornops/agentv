@@ -15,15 +15,30 @@ $ps=Join-Path ([Environment]::SystemDirectory) 'WindowsPowerShell\v1.0\powershel
 $node=(Get-Command node -CommandType Application|Select-Object -First 1).Source
 $certificate=$null;$owned=$false;$rootOwned=$false;$server=$null;$job=$null
 $processes=[Collections.Generic.List[Diagnostics.Process]]::new()
-$startup=Join-Path $work 'server-startup.json'
-$evidence=[ordered]@{schema=1;boundary='exact-generated-outer-https-wrapper-with-synthetic-bootstrap';controlPlaneRevision=$fixture.controlPlaneRevision;sourceSha256=$fixture.sourceSha256;configurationSourceSha256=$fixture.configurationSourceSha256;sourceRevision=(& git -C $repo rev-parse HEAD);powershell51=$true;serverStartup=@{available=$false;processExitCode=$null};stage='preflight';cases=@();passed=$false;cleanupConfirmed=$false}
+$startup=Join-Path $work 'server-startup.json';$moduleStatus=Join-Path $work 'server-module.json'
+$script:ObservingWrapperReadiness=$false
+$evidence=[ordered]@{schema=1;boundary='exact-generated-outer-https-wrapper-with-synthetic-bootstrap';controlPlaneRevision=$fixture.controlPlaneRevision;sourceSha256=$fixture.sourceSha256;configurationSourceSha256=$fixture.configurationSourceSha256;sourceRevision=(& git -C $repo rev-parse HEAD);powershell51=$true;serverLaunch=@{available=$false};serverReadiness=@{outcome='not-started';pollObserved=$false;preCleanupAvailable=$false};serverModule=@{available=$false;metadataState='absent'};serverStartup=@{available=$false;metadataState='absent';processExitCode=$null};stage='preflight';cases=@();passed=$false;cleanupConfirmed=$false}
 function Assert-Wrapper([bool]$Condition,[string]$Message){if(-not $Condition){throw $Message}}
-function Wait-Wrapper([scriptblock]$Condition,[int]$Seconds){$clock=[Diagnostics.Stopwatch]::StartNew();while(-not(& $Condition)){if($clock.Elapsed.TotalSeconds -gt $Seconds){throw 'Owned wrapper fixture deadline exceeded.'};Start-Sleep -Milliseconds 100}}
+function Wait-Wrapper([scriptblock]$Condition,[int]$Seconds){
+    if($script:ObservingWrapperReadiness){$evidence.serverReadiness.conditionIsScriptBlock=($Condition -is [scriptblock]);$evidence.serverReadiness.deadlineSeconds=$Seconds}
+    $clock=[Diagnostics.Stopwatch]::StartNew()
+    while(-not(& $Condition)){
+        if($clock.Elapsed.TotalSeconds -gt $Seconds){if($script:ObservingWrapperReadiness){$evidence.serverReadiness.outcome='deadline'};throw 'Owned wrapper fixture deadline exceeded.'}
+        Start-Sleep -Milliseconds 100
+    }
+    if($script:ObservingWrapperReadiness){$evidence.serverReadiness.outcome='ready'}
+}
 function Start-Wrapper([string]$Executable,[string[]]$Arguments){
     $info=[Diagnostics.ProcessStartInfo]::new();$info.FileName=$Executable
-    $info.Arguments=(@($Arguments|ForEach-Object {if($_.Contains('"')){throw 'Unsafe fixture argument.'};'"'+$_+'"'}) -join ' ')
+    $quotedArguments=@($Arguments|ForEach-Object {if($_.Contains('"')){throw 'Unsafe fixture argument.'};'"'+$_+'"'})
+    $info.Arguments=$quotedArguments -join ' '
     $info.UseShellExecute=$false;$info.CreateNoWindow=$true
     $info.RedirectStandardInput=$true;$info.RedirectStandardOutput=$true;$info.RedirectStandardError=$true
+    if($Executable -ceq $node){
+        $count=if($null -eq $Arguments){0}else{$Arguments.Count}
+        $evidence.serverLaunch=@{available=$true;boundArgumentCount=$count;unboundArgumentCount=$args.Count;serializedArgumentCount=$quotedArguments.Count;commandLineNonempty=(-not [string]::IsNullOrEmpty($info.Arguments));expectedScriptArgument=($count -ge 1 -and $Arguments[0] -ceq (Join-Path $PSScriptRoot 'generated-command-server.mjs'));expectedOptionsArgument=($count -eq 2 -and $Arguments[1] -ceq $options);executableExists=(Test-Path -LiteralPath $Executable -PathType Leaf)}
+        $info.EnvironmentVariables['AGENTV_WRAPPER_MODULE_STATUS']=$moduleStatus
+    }
     $process=[Diagnostics.Process]::new();$process.StartInfo=$info
     $null=$process.Start();$null=$process.Handle;$processes.Add($process)
     # Drain privately; no command, bound values or raw child output is published.
@@ -72,7 +87,21 @@ try{
     $options=Join-Path $work 'server-options.json';$ready=Join-Path $work 'ready'
     [IO.File]::WriteAllText($options,(@{allowDisposableCi=$true;pfx=$pfx;passphrase=$password;control=(Join-Path $work 'mode');ready=$ready;startupStatus=$startup}|ConvertTo-Json -Compress))
     $server=Start-Wrapper $node @((Join-Path $PSScriptRoot 'generated-command-server.mjs'),$options)
-    Wait-Wrapper {if($server.HasExited){throw 'Owned HTTPS server exited before readiness.'};Test-Path -LiteralPath $ready} 15
+    $script:ObservingWrapperReadiness=$true;$evidence.serverReadiness.outcome='waiting'
+    try{
+        Wait-Wrapper {$evidence.serverReadiness.pollObserved=$true;if($server.HasExited){$evidence.serverReadiness.outcome='process-exited';throw 'Owned HTTPS server exited before readiness.'};Test-Path -LiteralPath $ready} 15
+    }catch{if($evidence.serverReadiness.outcome -eq 'waiting'){$evidence.serverReadiness.outcome='condition-error'};throw}finally{
+        $script:ObservingWrapperReadiness=$false
+        try{
+            $exitedBeforeCleanup=$server.HasExited
+            $evidence.serverReadiness.processExitedBeforeCleanup=$exitedBeforeCleanup
+            $evidence.serverReadiness.processExitCodeBeforeCleanup=if($exitedBeforeCleanup){$server.ExitCode}else{$null}
+            $evidence.serverReadiness.readyExistsBeforeCleanup=Test-Path -LiteralPath $ready
+            $evidence.serverReadiness.startupExistsBeforeCleanup=Test-Path -LiteralPath $startup
+            $evidence.serverReadiness.moduleExistsBeforeCleanup=Test-Path -LiteralPath $moduleStatus
+            $evidence.serverReadiness.preCleanupAvailable=$true
+        }catch{}
+    }
     Run-Wrapper 'initial' 'untrusted'
     $evidence.stage='trust-owned-root'
     $rootOwned=$true;$null=Import-Certificate -FilePath $cer -CertStoreLocation 'Cert:\LocalMachine\Root'
@@ -98,15 +127,31 @@ try{
     # explicitly unavailable. No raw stderr/error message is ever published.
     if($owned -and (Test-Path -LiteralPath $startup)){
         try{
+            $evidence.serverStartup.metadataState='size-or-access-rejected'
             Assert-Wrapper ((Get-Item -LiteralPath $startup).Length -le 1024) 'Oversized startup status.'
+            $evidence.serverStartup.metadataState='read-or-json-rejected'
             $status=Get-Content -LiteralPath $startup -Raw|ConvertFrom-Json
+            $evidence.serverStartup.metadataState='fields-rejected'
             foreach($field in @('phase','category','code','node','openssl')){Assert-Wrapper ($status.$field -is [string]) 'Nonliteral startup value.'}
             Assert-Wrapper ($status.phase -cin @('unavailable','authorization','options-read','pfx-read','bootstrap-read','tls-create','listen','ready-write','ready')) 'Unknown startup phase.'
             Assert-Wrapper ($status.category -cin @('none','other','file-missing','address-in-use','unsupported-pfx','pfx-password-or-mac')) 'Unknown startup category.'
             Assert-Wrapper ($status.code -cin @('none','unclassified','ENOENT','EADDRINUSE','ERR_CRYPTO_UNSUPPORTED_OPERATION','ERR_OSSL_EVP_UNSUPPORTED')) 'Unknown startup code.'
             Assert-Wrapper ($status.node -cmatch '^(?:[0-9][A-Za-z0-9.+-]{0,31}|unavailable)$' -and $status.openssl -cmatch '^(?:[0-9][A-Za-z0-9.+-]{0,31}|unavailable)$') 'Invalid runtime version.'
-            $evidence.serverStartup.available=$true
+            $evidence.serverStartup.available=$true;$evidence.serverStartup.metadataState='valid'
             foreach($field in @('phase','category','code','node','openssl')){$evidence.serverStartup[$field]=$status.$field}
+        }catch{}
+    }
+    if($owned -and (Test-Path -LiteralPath $moduleStatus)){
+        try{
+            $evidence.serverModule.metadataState='size-or-access-rejected'
+            Assert-Wrapper ((Get-Item -LiteralPath $moduleStatus).Length -le 1024) 'Oversized module status.'
+            $evidence.serverModule.metadataState='read-or-json-rejected'
+            $facts=Get-Content -LiteralPath $moduleStatus -Raw|ConvertFrom-Json
+            $evidence.serverModule.metadataState='fields-rejected'
+            foreach($field in @('moduleEvaluated','scriptArgumentPresent','rawScriptArgumentMatches','optionsArgumentPresent','entryComparisonCompleted','entryMatched')){Assert-Wrapper ($facts.$field -is [bool]) 'Invalid module fact.'}
+            Assert-Wrapper ($facts.argumentCount -is [int] -and $facts.argumentCount -ge 0 -and $facts.argumentCount -le 8) 'Invalid argument count.'
+            foreach($field in @('moduleEvaluated','argumentCount','scriptArgumentPresent','rawScriptArgumentMatches','optionsArgumentPresent','entryComparisonCompleted','entryMatched')){$evidence.serverModule[$field]=$facts.$field}
+            $evidence.serverModule.available=$true;$evidence.serverModule.metadataState='valid'
         }catch{}
     }
     foreach($process in $processes){try{if(-not $process.WaitForExit(5000)){$process.Kill();if(-not $process.WaitForExit(5000)){$cleanup=$false}}}catch{$cleanup=$false}finally{$process.Dispose()}}

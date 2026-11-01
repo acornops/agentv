@@ -44,13 +44,26 @@ export function generatedCommandStartupStatus(phase, error = null) {
   return { phase: phases.includes(phase) ? phase : 'unavailable', category, code: error ? codes.includes(error.code) ? error.code : 'unclassified' : 'none', node: version(process.versions.node), openssl: version(process.versions.openssl) };
 }
 
+// Independent of options parsing and the CLI predicate: prove module evaluation
+// using only booleans/counts in the exact private path supplied by our parent.
+const moduleFacts = { moduleEvaluated: true, argumentCount: Math.min(process.argv.length, 8), scriptArgumentPresent: Boolean(process.argv[1]), rawScriptArgumentMatches: process.argv[1] === fileURLToPath(import.meta.url), optionsArgumentPresent: Boolean(process.argv[2]), entryComparisonCompleted: false, entryMatched: false };
+let moduleStatusOwned = false;
+if (process.env.CI === 'true' && process.env.GITHUB_ACTIONS === 'true' && process.env.AGENTV_WRAPPER_MODULE_STATUS) {
+  try { await writeFile(process.env.AGENTV_WRAPPER_MODULE_STATUS, JSON.stringify(moduleFacts), { flag: 'wx' }); moduleStatusOwned = true; } catch { /* Parent reports absent/unavailable metadata. */ }
+}
+
 // Node resolves the module's real path; argv can retain an alias or Windows
 // casing. Compare canonical files so an owned CLI launch cannot silently skip.
 const entryPath = value => {
   const canonical = realpathSync(value);
   return process.platform === 'win32' ? canonical.toLowerCase() : canonical;
 };
-if (process.argv[1] && entryPath(process.argv[1]) === entryPath(fileURLToPath(import.meta.url))) {
+const entryMatched = Boolean(process.argv[1] && entryPath(process.argv[1]) === entryPath(fileURLToPath(import.meta.url)));
+moduleFacts.entryComparisonCompleted = true; moduleFacts.entryMatched = entryMatched;
+if (moduleStatusOwned) {
+  try { await writeFile(process.env.AGENTV_WRAPPER_MODULE_STATUS, JSON.stringify(moduleFacts)); } catch { /* Parent reports invalid/unavailable metadata. */ }
+}
+if (entryMatched) {
   let options;
   let startupStatusOwned = false;
   let phase = 'authorization';

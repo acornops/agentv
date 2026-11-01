@@ -53,7 +53,9 @@ test('CLI reports bounded missing-PFX startup cause without disclosing options',
     const options = { allowDisposableCi: true, pfx: path.join(work, 'missing-sensitive-name.pfx'), passphrase: 'never-publish-this-password', control: path.join(work, 'mode'), ready: path.join(work, 'ready'), startupStatus: path.join(work, 'startup.json') };
     const optionsPath = path.join(work, 'options.json');
     await writeFile(optionsPath, JSON.stringify(options));
-    const child = spawnSync(process.execPath, [fileURLToPath(new URL('./generated-command-server.mjs', import.meta.url)), optionsPath], { env: { ...process.env, CI: 'true', GITHUB_ACTIONS: 'true' }, timeout: 10000, encoding: 'utf8' });
+    const moduleStatus = path.join(work, 'module.json');
+    const child = spawnSync(process.execPath, [fileURLToPath(new URL('./generated-command-server.mjs', import.meta.url)), optionsPath], { env: { ...process.env, CI: 'true', GITHUB_ACTIONS: 'true', AGENTV_WRAPPER_MODULE_STATUS: moduleStatus }, timeout: 10000, encoding: 'utf8' });
+    assert.deepEqual(JSON.parse(await readFile(moduleStatus, 'utf8')), { moduleEvaluated: true, argumentCount: 3, scriptArgumentPresent: true, rawScriptArgumentMatches: true, optionsArgumentPresent: true, entryComparisonCompleted: true, entryMatched: true });
     assert.equal(child.status, 1);
     const statusText = await readFile(options.startupStatus, 'utf8');
     const status = JSON.parse(statusText);
@@ -104,8 +106,10 @@ test('CLI PFX boundary reports unsupported, wrong-password and malformed inputs;
     // no startup file, the parent must retain available=false, not infer PFX.
     const noEntryStatus = path.join(work, 'no-entry.json');
     await writeFile(optionsPath, JSON.stringify({ allowDisposableCi: true, startupStatus: noEntryStatus }));
-    const noEntry = spawnSync(process.execPath, ['--input-type=module', '-e', 'await import('+JSON.stringify(new URL('./generated-command-server.mjs', import.meta.url).href)+')', optionsPath], { env: environment, timeout: 10000 });
+    const noEntryModule = path.join(work, 'no-entry-module.json');
+    const noEntry = spawnSync(process.execPath, ['--input-type=module', '-e', 'await import('+JSON.stringify(new URL('./generated-command-server.mjs', import.meta.url).href)+')', optionsPath], { env: { ...environment, AGENTV_WRAPPER_MODULE_STATUS: noEntryModule }, timeout: 10000 });
     assert.equal(noEntry.status, 0);
+    assert.deepEqual(JSON.parse(await readFile(noEntryModule, 'utf8')), { moduleEvaluated: true, argumentCount: 2, scriptArgumentPresent: true, rawScriptArgumentMatches: false, optionsArgumentPresent: false, entryComparisonCompleted: true, entryMatched: false });
     await assert.rejects(readFile(noEntryStatus), { code: 'ENOENT' });
     // Readiness must never replace a preexisting marker. If publishing it fails
     // after startup status was created, retain the bounded causal failure.
@@ -160,7 +164,13 @@ test('CLI starts through an alias of the same entry file', async () => {
     const options = { allowDisposableCi: true, pfx: path.join(work, 'missing.pfx'), passphrase: 'synthetic-only', startupStatus: path.join(work, 'startup.json') };
     const optionsPath = path.join(work, 'options.json');
     await writeFile(optionsPath, JSON.stringify(options));
-    const child = spawnSync(process.execPath, [process.platform === 'win32' ? alias.toUpperCase() : alias, optionsPath], { env: { ...process.env, CI: 'true', GITHUB_ACTIONS: 'true' }, timeout: 10000, encoding: 'utf8' });
+    const moduleStatus = path.join(work, 'module.json');
+    const child = spawnSync(process.execPath, [process.platform === 'win32' ? alias.toUpperCase() : alias, optionsPath], { env: { ...process.env, CI: 'true', GITHUB_ACTIONS: 'true', AGENTV_WRAPPER_MODULE_STATUS: moduleStatus }, timeout: 10000, encoding: 'utf8' });
+    const facts = JSON.parse(await readFile(moduleStatus, 'utf8'));
+    assert.equal(facts.moduleEvaluated, true);
+    assert.equal(facts.entryComparisonCompleted, true);
+    assert.equal(facts.entryMatched, true);
+    assert.equal(facts.rawScriptArgumentMatches, false);
     // Reaching PFX-read proves CLI startup occurred despite argv/module spelling.
     assert.equal(child.status, 1);
     const status = JSON.parse(await readFile(options.startupStatus, 'utf8'));
