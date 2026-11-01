@@ -105,3 +105,11 @@ separate history. No merge, deployment, release or activation is included.
 Hosted follow-up adds an unresolved rollback-finalization sharing violation,
 alongside another cold collector timeout; see the [qualification evidence](../../design-docs/windows-qualification-decision.md#final-catch-all-audit).
 Source review completion does not close these native release blockers.
+
+Late hosted testing also exposed a stale provisional reconnect timer. Four
+deterministic Linux/Windows replacement-connection cases fail before a two-line
+generation guard and pass afterward; two controls retain the one-second retry.
+Fourteen focused cases include actual WebSocket and Linux compatibility checks.
+The guard changes no deadline, retry schedule, protocol or collector behavior.
+Final unit count is 262 across 37 files, plus the unchanged 28 Node fixtures;
+exact-revision native results remain on the draft PR.

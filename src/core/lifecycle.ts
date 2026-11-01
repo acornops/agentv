@@ -135,7 +135,8 @@ export class LifecycleManager {
     if (result.provisional === true) {
       if (this.runtime?.kind === 'windows') this.sessionState.provisionalAuthenticated?.();
       this.logger.info({}, 'AgentV installation credential verified; waiting for activation');
-      setTimeout(() => this.transport.forceReconnect(), 1_000).unref();
+      const generation = this.generation;
+      setTimeout(() => { if (generation === this.generation) this.transport.forceReconnect(); }, 1_000).unref();
       return;
     }
     const compiled = new Set(toolRegistry.getAll().map((tool) => tool.name));

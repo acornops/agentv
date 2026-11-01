@@ -73,3 +73,5 @@ Final catch-all (2026-11-02): current Linux lifecycle and all four Windows host
 cells pass. Native collectors still time out, and one rollback-finalization path
 now records an unresolved sharing violation with retained recovery state. These
 are release blockers; see the [current qualification evidence](design-docs/windows-qualification-decision.md#final-catch-all-audit).
+Six deterministic cases separately cover a generation guard for stale provisional
+reconnect timers, preserving the normal Linux/Windows retry schedule.

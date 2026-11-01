@@ -48,7 +48,7 @@ jobs:
       - run: npm ci
       - run: npm run build
       - name: Verify Windows read runtime and service entry gate
-        run: npx vitest run src/config.spec.ts src/windows-runtime.spec.ts src/windows-service-entry.spec.ts src/windows
+        run: npx vitest run src/config.spec.ts src/windows-runtime.spec.ts src/windows-service-entry.spec.ts src/core/provisional-generation.spec.ts src/windows
       - name: Measure the first native call in an owned diagnostic job
         if: github.event_name == 'workflow_dispatch' && inputs.first_call_diagnostic && !inputs.component_composition
         shell: pwsh

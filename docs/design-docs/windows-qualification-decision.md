@@ -287,6 +287,14 @@ The artifact does not identify the locked destination or holder. Concurrent
 recovery reads are a hypothesis, not an established cause or an implemented fix.
 Neither timeout retries nor file-sharing/locking changes were made speculatively.
 
+The subsequent [41342700534](https://github.com/acornops/agentv/actions/runs/41342700534)
+fails a provisional-readiness test before native collection in one cell. A
+deterministic follow-up reproduces an old provisional timer interrupting a newer
+connection in both Linux and Windows (four failures, two unchanged-retry controls).
+A two-line generation guard fixes those cases; it does not explain or repair the
+native collector timeout or installer sharing violation. The superseded installer
+run `41342700480` was cancelled before verifying the new runtime revision.
+
 ## Unmet gates
 
 1. **Explain and resolve native collector reliability failures.** Preserve failed
