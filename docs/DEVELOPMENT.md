@@ -188,10 +188,12 @@ then removes only the resources it created. Structural evidence is uploaded as
 `windows-service-host-<runner>-node<major>`.
 
 The suite covers SID access, kernel containment, crash recovery, bounded stop
-and logs, unsafe ACLs and reparse paths. Compilation and native qualification are
-pending until a matching hosted run passes. Transactional installer packaging,
-real reboot and Core/Desktop Experience qualification are separate gates;
-Windows rollout remains disabled.
+and logs, unsafe ACLs and reparse paths. Hosted compilation and service-host
+matrices have passed; the [qualification decision](design-docs/windows-qualification-decision.md)
+retains exact revisions and unresolved native failures. Real reboot and
+Core/Desktop Experience qualification remain open; Windows rollout is disabled.
+The workflow also runs the built production entry in real Node children with
+the parent control pipe held open, covering successful stop and failed startup.
 
 ## Windows transactional package qualification
 
@@ -206,11 +208,17 @@ The additive `Windows installer recovery` workflow runs PowerShell5.1 parsing,
 recovery decision tests, native SCM policy and durable-file tests. Its separate
 Server2022/2025 × Node22/24 installation matrix uses an explicitly authorized
 disposable runner, synthetic credentials, a loopback HTTPS/WebSocket fixture and
-the real packaged host. Initial coverage exercises bootstrap, repair, lost
-replacement commit response and uninstall. Full interruption and upgrade
-qualification is still in progress; do not interpret those initial cases as
-reboot or production rollout qualification. Evidence contains fixed stages,
+the real packaged host. Coverage includes bootstrap, repair, retained reinstall,
+replacement, interrupted verification/commit, lost responses, upgrade/rollback,
+restart suppression, cleanup and uninstall. These hosted scenarios do not
+qualify reboot or production rollout. Evidence contains fixed stages,
 assertion names and sanitized numeric failure details, never fixture secrets.
+
+`npm run validate` builds the runtime and runs the Node fixture suites, including
+real process-exit and HTTPS/PFX negative cases (`npm run test:fixtures` after a
+build). Local HTTPS tests need loopback listening and OpenSSL. Native Windows
+workflows skip prose-only PRs; source, configuration, contract fixtures and
+manual dispatch retain the full matrices. Failed/unresolved comparisons run CI.
 
 ## Candidate and reboot evidence tooling
 

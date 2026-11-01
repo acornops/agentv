@@ -14,7 +14,11 @@ permissions:
   contents: read
 
 jobs:
+  changes:
+    uses: ./.github/workflows/windows-change-scope.yml
   recovery-state:
+    needs: changes
+    if: needs.changes.outputs.run_native == 'true'
     name: Recovery state (${{ matrix.os }})
     runs-on: ${{ matrix.os }}
     timeout-minutes: 10

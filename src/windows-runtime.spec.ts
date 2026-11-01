@@ -1,7 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import { createWindowsHost } from './windows-runtime.js';
 import { WindowsMockHost } from './windows/mock.js';
-import { isFailedService, buildWindowsSnapshot } from './windows/snapshot.js';
+import { buildWindowsSnapshot } from './windows/snapshot.js';
+import { isFailedService } from './windows/service-health.js';
 import { registerWindowsTools } from './windows/tools.js';
 import { toolRegistry } from './tools/registry.js';
 import { ToolExecutor } from './tools/executor.js';

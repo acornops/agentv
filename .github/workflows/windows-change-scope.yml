@@ -1,0 +1,22 @@
+name: Windows validation scope
+
+on:
+  workflow_call:
+    outputs:
+      run_native:
+        value: ${{ jobs.changes.outputs.run_native }}
+
+permissions:
+  contents: read
+
+jobs:
+  changes:
+    runs-on: ubuntu-latest
+    outputs:
+      run_native: ${{ steps.filter.outputs.run_native }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - id: filter
+        run: node scripts/windows-change-scope.mjs

@@ -1,6 +1,6 @@
 # Windows service host decision for task 5
 
-Status: approach and detailed corrections approved by independent technical review; native implementation and qualification pending.
+Status: implemented and source-reviewed; hosted service-host/installer matrices have passed. General Windows rollout remains unqualified; see the [qualification decision](windows-qualification-decision.md) for revisions and unmet gates.
 Date: 2026-10-31. User already approved staged Windows implementation.
 
 ## Decision

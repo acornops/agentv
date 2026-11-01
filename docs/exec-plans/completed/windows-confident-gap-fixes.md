@@ -93,51 +93,20 @@ gaps here, then move the plan to completed and link it from the docs index.
 
 ## Completion evidence
 
-AgentV `c94607a` corrects the mock summary output; `0bd62ea` gates only optional
-Codecov publication. Parent `314ecad` corrects linked-workspace validation and
-child-owned contract counts. Only the Linux mock and its contract test changed
-under AgentV `src/` in this follow-up. Live Linux and Windows implementations,
-installers and control-plane source are unchanged. Existing unrelated changes
-in linked main checkouts were preserved.
+AgentV `c94607a` fixes the Linux mock summary; `0bd62ea1540391ee4e8fe504f5f1553a54a1bd8b`
+gates optional Codecov publication. Parent `314ecad` fixes linked-workspace and
+child-owned contract checks, tested through merge `3152c48`. Live Linux/Windows,
+installers and backend source were unchanged; linked-main user changes were kept.
 
-| Check | Result |
-| --- | --- |
-| `npx vitest run src/tools/contracts.spec.ts` | New assertion failed on extra detail fields before the fix; 10/10 pass after it. |
-| `npm run validate` | Pass: lint/typecheck, 256 tests/36 files, contracts, harness and build. |
-| `npm run test:coverage:all` | Pass: 260 tests/37 files, 80.23% statements, 71.8% branches, 76.42% functions, 88.14% lines. |
-| `npm run smoke:package` | Pass: archive and bootstrap failure-path checks; no asset published. |
-| `actionlint .github/workflows/ci.yml` in AgentV and parent | Pass. |
-| Parent `node --test scripts/harness/*.test.mjs` and `task validate` | Pass: four regressions plus every parent gate. The new regressions failed on old symlink/count/tracked-child behavior first. |
-| Platform-admin `npm run requirements:check` | Pass read-only: its 29-route/eight-scope baseline agrees with runtime. |
-| Independent final review | No Critical, Important or Minor findings; reviewer independently reran all four parent regressions. |
-
-[Linux CI 41305615953](https://github.com/acornops/agentv/actions/runs/41305615953)
-tested merge `65fad1ef8940269f17f33ad0062678da0653d881`, combining AgentV
-`0bd62ea1540391ee4e8fe504f5f1553a54a1bd8b` with main `3d86cfc`. Validation,
-260 coverage/E2E tests, package/bootstrap/curl compatibility and Ubuntu 24.04
-Node 22/24 install/restart/upgrade/rollback/uninstall gates pass. The coverage
-artifact upload succeeds; Codecov is correctly skipped because its credential
-is unavailable. The authenticated external-upload path was not exercised.
-
-[Parent CI 41305617865](https://github.com/acornops/acornops/actions/runs/41305617865)
-tests `314ecad` through merge `3152c48`; harness, four regressions and title checks
-pass. The updated PR title also passed the local Conventional Commits check.
-
-Automatic Windows [collector CI 41305615972](https://github.com/acornops/agentv/actions/runs/41305615972)
-and [service-host CI 41305615963](https://github.com/acornops/agentv/actions/runs/41305615963)
-both pass all four OS/Node cells. The eight inspected native artifacts record
-host reads of 5,110–7,600 ms, successful boundary and assignment-negative checks,
-and 33 service-host checks per cell including LocalService reads and containment.
-These are additional passing samples, not repairs for previous intermittent
-native failures. No manual composition experiment or unchanged retry was run.
-
-[Installer CI 41305615938](https://github.com/acornops/agentv/actions/runs/41305615938)
-passes all 18 jobs at the same tested merge. All 22 artifacts were inspected:
-each OS/Node cell records lifecycle 23, recovery 21, startup 9 and acceptance 21
-checks. Both OS versions also pass 25 API-diagnostic cases, six generated HTTPS
-wrapper cases and ten teardown-race checks. Native I/O in the API-helper fixture,
-the wrapper's bootstrap and the installer backend are synthetic; these results
-do not establish real-backend enrollment or power-cycle recovery.
+The new mock assertion and four workspace regressions failed before correction.
+Local validation passed 256 unit tests, 260 coverage/E2E tests, package/bootstrap,
+actionlint, parent `task validate` and read-only platform-admin requirements.
+Independent final review had no findings. The
+[qualification record](../../design-docs/windows-qualification-decision.md#deterministic-follow-up-fixes)
+retains exact Linux/Windows/parent run IDs, tested merge identity, artifact counts,
+synthetic boundaries and unresolved native failures. Optional Codecov upload was
+skipped, not passed. The [parent PR](https://github.com/acornops/acornops/pull/27)
+remains separate from Windows runtime scope.
 
 ## Decisions and remaining gaps
 

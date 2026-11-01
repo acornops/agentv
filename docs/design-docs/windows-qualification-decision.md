@@ -260,6 +260,21 @@ wrapper cases and ten teardown-race checks per OS. Their synthetic native-I/O,
 bootstrap and backend boundaries remain as documented above. This is hosted
 transactional testing, not real-backend deployment or reboot qualification.
 
+## Final catch-all audit
+
+The [final catch-all record](../exec-plans/completed/windows-final-catch-all.md)
+fixes the service entry retaining its open control pipe after completion,
+onboarding ignoring expired observations, and hidden confirmation errors.
+It removes a repeated backend discovery filter without changing dispatch guards,
+wires real process/HTTPS regressions into validation, and conservatively skips
+native jobs for prose-only PRs. Historical native failure records above remain
+unchanged; none of these fixes explains the collector timing failures.
+
+Shared heartbeat reporting now expires stale observations (see the
+[backend record](https://github.com/acornops/control-plane/blob/feat/windows-vm-support/docs/exec-plans/completed/agent-heartbeat-freshness.md));
+persistent outage-status/event reconciliation remains separate. Exact-revision
+hosted evidence for this pass is recorded on the coordinated draft PRs.
+
 ## Unmet gates
 
 1. **Explain and resolve native collector reliability failures.** Preserve failed

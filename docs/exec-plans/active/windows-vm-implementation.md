@@ -173,248 +173,45 @@ Backend first, with Windows disabled. Linux agents need no upgrade. Windows acti
 
 ## Completion evidence
 
-Task 1 passed independent review with no findings. AgentV `984ad70` adds frozen catalog/provenance, and control-plane `05de831` pins legacy behavior. AgentV validation passed133 tests plus4 e2e; CP focused29 passed. Deliberate fixture perturbation failed as expected, then original bytes were restored.
+Source implementation tasks 1–7 and the task 8 read-only qualification decision
+are complete. Windows rollout remains **unqualified and disabled**. The
+[qualification decision](../../design-docs/windows-qualification-decision.md)
+is the authoritative record of final matrices, failed native samples, reviewed
+fixes, synthetic/native boundaries and unmet production gates. It supersedes the
+intermediate “pending” statements in the
+[original task ledger](https://github.com/acornops/agentv/blob/b7f71b777b47e397c8093b0255e1b97643a6498a/docs/exec-plans/active/windows-vm-implementation.md#completion-evidence).
 
-Task 2 passed independent review after one fix round. Control-plane `3985774` and `385339a` add immutable OS identity, enrollment ordering, default-off Windows read policy and separate install instructions. Review found and resolved smart-quote literal injection and deleted-target discovery/dispatch through retained sockets. Final canonical validation passed 1,549 tests with zero skips; all remaining checks and build passed. Linux/Kubernetes compatibility assertions remain intact. Contract mirrors are AgentV `99a7852` and generated docs `4e944d6`. Windows native execution is still a later qualification gate.
+| Task | Checkpoint and scope |
+| --- | --- |
+| 1: Linux baseline | AgentV `984ad70`, backend `05de831`: frozen released catalog/provenance; deliberate perturbation failed before restoration. |
+| 2: Backend identity | `3985774`, `385339a`; mirrors `99a7852`, `4e944d6`: immutable OS, default-off read policy; quote injection and deleted-target dispatch findings fixed. 1,549 backend tests passed. |
+| 3: Windows runtime | `754afa8` through `b468f7b`, tested merge `52cff0b3`: isolated collectors/mock; fixed module-qualified lookup removed an observed 23–29 second lookup delay. Later unrelated cold-call failures remain open. |
+| 4: Telemetry | Backend `d0fbcac`, docs `c10e5f9`, console `b4337a7`: ingestion, inventory/issues/metrics/logs and backend platform availability. 1,583 backend and 1,240 console tests passed. |
+| 5: Native packaging | Host `d03bfbc`, checkpoint `f10e138`, installer `25063fb`/merge `e6508339`, recovery `d7d2f4d`, final `2a69373`/merge `2a9adb0a`: source-reviewed transactional installer. Concurrent fresh ownership, watcher/stop race and retained-config SID lookup received native RED/GREEN checks. |
+| 6: Console | `6c77dbc` including main `54f7e12`: backend-gated OS selection, Windows read-only policy and channel-scoped logs; 1,266 tests and hosted browsers passed. Populated log/race/409 cases used intercepted fixtures. |
+| 7: Integration | Snapshot aggregation correction `5bce18b`; AgentV `f86bd5ab7040c9372f6160383ef7620091f821ea`, backend `37c62d69f8aae157480a0502142bc662ee8bd816`, docs `4586d5e`. Three released/updated Linux/Windows processes passed scoped reads, reconnects, registry/schema isolation and Linux approvals through actual transport. Host observations/actions were synthetic. |
+| 8: Qualification | The linked decision retains timing, service identity, composition, reboot and deployment gaps. No native Windows writes are implemented. |
 
-Pre-runtime native Linux qualification at AgentV `32da905` passed both Ubuntu24.04/systemd Node22 and Node24 jobs, including install/restart/upgrade/rollback/uninstall. [CI run](https://github.com/acornops/agentv/actions/runs/41209224807) and [draft PR](https://github.com/acornops/agentv/pull/8) preserve evidence. This run qualifies the baseline, not future runtime changes.
+Intermediate native checkpoints remain available below. These historical samples
+are not acceptance evidence for later source revisions.
 
-User selected hosted Windows CI for now. Actual Windows reboot and Core/Desktop Experience coverage remain separate unexecuted gates; no disposable Windows VM was supplied. Baselines and environment-specific failures are recorded in [assessment](windows-vm-assessment.md). Per-task reports and reviewer evidence are kept in the local ignored plan workspace; durable conclusions are copied here before handoff.
+| Checkpoint | Hosted evidence |
+| --- | --- |
+| Linux before runtime, `32da905` | [41209224807](https://github.com/acornops/agentv/actions/runs/41209224807): Ubuntu systemd lifecycle on Node 22/24 passed. |
+| Runtime `b468f7b` | [Collectors 41217103762](https://github.com/acornops/agentv/actions/runs/41217103762), [Linux 41217103832](https://github.com/acornops/agentv/actions/runs/41217103832): four Windows cells and Linux lifecycle passed. |
+| Host prerequisite `d03bfbc` | [Host 41221285754](https://github.com/acornops/agentv/actions/runs/41221285754), [Linux 41221285808](https://github.com/acornops/agentv/actions/runs/41221285808): 33 host checks/cell and Linux gates passed. |
+| Initial installer `25063fb` | [41231100923](https://github.com/acornops/agentv/actions/runs/41231100923): 12 checks/cell; later interruption coverage was still pending at this checkpoint. |
+| Recovery `d7d2f4d` | [Linux 41234585924](https://github.com/acornops/agentv/actions/runs/41234585924), [host 41234585870](https://github.com/acornops/agentv/actions/runs/41234585870) passed; [collectors 41234585971](https://github.com/acornops/agentv/actions/runs/41234585971) failed both Server 2022 cells, with a later 8.37-second diagnostic sample. |
+| Installer source completion `2a69373` | [Installer 41239335850](https://github.com/acornops/agentv/actions/runs/41239335850): two short gates and 16 scenario cells passed (lifecycle 23, recovery 21, startup 9, acceptance 21 checks per OS/Node pair). [Host 41239335845](https://github.com/acornops/agentv/actions/runs/41239335845) and [Linux 41239335838](https://github.com/acornops/agentv/actions/runs/41239335838) passed. |
+| Console source completion `6c77dbc` | [41242199107](https://github.com/acornops/management-console/actions/runs/41242199107): preflight and eight browser jobs passed. |
 
-Task 3 passed independent review after one fix round. AgentV `754afa8` through
-`b468f7b` add isolated read collectors, a native snapshot, explicit OS dispatch,
-synthetic mock and service bootstrap seam. Review corrected incomplete Running
-service evidence. Hosted CI exposed broad PowerShell command lookup taking
-23–29 seconds; fixed module-qualified commands removed that delay without
-raising the eight-second collector limit or inheriting ambient environment.
-Local validation passed 159 tests; frozen Linux behavior remains intact.
+Final implementation-stage source, native failure history, all final hosted run
+IDs and collection-health fixes are retained once in the qualification decision.
+The original two Linux mock schema failures were subsequently fixed by
+[the deterministic follow-up](../completed/windows-confident-gap-fixes.md);
+the earlier failing observations are not relabeled. Shared heartbeat reporting is
+recorded in the backend/console plans; durable outage-status repair is separate.
 
-[Windows collector CI](https://github.com/acornops/agentv/actions/runs/41217103762)
-passed all Windows Server 2022/2025 × Node 22/24 jobs. Artifacts identify PR merge
-`52cff0b3`; all six script hashes match reviewed feature commit `b468f7b`. First
-host collection took 4.69–6.58 seconds; full collections and boundary checks
-passed. [Matching Linux CI](https://github.com/acornops/agentv/actions/runs/41217103832)
-passed validation and both Ubuntu systemd lifecycle jobs. Native service identity,
-ACLs, packaging and recovery remain task 5 gates. A minor mock-filter discrepancy
-is tracked for task 7 and final review; synthetic evidence does not qualify a VM.
-
-Task 4 passed independent review at control-plane `d0fbcac`, generated docs
-`c10e5f9`, and console contract-only `b4337a7`. Separate Windows ingestion,
-inventory, issues, recovery, system-volume metrics and channel-based logs now
-consume the native contract. Registration options expose only backend-qualified
-platforms. Canonical backend validation passed 1,583 tests/253 suites with zero
-failures or skips, including real PostgreSQL and authenticated gzip snapshot
-ingress; console validation passed 1,240 tests/234 files plus build/route checks.
-Docs and cross-repo contract checks passed. Input schema isolation is covered;
-explicit output-schema assertions are deferred to task 7. Existing expected
-failure-path test logs remain a non-blocking hygiene observation for final review.
-
-Coordinated drafts: [backend](https://github.com/acornops/control-plane/pull/33),
-[AgentV](https://github.com/acornops/agentv/pull/8),
-[console](https://github.com/acornops/management-console/pull/35), and
-[API docs](https://github.com/acornops/docs-website/pull/19). No merge, release or
-activation has occurred. Console behavior and Windows packaging are still pending.
-
-Task 5's service-host prerequisite passed at AgentV `d03bfbc`:
-[native host CI](https://github.com/acornops/agentv/actions/runs/41221285754)
-passed all Server 2022/2025 × Node 22/24 cells, with 33 checks each. These cover
-the LocalService token and unique SID, unrelated-user access denial, crash
-recovery, whole-process-tree stop, bounded logs and trusted runtime paths.
-Production collectors also ran under the contained service identity. Artifact
-source hashes match the reviewed C# source with Windows checkout line endings.
-[Matching Linux CI](https://github.com/acornops/agentv/actions/runs/41221285808)
-passed. Transactional installer implementation and independent task review remain
-pending; this does not qualify installation recovery or reboot.
-
-Separate cold collector runs subsequently exposed intermittent eight-second
-timeouts on Server 2022/Node 24, Server 2022/Node 22 and Server 2025/Node 24.
-Identical post-failure diagnostic trials completed in 1.49–2.15 seconds. Later
-matrices, including `f10e138`, passed, but the cold-start cause remains unresolved.
-No production timeout was raised, and diagnostics retain the original failing
-gate. Final qualification must account for this reliability observation.
-
-A source-unmodified Linux `v0.0.1-experimental.14` process also completed real
-TLS enrollment, reconnect and snapshot persistence against the disposable updated
-backend. Registration omitted OS fields and retained Linux/systemd defaults;
-all nine existing tool names remained advertised. Its observations/actions are
-synthetic, so native Linux behavior is qualified separately by Ubuntu CI.
-
-At checkpoint `f10e138`, all four hosted workflows passed: Linux lifecycle CI,
-Windows collectors, native service hosting and installer recovery primitives.
-The latter covers decision cases, exact SCM policies, protected durable writes
-and exclusive locks on Server 2022/2025; full installer cutover remains pending.
-
-Mixed-target preparation now runs released Linux, updated Linux and Windows
-AgentV processes concurrently against an isolated backend. A Windows-only
-snapshot aggregation bug found by actual ingress was fixed in `5bce18b`, with
-regression tests; shared Linux redaction was unchanged. Windows then reused its
-existing credential and persisted its snapshot successfully.
-
-The actual execution-engine client called the actual gateway, backend and agent
-processes for host, service and log reads on all three targets. Twelve checks
-passed, including rejecting service arguments from the other OS. Six registry
-target switches preserved each target's input/output schemas; all nine Linux
-schemas match between released and updated agents, and Windows has eight reads
-with no restart. Nine actual returned results match their own output schema and
-fail the corresponding other-OS schema. Existing VM generic result normalization
-is unchanged. The integration fixture bypasses model generation and automatic run
-dispatch; host observations remain synthetic. Full task 7 qualification is pending.
-
-A tracked-blob comparison at this checkpoint also confirms 72 Linux-owned source,
-action, tool, systemd packaging, dependency and CI files are unchanged from the
-baseline. Shared configuration/lifecycle/entry seams are excluded from that
-comparison and require behavioral regression tests. The observed pre-existing VM
-disconnect-status defect remains the separate scoped task 7 correction.
-
-Fourteen Linux approval checks passed through real approval APIs, receipt signing,
-the execution-engine client, gateway, backend and both released/updated AgentV
-processes. Each rejects unapproved writes, altered approved arguments and replay,
-then completes the approved restart and post-action read. Host actions remain
-synthetic, and fixture run state suppresses model continuation dispatch; this
-qualifies the tool/approval boundary rather than a complete assistant run.
-
-Shared-configuration review also reproduced a narrow Linux regression: the new
-Windows log-channel parser rejects a Windows-only environment setting that the
-released Linux runtime ignored. Task 7 must fix this with characterization tests
-before final qualification; it is not an accepted residual risk.
-
-The basic native Windows installer lifecycle passed at `25063fb`:
-[installer CI](https://github.com/acornops/agentv/actions/runs/41231100923)
-completed all Server 2022/2025 × Node 22/24 cells, with 12 assertions each and
-artifact revision `e6508339`. Fresh installation, authenticated activation,
-repair preserving credentials and CA, lost-commit replacement, and uninstall
-retaining configuration passed. Native diagnostics isolated a stale Server 2022
-CIM task timestamp; direct COM completion observation corrected the check while
-retaining freshness, successful completion and the 30-second deadline. Expanded
-interruption/recovery cases and independent task 5 review remain pending.
-
-Matching Linux CI and native service-host CI passed. The separate cold collector
-matrix failed both Server 2022 cells at the unchanged eight-second ceiling;
-identical subsequent diagnostic trials ranged from 1.43 to 6.59 seconds. This
-remains unresolved reliability evidence, despite the installer success.
-
-A concurrent full-catalog integration probe completed all 24 read calls across
-the three targets. Explicit schema validation passed 22 results, including all
-eight Windows reads. Both released and updated Linux mocks return full service
-details for `list_services`, exceeding their frozen summary schema. The source
-is unchanged from the release; record this pre-existing mock gap separately
-instead of changing Linux behavior or claiming every schema check passed.
-
-At `d7d2f4d`, both short native recovery jobs pass, including missing-journal
-refusal, protected durable-state tests, fixed SCM policy, and generated
-control-plane command parsing/argument binding. The expanded installer matrix
-is still pending; finalized cleanup was previously reproduced as a failing
-native case. The generated download wrapper itself has not been executed end
-to end. Matching [Linux CI](https://github.com/acornops/agentv/actions/runs/41234585924)
-and [native service-host CI](https://github.com/acornops/agentv/actions/runs/41234585870)
-pass.
-
-The [collector matrix at the same checkpoint](https://github.com/acornops/agentv/actions/runs/41234585971)
-again fails both Server 2022 cells. One subsequent diagnostic invocation also
-takes 8.37 seconds, so this is not established as a single first-call delay.
-The unchanged eight-second production limit and failed qualification outcome
-remain in place; a later passing run alone will not resolve this evidence.
-
-Task 5 is complete at AgentV `2a69373` after independent source review and one
-scoped fix round. The review found and closed concurrent fresh-owner replacement
-and a watcher/SCM-stop race; native qualification also found and closed service
-SID lookup during retained-config reinstall. Controlled native RED/GREEN tests
-cover all three on Server 2022 and 2025.
-
-[Final installer CI](https://github.com/acornops/agentv/actions/runs/41239335850)
-passes both short gates and all 16 Server 2022/2025 × Node 22/24 × scenario cells.
-Each OS/Node pair passes lifecycle 23 checks, recovery 21, startup 9, and explicit
-acceptance 21. Artifacts identify merge `2a9adb0a` and match the reviewed native
-host source hash. This includes fresh install, repair and retained reinstall,
-credential replacement, successful/failed upgrade, interrupted verification/commit,
-lost responses, queued restart suppression/reentry, cleanup and uninstall.
-[Actual host CI](https://github.com/acornops/agentv/actions/runs/41239335845)
-passes all four cells with 33 assertions each.
-[Matching Linux CI](https://github.com/acornops/agentv/actions/runs/41239335838)
-passes 167 unit tests plus four E2E tests, package/bootstrap/curl checks, and both
-Ubuntu systemd lifecycle jobs.
-
-These are hosted package/host gates, not complete Windows rollout qualification.
-The separate collector timing failures remain a Task 7 reliability issue even
-though the final collector matrix passed. Real reboot and Core/Desktop coverage
-remain unexecuted. The generated command is native parsed and argument-bound;
-its outer download/temp-file lifecycle has not been tested end to end. Completed
-grace/revoked credentials and invalid retained keys remain documented manual
-support cases. Windows activation and writes remain disabled.
-
-Task 6 is complete at console `6c77dbc`, including pinned main `54f7e12`. Initial
-source review and scoped integration review are clean. Linux remains the default,
-Windows selection follows backend availability, Windows host policy stays
-read-only, and Application/System logs use explicit channel-scoped requests.
-Shared run approval permissions retain their existing semantics. Local validation
-passed 1,266 tests across 237 files, plus actual backend/browser flows and bounded
-synthetic race fixtures. [Hosted console CI](https://github.com/acornops/management-console/actions/runs/41242199107)
-passed Node 22 preflight and all eight browser jobs. Actual Windows log responses
-were empty; populated log/race and 409 rejection cases were intercepted fixtures.
-
-Task 7 source/integration is complete at AgentV
-`f86bd5ab7040c9372f6160383ef7620091f821ea`, control-plane
-`37c62d69f8aae157480a0502142bc662ee8bd816`, and API docs `4586d5e`.
-The initial review's same-socket disconnect-cleanup race was fixed and independent
-fix re-review is clean. Exact-runtime integration passed three automatic and three
-controlled reconnects, metadata/policy/credential retention, 12 scoped reads,
-10 scope checks, four invalid-OS rejects, six registry switches, nine own/other-OS
-schema checks, eight Windows filters and 14 Linux approval checks. Host data and
-actions were synthetic. All 24 catalog reads succeeded; 22 schema validations
-passed, while both Linux mock `list_services` results reproduce baseline debt.
-The backend checkpoint's [hosted CI](https://github.com/acornops/control-plane/actions/runs/41246730821)
-subsequently passed 1,712 tests/254 suites and all validation gates. The final
-review fixes and their evidence are recorded below.
-
-Task 8's [qualification decision](../../design-docs/windows-qualification-decision.md)
-keeps Windows rollout and writes disabled. Hosted native package/host success does
-not resolve the unexplained cold-collector and service-identity failures or execute
-the reboot, Core/Desktop Experience and full generated-download gates. Future
-native-action controls are design requirements only. No merge, release,
-deployment or activation is authorized; the wider program remains incomplete.
-
-Final broad review and its one scoped fix re-review are complete. Both important
-findings are addressed at backend `3a1b969`, console `5eabc88`, and API docs
-`a39eb95`: successful Windows log responses retain health/truncation/counts, and
-inventory retains snapshot-bound category health/coverage/omitted counts. Unknown
-or partial collection remains visible with useful rows. Backend reads bind raw
-and derived data in one SQL statement; console caches bind workspace, target,
-generation and log channel. Linux keeps its exact resource response and cache
-paths. No open or new review findings remain.
-
-[Final backend CI](https://github.com/acornops/control-plane/actions/runs/41249382697)
-passes 1,719 tests/255 suites with zero failures/skips and the complete validation
-chain. The final focused console checks pass 17 unit tests and 19 browser
-fixtures. Nine additional actual backend/browser checks pass without interception,
-including denied/unavailable/partial logs, retained rows, counts, snapshot time,
-target/channel/cache separation and a narrow viewport. Host faults are synthetic
-process-local overrides; the actual transport/backend/browser compose normally.
-Both Linux targets retain online state, write policy and exact resource envelopes.
-
-Final mixed-target probes at backend `3a1b969` repeat reads, scope, OS rejection,
-registry/schema isolation, Windows filters and 14 approved Linux restart checks.
-All 24 reads succeed; 22 schemas pass and both Linux mock schema failures exactly
-match the frozen baseline. The Windows mock was restored to its ordinary fixture
-after fault testing. No native mutation or model-generated dispatch was claimed.
-
-At AgentV checkpoint `e9e9bbd`, all four hosted workflows pass:
-[Linux](https://github.com/acornops/agentv/actions/runs/41247116654),
-[Windows collectors](https://github.com/acornops/agentv/actions/runs/41247116633),
-[Windows service host](https://github.com/acornops/agentv/actions/runs/41247116727),
-and [Windows installer](https://github.com/acornops/agentv/actions/runs/41247116808).
-The tested merge is `f15c45fee1f30da9e4495348428eafcc8e677422`; its parents include
-`e9e9bbd`, and native source/script hashes match the reviewed runtime. Linux passes
-183 unit/E2E tests/34 files, package/bootstrap/curl and both Ubuntu 24.04 Node 22/24
-systemd lifecycle jobs. Windows passes all four collector/host pairs and all 18
-installer jobs, with all 16 scenario artifacts checked. These passing samples do
-not explain the earlier native failures. This final record changes documentation
-only; it does not relabel the tested checkpoint or qualify a release.
-
-Final [console CI](https://github.com/acornops/management-console/actions/runs/41249388708)
-passes Node 22 preflight (1,277 tests/237 files) and all eight browser jobs,
-including 330 fixture tests, at `5eabc88`.
-[Docs CI](https://github.com/acornops/docs-website/actions/runs/41249390190) and
-final cross-repository contract checks pass. All four PRs remain drafts on
-`feat/windows-vm-support`; original checkout file status is unchanged. Owned
-disposable services, images and private integration credentials are removed;
-feature worktrees and sanitized review/validation evidence remain available.
+All coordinated PRs remain drafts on feature branches. No merge, release or
+activation has occurred. Hosted CI was selected by the user; real reboot,
+Core/Desktop Experience and combined native/backend qualification remain open.

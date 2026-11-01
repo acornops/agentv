@@ -7,7 +7,6 @@ import { redactValue } from '../redaction.js';
 import { ToolExecutionError } from '../tools/errors.js';
 import type { WindowsHost } from './types.js';
 import { isFailedService } from './service-health.js';
-export { isFailedService } from './service-health.js';
 
 /** Build Windows-only telemetry; incomplete enumeration can never assert recovery. */
 export async function buildWindowsSnapshot(host: WindowsHost, signal?: AbortSignal) {

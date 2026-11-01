@@ -22,7 +22,11 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  changes:
+    uses: ./.github/workflows/windows-change-scope.yml
   native-collectors:
+    needs: changes
+    if: needs.changes.outputs.run_native == 'true'
     name: Native collectors (${{ matrix.os }}, Node ${{ matrix.node }})
     runs-on: ${{ matrix.os }}
     timeout-minutes: 15

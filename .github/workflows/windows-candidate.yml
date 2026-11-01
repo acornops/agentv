@@ -9,7 +9,11 @@ permissions:
   contents: read
 
 jobs:
+  changes:
+    uses: ./.github/workflows/windows-change-scope.yml
   candidate:
+    needs: changes
+    if: needs.changes.outputs.run_native == 'true'
     runs-on: windows-2022
     timeout-minutes: 15
     steps:

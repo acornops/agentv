@@ -15,6 +15,7 @@
     "typecheck": "tsc --noEmit",
     "lint": "node scripts/check-docstrings.mjs && tsc --noEmit",
     "test": "vitest run --exclude src/e2e.spec.ts",
+    "test:fixtures": "node --test scripts/windows-tests/*.test.mjs",
     "test:e2e": "vitest run src/e2e.spec.ts",
     "test:coverage": "vitest run --coverage --exclude src/e2e.spec.ts",
     "test:coverage:all": "vitest run --coverage --coverage.thresholds.lines=75 --coverage.thresholds.functions=60 --coverage.thresholds.branches=55 --coverage.thresholds.statements=65",
@@ -24,8 +25,8 @@
     "smoke:systemd": "npm run smoke:package && sudo --preserve-env=CI,AGENTV_SYSTEMD_SMOKE_ALLOW bash scripts/systemd-smoke.sh",
     "contracts:check": "node scripts/check-contracts.mjs",
     "harness:check": "node scripts/check-harness.mjs",
-    "validate": "npm run lint && npm test && npm run contracts:check && npm run harness:check && npm run build",
-    "validate:ci": "npm run lint && npm test && npm run contracts:check && npm run harness:check && npm run build"
+    "validate": "npm run lint && npm test && npm run contracts:check && npm run harness:check && npm run build && npm run test:fixtures",
+    "validate:ci": "npm run lint && npm test && npm run contracts:check && npm run harness:check && npm run build && npm run test:fixtures"
   },
   "dependencies": {
     "ws": "^8.20.1",

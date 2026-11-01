@@ -52,7 +52,7 @@ async function startFromProtectedConfig(configPath: string, options: ServiceRunt
 
 /** Wait for private START, retain early STOP, and bound protocol/start/stop lifetimes. */
 export async function runWindowsServiceEntry(options: {
-  input: Readable; configPath: string; sessionState?: WindowsRuntimeOptions['sessionState'];
+  input: Readable; configPath: string;
   start?: (path: string, runtime: ServiceRuntimeOptions) => Promise<WindowsStopHandle>;
 }): Promise<void> {
   if (!win32.isAbsolute(options.configPath)) throw new Error('Windows service config path must be absolute');
@@ -83,12 +83,17 @@ export async function runWindowsServiceEntry(options: {
       if (started || stopRequested) { fail(); return; }
       started = true; clearTimeout(startTimer);
       startTimer = setTimeout(() => { stopRequested = true; rejectDone(new Error('Windows runtime startup deadline exceeded')); }, 15000);
-      void (options.start || startFromProtectedConfig)(options.configPath, { trustedSystemDirectory: command.trustedSystemDirectory, sessionState: options.sessionState, launch: command.launch }).then((runtime) => { clearTimeout(startTimer); handle = runtime; if (stopRequested) void boundedStop(); }).catch(() => rejectDone(new Error('Windows runtime startup failed')));
+      void (options.start || startFromProtectedConfig)(options.configPath, { trustedSystemDirectory: command.trustedSystemDirectory, launch: command.launch }).then((runtime) => { clearTimeout(startTimer); handle = runtime; if (stopRequested) void boundedStop(); }).catch(() => rejectDone(new Error('Windows runtime startup failed')));
     }
   };
   const end = () => { if (!started || buffer.length) fail(); else requestStop(); };
   options.input.on('data', data); options.input.once('end', end); options.input.once('error', fail);
-  try { await done; } finally { clearTimeout(startTimer); options.input.off('data', data); options.input.off('end', end); options.input.off('error', fail); }
+  try { await done; } finally {
+    clearTimeout(startTimer); options.input.off('data', data); options.input.off('end', end); options.input.off('error', fail);
+    // The host waits for child exit with its pipe open. Release our owned read
+    // handle so completed shutdown or failed startup can actually exit Node.
+    options.input.destroy();
+  }
 }
 
 if (process.argv[1] && import.meta.url === pathToFileURL(resolve(process.argv[1])).href) {
