@@ -51,6 +51,17 @@ jobs:
       - name: Exercise recovery state decisions
         shell: powershell
         run: ./scripts/windows-tests/recovery-decision-tests.ps1
+      - name: Preserve API results with sanitized failure categories (synthetic native I/O)
+        shell: powershell
+        run: ./scripts/windows-tests/api-diagnostic-tests.ps1 -AllowDisposableCi
+      - name: Upload allowlisted synthetic API diagnostic evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: windows-api-diagnostics-${{ matrix.os }}
+          path: artifacts/windows-api-diagnostics/evidence.json
+          if-no-files-found: warn
+          retention-days: 14
       - name: Check task completion freshness boundaries
         shell: powershell
         run: ./scripts/windows-tests/task-observation-tests.ps1
