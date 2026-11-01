@@ -33,11 +33,11 @@
 
 **Interfaces:** Preserve `WindowsSnapshotManager.start(intervalMs, maxBytes)` and `stop()`. A pending start coalesces to the newest generation and budget, without overlapping collections or retrying stale work.
 
-- [ ] Add a deterministic deferred-promise regression: start, stop/restart while old work drains, release old work; assert exactly one fresh-generation snapshot without advancing a one-hour interval. Observe RED on current source.
-- [ ] Cover repeated restarts, changed maxBytes, stop-before-drain and collection failure; retain no stale send and at most one active collection. Use fake timers/barriers, not wall-clock sleeps.
-- [ ] Add minimal Windows-local active/pending scheduling state; leave snapshot construction and Linux source unchanged.
-- [ ] Run `npx vitest run src/windows/snapshot-manager.spec.ts src/windows/snapshot.spec.ts src/windows/lifecycle.spec.ts src/linux-compatibility.spec.ts`, then `npm test` and `npm run typecheck`. Record exact results and commit only task files.
-- [ ] Independent spec/quality review before completion.
+- [x] Add a deterministic deferred-promise regression: start, stop/restart while old work drains, release old work; assert exactly one fresh-generation snapshot without advancing a one-hour interval. Observe RED on current source.
+- [x] Cover repeated restarts, changed maxBytes, stop-before-drain and collection failure; retain no stale send and at most one active collection. Use fake timers/barriers, not wall-clock sleeps.
+- [x] Add minimal Windows-local active/pending scheduling state; leave snapshot construction and Linux source unchanged.
+- [x] Run `npx vitest run src/windows/snapshot-manager.spec.ts src/windows/snapshot.spec.ts src/windows/lifecycle.spec.ts src/linux-compatibility.spec.ts`, then `npm test` and `npm run typecheck`. Record exact results and commit only task files.
+- [x] Independent spec/quality review before completion.
 
 ### Task 2: Match Windows mock/live log validation
 
@@ -53,7 +53,7 @@
 
 ### Task 3: Make Windows cross-repository compatibility executable
 
-**Files:** New small snapshot case generator/test and checked-in synthetic contract JSON in AgentV; matching backend fixture/test; backend generated-command fixture/test using the actual builder; existing AgentV generated-command fixture/native tests; parent `scripts/harness/check-platform-contracts.mjs`; mirrored runtime docs and relevant contract docs.
+**Files:** AgentV `src/windows/fixtures/snapshot-contract-cases.ts`, `src/windows/fixtures/snapshot-contract.json`, `src/windows/snapshot-contract.spec.ts`; backend `test/fixtures/windows-snapshot-contract.json`, `test/fixtures/windows-generated-commands.json`, `test/windows-vm-producer-contract.test.ts`; existing AgentV `scripts/windows-tests/generated-command-fixtures.json`; parent `scripts/harness/check-platform-contracts.mjs` and a focused helper/test if needed; mirrored runtime docs and relevant contract docs. A small fixture-generation entrypoint may live under AgentV `scripts/windows-tests/`; test data must not enter production compilation.
 
 **Interfaces:** Producer tests regenerate deterministic cases through actual production builders and compare committed JSON. Consumer tests parse/project the mirrored JSON through production consumers. Existing workspace contract gate compares counterpart fixture content. Native command tests continue consuming exact builder output. Each repository's own checks work without a sibling checkout or network access.
 
