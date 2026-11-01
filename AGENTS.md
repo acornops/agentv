@@ -35,10 +35,12 @@ validation helpers, and PR coordination workflow.
 - `src/core`: authenticated lifecycle, heartbeat, and snapshot scheduling
 - `src/transport`: bounded outbound WebSocket control-plane client
 - `src/adapters`: narrow Linux, procfs, systemd, journald, filesystem, and socket adapters
+- `src/windows`: separate Windows collectors, schemas, read tools, and snapshots
 - `src/tools`: strict VM tool registry, contracts, model projection, and bounded executor
 - `src/actions`: root-helper client, policy boundary, and idempotency ledger
 - `src/mcp`: JSON-RPC/MCP protocol and request router
 - `packaging/systemd`: Linux systemd install assets
+- `packaging/windows`: native SCM host and protected installer/recovery assets
 
 ## Working Rules
 
@@ -50,8 +52,9 @@ validation helpers, and PR coordination workflow.
   root-owned socket helper. The default policy requires approval; an explicit
   auto-run policy may allow this reviewed non-destructive action. Do not add shell execution, sudo, package changes,
   process kills, arbitrary filesystem mutation, or unrestricted systemctl.
-- Model OS family, service manager, collector mode, and log sources explicitly
-  so Windows support can add adapters later.
+- Preserve explicit OS/service-manager pairs and Linux defaults. Windows/SCM is
+  implemented as a read-only preview; keep rollout disabled until the
+  [qualification gates](docs/design-docs/windows-qualification-decision.md) pass.
 - If the agent protocol changes, update `docs/contracts` and the matching
   control-plane contract docs in the same coordinated change.
 - If work spans multiple steps or design decisions, create an execution plan in `docs/exec-plans/active/`.

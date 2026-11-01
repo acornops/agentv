@@ -6,6 +6,7 @@ import type { AgentConfig } from './config.js';
 import { runDoctor } from './doctor.js';
 
 const config: AgentConfig = {
+  osFamily: 'linux', serviceManager: 'systemd', allowedLogChannels: [],
   platformUrl: 'https://api.example.com', targetId: 'vm-1', agentKey: 'test', targetType: 'virtual_machine',
   connectorVersion: 'test', snapshotIntervalMs: 60_000, minSnapshotIntervalMs: 10_000, maxSnapshotIntervalMs: 3_600_000,
   maxSnapshotBytes: 65_536, minSnapshotBytes: 16_384, maxRemoteSnapshotBytes: 1_048_576,

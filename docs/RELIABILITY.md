@@ -38,7 +38,13 @@ The agent emits structured logs for:
 
 ## Recovery And Rollback
 
-The main agent keeps no durable state. The helper retains only bounded action receipts for seven days or 1,000 records. Systemd rollback switches the `current` symlink to a preserved release and restarts AgentV.
+Linux installation recovery retains protected transactions and runtime selection;
+the helper retains bounded action receipts for seven days or 1,000 records.
+Systemd rollback switches the `current` symlink to a preserved release and restarts
+AgentV. Windows uses a separate protected journal and SYSTEM recovery task;
+uncertain outcomes retain that state and require fresh authentication before
+finalization. Its [native qualification blockers](design-docs/windows-qualification-decision.md#unmet-gates)
+remain open, including collector reliability and rollback file sharing.
 
 ## Release Evidence
 

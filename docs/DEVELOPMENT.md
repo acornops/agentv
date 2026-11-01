@@ -2,8 +2,10 @@
 
 ## Scope
 
-This repository owns the Linux/systemd AgentV, host collectors, JSON-RPC/MCP
-tool bridge, outbound WebSocket lifecycle, and systemd packaging assets.
+This repository owns the Linux/systemd AgentV and read-only Windows/SCM preview,
+host collectors, JSON-RPC/MCP tool bridge, outbound WebSocket lifecycle, and
+OS-specific packaging assets. Windows rollout remains disabled pending the
+[qualification gates](design-docs/windows-qualification-decision.md#unmet-gates).
 
 ## Prerequisites
 
@@ -62,6 +64,12 @@ npm run smoke:curl-compat
 `npm run test:coverage` uses Vitest V8 coverage and writes text, HTML, and lcov
 reports under `coverage/`. `npm run test:coverage:all` also includes the local
 WebSocket E2E suite and enforces the CI non-regression floors.
+
+CI always computes coverage and retains the GitHub coverage artifact when that
+job succeeds. Optional Codecov publication runs only when `CODECOV_TOKEN` is
+available to the job; configure a valid repository or organization secret to
+enable it. A skipped Codecov step does not mean an external upload succeeded
+and does not skip the coverage thresholds or artifact upload.
 
 The release archive smoke verifies its checksum, safe paths, required units and
 entrypoints, production-only dependency tree, executable modes, and ability to
@@ -126,3 +134,105 @@ Update these docs when their surfaces change:
 Keep `README.md`, `AGENTS.md`, `ARCHITECTURE.md`, `docs/index.md`, this file,
 and `docs/OPERATIONS.md` in sync when changing repo behavior.
 `npm run harness:check` enforces the required structure.
+
+## Windows read runtime development
+
+Select `ACORNOPS_VM_OS_FAMILY=windows` and
+`ACORNOPS_VM_SERVICE_MANAGER=scm` together. `ACORNOPS_VM_COLLECTOR_MODE=mock`
+uses deterministic synthetic Windows data on any OS; it is not native evidence.
+Writes and mock actions are rejected for Windows. Optional
+`ACORNOPS_VM_ALLOWED_LOG_CHANNELS=Application,System` enables only those local
+event channels; the default is no logs. Linux environment defaults are unchanged.
+
+On a disposable Windows Server 2022/2025 x64 runner with Node 22/24:
+
+```powershell
+npm ci
+npm run build
+npx vitest run src/config.spec.ts src/windows-runtime.spec.ts src/windows-service-entry.spec.ts src/windows
+node scripts/windows-collector-smoke.mjs
+```
+
+The additive native collector workflow preserves the existing Ubuntu gates and
+uploads only sanitized structures and provenance. See the
+[Windows read contract](contracts/windows-read-runtime.md) for supported native
+paths, schemas and qualification limits. Packaging and actual service hosting
+remain separate tasks; collector CI does not establish either.
+
+Native collector failures retain a sanitized artifact too. Fixed stage markers
+identify PowerShell startup, encoding, stdin decoding and host CIM boundaries;
+only allowlisted stage names, elapsed time, byte counts and stdin/spawn flags
+are reported. Raw stderr and input values are excluded. Collector time/output
+limits remain fixed; the host read has a ten-second limit and the other
+collectors retain eight seconds. See the
+[native reliability follow-up](exec-plans/active/windows-native-reliability.md).
+
+All native collector cmdlets use fixed, documented module qualification. Native
+causal measurements showed unqualified command discovery took 22–29 seconds,
+while module-qualified Utility commands completed in 0.22–0.27 seconds across
+the hosted 2022/2025 × Node 22/24 matrix. This avoids broad command discovery
+without adding ambient environment variables or increasing the then-eight-second
+collector budget. The later host-only ten-second tolerance is a separate change.
+The temporary 30-second diagnostic probes were removed after
+that measurement; fixed sanitized failure stages remain available.
+
+## Windows service-host qualification
+
+The additive `Windows native service host` workflow compiles the repository C#
+host with the Windows Framework 4.8 compiler (no NuGet) and exercises SCM on
+Server 2022/2025 x64 with Node 22/24. `scripts/build-windows-host.ps1` writes a
+manifest binding source revision, source checksum, target and binary checksum.
+`scripts/windows-service-host-smoke.ps1 -AllowDisposableCi` requires an elevated,
+disposable GitHub-hosted runner and refuses preexisting service names, users or
+installation roots. It changes real SCM services, ACLs and process trees; never
+run it on a workstation or persistent host. It uses synthetic fixture config,
+then removes only the resources it created. Structural evidence is uploaded as
+`windows-service-host-<runner>-node<major>`.
+
+The suite covers SID access, kernel containment, crash recovery, bounded stop
+and logs, unsafe ACLs and reparse paths. Hosted compilation and service-host
+matrices have passed; the [qualification decision](design-docs/windows-qualification-decision.md)
+retains exact revisions and unresolved native failures. Real reboot and
+Core/Desktop Experience qualification remain open; Windows rollout is disabled.
+The workflow also runs the built production entry in real Node children with
+the parent control pipe held open, covering successful stop and failed startup.
+
+## Windows transactional package qualification
+
+`scripts/build-windows-archive.ps1` builds a separate pinned
+`agentv-<version>-windows-x64.zip`, SHA-256 sidecar and version-embedded
+`install-agentv.ps1`. It compiles the host and installer-only Framework4.8 SCM
+interop DLL, stages production dependencies without lifecycle scripts, and
+records source revision and every runtime file checksum. It does not publish a
+release or install Node/.NET prerequisites. Linux release scripts are unchanged.
+
+The additive `Windows installer recovery` workflow runs PowerShell5.1 parsing,
+recovery decision tests, native SCM policy and durable-file tests. Its separate
+Server2022/2025 × Node22/24 installation matrix uses an explicitly authorized
+disposable runner, synthetic credentials, a loopback HTTPS/WebSocket fixture and
+the real packaged host. Coverage includes bootstrap, repair, retained reinstall,
+replacement, interrupted verification/commit, lost responses, upgrade/rollback,
+restart suppression, cleanup and uninstall. These hosted scenarios do not
+qualify reboot or production rollout. Evidence contains fixed stages,
+assertion names and sanitized numeric failure details, never fixture secrets.
+
+`npm run validate` builds the runtime and runs the Node fixture suites, including
+real process-exit and HTTPS/PFX negative cases (`npm run test:fixtures` after a
+build). Local HTTPS tests need loopback listening and OpenSSL. Native Windows
+workflows skip prose-only PRs; source, configuration, contract fixtures and
+manual dispatch retain the full matrices. Failed/unresolved comparisons run CI.
+
+## Candidate and reboot evidence tooling
+
+See [Windows qualification tools](windows-qualification.md). Run the pure
+decision/CLI suite locally with
+`node --test scripts/windows-qualification/reboot-evidence.test.mjs`. The separate
+Windows candidate workflow builds and verifies downloadable unqualified assets
+and exercises the PowerShell5.1-to-Node CLI boundary. The installer startup
+scenario runs the actual prepare/verify probe on its disposable installation.
+
+For a focused manual installer workflow dispatch, `startup_only=true` runs the
+four startup/probe cells after recovery-state fixtures; the default and every PR
+run retain all sixteen installation scenarios. A focused run does not replace
+full qualification. The native probe never reboots the runner, and neither the
+synthetic decision tests nor same-boot observations qualify a real reboot.

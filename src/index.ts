@@ -15,6 +15,17 @@ import { notifyReady, notifyWatchdog } from './systemd-notify.js';
 
 const config = loadConfig();
 const logger = createLogger(config.logLevel);
+if (config.osFamily === 'windows') {
+  const { startWindowsAgent, createWindowsHost } = await import('./windows-runtime.js');
+  if (process.argv[2] === 'doctor') {
+    const { runWindowsDoctor } = await import('./doctor.js');
+    const host = createWindowsHost(config);
+    try { const result = await runWindowsDoctor(config, host); process.stdout.write(`${JSON.stringify(result, null, 2)}\n`); process.exitCode = result.ok ? 0 : 1; } finally { await host.stop(); }
+  } else {
+    const runtime = await startWindowsAgent(config);
+    for (const signal of ['SIGINT', 'SIGTERM'] as const) process.on(signal, () => { void runtime.stop().then(() => { process.exitCode = 0; }).catch(() => { process.exitCode = 1; }); });
+  }
+} else {
 const host = config.collectorMode === 'mock' ? new MockHostAdapter() : new LinuxHostAdapter(config.allowedLogUnits);
 const actions = config.mockActionsEnabled ? new MockActionClient() : new SocketActionClient(config.helperSocketPath);
 
@@ -57,4 +68,6 @@ if (process.argv[2] === 'doctor') {
   for (const signal of ['SIGINT', 'SIGTERM'] as const) process.on(signal, () => {
     logger.info({ signal }, 'AgentV stopping'); if (watchdog) clearInterval(watchdog); lifecycle.stop(); setTimeout(() => process.exit(0), 250).unref();
   });
+}
+
 }

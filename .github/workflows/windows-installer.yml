@@ -1,0 +1,126 @@
+name: Windows installer recovery
+
+on:
+  workflow_dispatch:
+    inputs:
+      startup_only:
+        description: Run only startup and reboot-probe checks after recovery-state fixtures
+        type: boolean
+        default: false
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  changes:
+    uses: ./.github/workflows/windows-change-scope.yml
+  recovery-state:
+    needs: changes
+    if: needs.changes.outputs.run_native == 'true'
+    name: Recovery state (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 10
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [windows-2022, windows-2025]
+    steps:
+      - uses: actions/checkout@v4
+      - name: Parse Windows package scripts with PowerShell5.1
+        shell: powershell
+        run: ./scripts/windows-tests/parse-package-tests.ps1
+      - name: Parse and bind actual generated control-plane commands
+        shell: powershell
+        run: ./scripts/windows-tests/generated-command-tests.ps1
+      - name: Execute exact generated HTTPS wrappers with synthetic bootstrap
+        shell: powershell
+        run: ./scripts/windows-tests/generated-command-https-tests.ps1 -AllowDisposableCi
+      - name: Upload sanitized generated-wrapper evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: windows-generated-wrapper-${{ matrix.os }}
+          path: artifacts/windows-generated-wrapper/evidence.json
+          if-no-files-found: warn
+          retention-days: 14
+      - name: Characterize native child-process exit observation
+        shell: powershell
+        run: ./scripts/windows-tests/process-observation-tests.ps1 -AllowDisposableCi
+      - name: Refuse active marker without its protected journal
+        shell: powershell
+        run: ./scripts/windows-tests/missing-journal-tests.ps1 -AllowDisposableCi
+      - name: Preserve ownership across concurrent fresh initialization
+        shell: powershell
+        run: ./scripts/windows-tests/installation-ownership-tests.ps1 -AllowDisposableCi
+      - name: Resolve fixed service SID without SCM registration
+        shell: powershell
+        run: ./scripts/windows-tests/service-sid-tests.ps1 -AllowDisposableCi
+      - name: Exercise recovery state decisions
+        shell: powershell
+        run: ./scripts/windows-tests/recovery-decision-tests.ps1
+      - name: Preserve API results with sanitized failure categories (synthetic native I/O)
+        shell: powershell
+        run: ./scripts/windows-tests/api-diagnostic-tests.ps1 -AllowDisposableCi
+      - name: Upload allowlisted synthetic API diagnostic evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: windows-api-diagnostics-${{ matrix.os }}
+          path: artifacts/windows-api-diagnostics/evidence.json
+          if-no-files-found: warn
+          retention-days: 14
+      - name: Check task completion freshness boundaries
+        shell: powershell
+        run: ./scripts/windows-tests/task-observation-tests.ps1
+      - name: Compile and exercise fixed-service SCM policy interop
+        shell: powershell
+        run: ./scripts/windows-tests/installer-policy-tests.ps1 -AllowDisposableCi
+      - name: Coordinate watcher and SCM teardown completion
+        shell: powershell
+        run: ./scripts/windows-tests/host-teardown-race.ps1 -AllowDisposableCi
+      - name: Exercise native durable journal and lock boundaries
+        if: always()
+        shell: powershell
+        run: ./scripts/windows-tests/durable-state-tests.ps1 -AllowDisposableCi
+      - name: Upload synthetic teardown race evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: windows-teardown-race-${{ matrix.os }}
+          path: artifacts/windows-service-host/teardown-race-evidence.json
+          if-no-files-found: warn
+          retention-days: 14
+  installation:
+    needs: recovery-state
+    name: Transactional installation (${{ matrix.os }}, Node ${{ matrix.node }}, ${{ matrix.scenario }})
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [windows-2022, windows-2025]
+        node: [22, 24]
+        scenario: ${{ fromJSON(inputs.startup_only && '["startup"]' || '["lifecycle","recovery","startup","acceptance"]') }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ matrix.node }}
+          cache: npm
+      - run: npm ci
+      - name: Parse package and native fixtures
+        shell: powershell
+        run: ./scripts/windows-tests/parse-package-tests.ps1
+      - name: Exercise disposable transactional installation
+        shell: powershell
+        run: ./scripts/windows-tests/installation-smoke.ps1 -AllowDisposableCi -Scenario ${{ matrix.scenario }}
+      - name: Upload sanitized installation evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: windows-installer-${{ matrix.os }}-node${{ matrix.node }}-${{ matrix.scenario }}
+          path: artifacts/windows-installer/
+          if-no-files-found: warn
+          retention-days: 14

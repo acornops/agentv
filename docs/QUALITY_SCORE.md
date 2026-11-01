@@ -30,3 +30,56 @@ installed hosts are not automatically updated.
 Experimental `.8` release evidence (2026-10-25): both hosted Node 22/24 systemd
 gates, published checksums and signed provenance passed. See the
 [runtime-selection completion record](exec-plans/completed/node-runtime-selection-implementation.md#published-experimental-release--2026-10-25).
+
+Windows qualification (2026-11-01): the read-only source/integration stage is
+complete, but [rollout and writes remain unqualified](design-docs/windows-qualification-decision.md).
+The full generated HTTPS wrapper passes both hosted OS fixtures with a synthetic
+bootstrap. Host-only ten-second headroom permits an observed 8.9-second read,
+but a later first call still timed out before any script marker. Collector and
+service-identity reliability, real reboot, Core/Desktop Experience and combined
+native/real-backend deployment remain unqualified. Passing samples do not resolve
+those limits; the historical scores are not Windows release approval.
+
+Review hardening (2026-11-01): Windows reconnect snapshot and mock/live validation
+regressions are covered, producer/consumer compatibility is executable, and
+installer failures retain safe categories without changing recovery decisions.
+Linux CI passes 259 unit/E2E tests and both Node 22/24 systemd lifecycle gates.
+The bounded cold component experiment adds two unhealthy Windows samples; it
+does not establish a causal repair. Shared outage-status repair remains at a
+separate backend design gate. See the updated qualification decision for exact
+evidence and limits; the historical scores remain unchanged. Final fixture checks
+pass on all four Windows cells, but the same run records another normal host
+collector timeout on Server 2022/Node 24. Earlier passing matrices do not erase it.
+
+Deterministic follow-up (2026-11-01): the Linux mock summary-contract mismatch and
+parent linked-workspace validation failures are corrected. Local and hosted
+coverage pass 260 tests; both hosted Ubuntu Node 22/24 lifecycle gates pass.
+Optional unconfigured Codecov publication skips cleanly while coverage and its
+GitHub artifact remain mandatory. Independent review has no findings. This adds
+regression evidence without changing live Linux code or Windows qualification.
+
+Qualification preparation (2026-11-01): a separate Windows candidate artifact
+workflow and protected read-only reboot probe are implemented. The 32 decision/CLI
+tests and all four native startup/probe cells pass. Native testing exposed a
+PowerShell UTF8 BOM at the stdin boundary; a reproducing test and one-prefix
+parser fix resolve that tooling failure. It is unrelated to the open collector
+timeout. Real-store backend characterization passes ten new races without a
+production source change. Actual reboot and production release qualification
+remain open. The full final Windows installer matrix passes all eighteen jobs;
+see [the completion evidence](exec-plans/completed/windows-qualification-preparation.md)
+and [tooling guide](windows-qualification.md).
+
+Final catch-all (2026-11-02): final source `de0ee0e` passes Linux lifecycle and
+all Windows collector, host and installer cells. Earlier native collector
+timeouts and a rollback-finalization sharing violation remain unexplained;
+one passing host read still takes 9,998 ms. These remain release blockers; see
+the [qualification evidence](design-docs/windows-qualification-decision.md#final-catch-all-audit).
+Six deterministic cases separately cover a generation guard for stale provisional
+reconnect timers, preserving the normal Linux/Windows retry schedule.
+
+Release audit (2026-11-02): the backend's immediate provisional close exposed a
+Windows installer polling defect hidden by the native fixture. A scoped Windows
+verification-receipt repair and corrected fixture preserve active-disconnect and
+Linux behavior. AgentV validation passes 264 unit cases plus 28 Node fixtures;
+coverage passes 268 tests. See the [audit record](exec-plans/completed/windows-release-audit.md)
+for hosted results and unchanged qualification limits.

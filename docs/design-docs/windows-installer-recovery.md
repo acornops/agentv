@@ -1,0 +1,217 @@
+# Windows installer recovery design
+
+Status: independently reviewed for implementation. Packaging and native
+interruption qualification remain pending. This design complements the
+[Windows service host](windows-service-host.md) and preserves the existing
+backend enrollment protocol and Linux installer.
+
+## Existing backend contract (do not redesign)
+
+Source: control-plane `src/controllers/agentv-installation-controller.ts` and
+`src/store/repository-agentv-enrollments.ts` at `385339a`.
+
+- Exchange: POST `/api/v1/agentv/enrollments/exchange`, JSON
+  `{targetId,enrollmentToken,purpose:'initial'|'replace'}`. A successful response
+  gives `{transactionId,transactionSecret,agentKey,purpose,accessPolicy}`. Validate
+  target-bound key, exact enrollment ID, expected purpose and read-only policy
+  with an empty restart list before using any returned credential.
+- Status: GET `/api/v1/agentv/installations/:id/status`, header
+  `x-agentv-transaction-secret`. Response is
+  `{transactionId,status,credentialState,activeConnected}`.
+- Commit and rollback are POST suffixes of that transaction URL, same header.
+  Commit returns `{status:'completed'}`; rollback `{status:'cancelled'}`.
+- Mutation window is 60 minutes from exchange. A replacement's immediately
+  previous active credential has a 30-minute grace window from commit; older
+  generations are revoked. Expiry is checked before idempotent mutation retries.
+- Status is intentionally readable with the transaction secret after mutation
+  expiry. This is the authority for resolving a response lost around commit.
+- `activeConnected` tests authenticated key generation and heartbeat against
+  activation/update time, without a current freshness bound. For cancelled or
+  expired transactions it refers to the target's current active generation,
+  which need not be the local backup. It is necessary remote evidence, not
+  sufficient evidence that this machine's selected installation reconnected.
+- Existing Linux installer/recovery is reference only; leave it unchanged.
+
+## Required local safety rules
+
+- Preflight admin, supported Server/x64/Node/.NET, paths/ACLs/reparse points,
+  exact package version/checksums and candidate doctor before consuming a token.
+- One exclusive installer/recovery lock under a protected fixed parent; no lock
+  or recovery authority in user-controlled temp. Refuse an unrelated existing
+  service/task; do not commandeer it. Revalidate durable input on recovery.
+- Publish a new owner identity only while holding that lock and only if no owner
+  exists. Read and validate the authoritative owner under the same lock. A stale
+  absent-root observation cannot authorize replacing a concurrent winner's owner,
+  even after the winner releases its lock. Initialization failure releases the
+  lock without changing an existing owner; an unowned existing root is refused.
+- Stage immutable versioned runtime beneath Program Files. Keep protected JSON
+  config, transaction journal and bounded state/logs beneath ProgramData.
+  Filesystem roots come from OS folder APIs, not caller environment overrides.
+- Config readable by the unique AgentV service SID, not all LocalService
+  processes. Transaction secrets/backups are Administrators/SYSTEM only.
+  The installer uses the fixed SID coupled to the fixed `AcornOpsAgentV` name,
+  so retained config can be validated before recreating absent SCM registration.
+  Native tests compare it with `sc.exe showsid AcornOpsAgentV` while absent and
+  `NT SERVICE\AcornOpsAgentV` translation while registered. Renaming the service
+  requires updating and requalifying that identity; no account or ACL is broadened.
+- Before publishing the active transaction marker, durably save previous and
+  candidate runtime/config selection, prior service enabled/running state and
+  whether this was an initial install. Flush journal writes and atomically
+  replace individual JSON files in the same protected directory.
+- A single atomic config/selection document should bind runtime and credential
+  where feasible. Any multi-step SCM update must still be recoverable from the
+  journal. Never overwrite an immutable release in place or follow junctions.
+- Recovery needs elevated access distinct from the LocalService agent. Use a
+  fixed protected SYSTEM scheduled recovery task (startup and bounded retry),
+  registered and validated before cutover, with a fixed trusted script path.
+  No arbitrary script or remote command inputs. During an unresolved transaction,
+  journal and suppress the owned service's failure restart actions. First set
+  the service disabled, suppress those actions, stop and observe its tree exit,
+  and drain any already queued restart delay before switching to manual. Validate
+  the existing owned 10/30/60-second policy; fail closed on unknown custom policy.
+  Use a monotonic 65-second drain while disabled after stopping (maximum owned
+  delay plus margin). Re-entry repeats the full drain, rather than trusting a
+  persisted wall-clock timestamp. New services with no prior start skip this
+  queued-action drain. Keep manual startup and suppressed failure actions until
+  resolution, with only the lock-owning installer/recovery starting the selected
+  runtime. Restore intended startup and failure-action policy after durable
+  finalization.
+  Test interruptions around mode/action changes, a queued restart during upgrade,
+  and concurrent startup/recovery. The
+  service host retains its four reviewed responsibilities, with no enrollment
+  HTTP in C#.
+- Readiness requires fresh local authentication evidence bound to the selected
+  configuration and this service launch, cleared before each launch and on stop.
+  Active evidence is invalidated on disconnect. Provisional verification is a
+  receipt that survives the backend's immediate close and subsequent reconnects;
+  the installer rejects it after 30 seconds and never accepts it as active
+  readiness. For enrollment transactions, valid authenticated
+  backend status is also required; network failure cannot waive this requirement.
+  Task 3 exposes callbacks; task 5 owns launch identity and the fixed protected
+  marker. LocalService-writable readiness is evidence only and never controls
+  recovery paths, privileged commands or journal selection.
+- Persist commit/rollback intent before sending the request. After an ambiguous
+  response or rejection, query status; a retry may reject after the original
+  request already succeeded. Keep unknown outcomes pending without guessing.
+- A synchronous SCM start rejection supplies no readiness evidence. Only the
+  start operation is caught; trust, runtime selection and durable-write errors
+  still terminate the operation. An ordinary candidate failure records rollback
+  intent, then follows the existing authenticated cancellation/restoration rules.
+  Unknown backend status preserves the candidate and journal. Repair without an
+  enrollment transaction may restore its trusted previous runtime only after a
+  new drain and fresh authentication; explicit committed-candidate acceptance
+  never falls back to a historical credential.
+- Finalization durably records the terminal selection first, restores the
+  intended service startup mode and failure actions, clears the active marker, then deletes secret
+  backups/journal. All steps tolerate re-entry after interruption.
+- A validated finalized journal with its marker already removed needs only
+  journal cleanup; do not recreate the marker or restart the authenticated
+  service. An active marker with no journal is inconsistent protected state:
+  refuse recovery without changing evidence, rather than report successful idle.
+- Preserve the additional CA setting on repair; no token exchange for reuse of
+  a valid local credential. Repair/upgrade must still reconnect successfully.
+- Successful uninstall stops/removes owned service/recovery registration, but
+  does not silently delete durable config or revoke credentials. An unresolved
+  transaction requires explicit recovery handling rather than silent deletion.
+
+## Failure matrix to implement and test
+
+| Interruption/evidence | Required safe outcome |
+| --- | --- |
+| Package, runtime, ACL, target or version preflight fails | No token consumed; existing installation unmodified. |
+| Duplicate installer/recovery | One owner; other operation fails/retries without mutation. |
+| Exchange request definitely rejected | No cutover; original state retained. |
+| Exchange succeeds but response is lost | No guessed credential or repeat successful exchange claim; original state retained, consumed token may require replacement. Record limitation clearly. |
+| Exchange response received, before journal publication | Candidate response must be safely persisted before cutover; loss cannot overwrite prior config. |
+| Pending candidate, verified not committed | Cancel pending transaction before claiming restoration; verify previous authenticated connection if one existed. |
+| Commit request/response lost | Query status. `completed` retains candidate; `verified` remains pending. Network/401/unknown status preserves recovery state and cannot be called rollback success. |
+| Completed + active credential + authenticated candidate | Keep candidate, finish transaction and remove secret journal only after evidence. |
+| Candidate fails after commit, rollback still available | Remote rollback must succeed before declaring previous credential restored; verify its reconnection. |
+| Rollback response is lost or retry returns rejection | Resolve via authenticated status; `cancelled` can prove earlier success. Do not infer failure from a late 409 or restore blindly. |
+| Completed but rollback denied after mutation/grace expiry | Keep/restore committed candidate and report recovery required; never claim a revoked previous key is usable. |
+| Cancelled/expired + revoked candidate | Restore known previous selection; first install cleans up only resources it created. |
+| Completed but candidate is later grace/revoked/non-active | Do not guess which historical credential is valid; retain diagnostics and require replacement. |
+| Status unreachable/invalid or unknown future state | Retain protected candidate/journal, bounded retry, actionable pending result. |
+| Recovery interrupted repeatedly | Re-entry is idempotent; no double enrollment or immutable release overwrite. |
+| Repair with existing key fails before/after selection | Restore previous runtime/config and reconnect, without an enrollment call. |
+| Runtime upgrade succeeds | Same target/key, new immutable release, authenticated connection; previous version retained for explicit rollback. |
+| Uninstall with normal configuration | Owned tree stopped, service/task removed, durable config retained, no credential revocation. |
+
+Minimal sequence: preflight/stage → establish recovery owner → exchange and
+durably journal response → publish active marker → disable/suppress/stop and
+drain queued recovery → manual service →
+atomically select candidate → start and verify provisional authentication →
+persist commit intent and commit → resolve status and verify active local
+authentication → durable finalization and cleanup. A new enrollment command can
+retire abandoned pending state after a lost exchange response; the old secret/key
+response cannot be replayed by the existing backend.
+
+SCM queue rationale: [Microsoft ChangeServiceConfig2W documentation](https://learn.microsoft.com/en-us/windows/win32/api/winsvc/nf-winsvc-changeserviceconfig2w)
+states that a queued restart cannot be cancelled; disabling the service prevents
+its execution. Changing startup type to manual alone is insufficient. The
+bounded drain is conservative and needs native interruption qualification.
+
+Hosted tests must exercise native file replacement/ACL/SCM behavior and simulated
+API outcomes separately from parser mocks. Kill installer/recovery processes at
+durable checkpoints, invoke actual recovery entrypoint, and verify selected
+config/runtime and backend credential generation. Actual machine reboot remains
+unqualified under the user's hosted-CI-only choice.
+
+## Implemented package boundary under qualification
+
+The fixed maintenance launcher is admin/SYSTEM-only, with a protected pointer
+containing constrained immutable version, owner UUID and package-manifest
+SHA-256. It validates bootstrap modules and all selected worker/runtime
+files/ancestors before importing or executing them. Readiness files never supply
+privileged paths. The journal preserves prior maintenance selection and owned
+task XML before replacement; task registration and an actual SYSTEM no-op run
+are required before publishing cutover authority. The versioned worker handles
+enrollment and recovery, while the service host remains unchanged.
+
+A small precompiled installer-only Framework4.8 `AgentV.InstallerNative.dll`
+provides locale-independent operations solely for fixed `AcornOpsAgentV`.
+Package/native manifests bind source and binary hashes before LoadFrom. It uses
+bounded SCM query buffers, validates exact owned account/type/startup/recovery
+policy, and closes native handles deterministically. It is not a service or a
+runtime privilege helper. The worker never compiles code or installs global
+prerequisites. When adopting a previously stopped trusted host, PID0 plus the
+full disabled drain may carry historical crash1067; a stop requested by the
+current owner must instead return clean observable shutdown.
+
+Retained configuration after uninstall supports a later no-token repair when
+the retained owner, config, selected immutable release, manifest and ACL trust
+all validate. Recreate only absent SCM/task registrations; never adopt a foreign
+or conflicting service/task. Missing/ambiguous selection or unresolved pending
+transactions fail closed. Preserve target, credential and CA, and require a
+fresh authenticated connection before reporting repaired. Native
+uninstall→repair and conflicting-registration tests are required for this path.
+
+For the specific rollback-denied state, the fixed launcher exposes an explicit
+manual `-AcceptCommittedCandidate` recovery action. Default/scheduled recovery
+keeps the conservative pending result. Explicit acceptance may finalize only
+the journal's exact candidate after authenticated transaction status says
+completed+active, the backend confirms connection, and fresh local active
+readiness matches the new launch and config hash. Recheck those proofs before
+terminal selection/cleanup. Persist the operator intent under the protected
+lock so interruption can safely resume with fresh proofs. Unknown, pending,
+grace/revoked, stale or mismatched evidence cannot authorize acceptance, and
+this action never selects a historical credential. Native default-pending,
+explicit acceptance, stale/non-active rejection and interrupted-intent cases
+are required before qualification.
+
+
+Package trust checks use one fresh scope per invocation: normalize and validate
+ancestors once, then check every current file/directory owner, effective rights
+and reparse state before traversing it. Match manifest entries to the actual
+case-insensitive file inventory and hash every file. No trust result is cached
+across calls. The launcher validates the manifest path before its pointer hash,
+then performs complete package integrity validation before loading worker/DLL.
+This removes repeated ancestor scans without changing permissions or deadlines.
+
+Preview limitation: completed+grace/revoked candidates and invalid retained
+credentials fail closed with protected state retained. No privileged journal
+retirement/replacement protocol is included in this scope. New enrollment is
+refused until protected state is resolved; these exact cases require manual
+support, remain unqualified, and must not be represented as automatic rollback
+success. No ad hoc journal/config deletion procedure is supported. Independent
+Task5 review must assess this explicit limitation against the full failure matrix.

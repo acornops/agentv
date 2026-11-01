@@ -257,3 +257,142 @@ systemctl stop acornops-agentv-actions.service
 The action socket remains enabled and starts the selected helper on the next
 request. Configuration, action policy, ledger, and prior releases are preserved
 by both upgrade and uninstall.
+
+## Windows read runtime boundary
+
+Windows uses an explicit Windows/SCM configuration; Linux/systemd remains the
+default. Windows writes are disabled locally regardless of remote policy.
+Read-only native collection is currently limited to Windows Server 2022/2025
+x64 and Node 22/24. Synthetic mock data is development-only and does not qualify
+host permissions or service installation. See the
+[Windows read runtime contract](contracts/windows-read-runtime.md).
+
+`ACORNOPS_VM_ALLOWED_LOG_CHANNELS` applies only to Windows; Linux ignores it
+and retains its exact systemd log-unit allowlist. Windows still permits only
+`Application` and `System`, with neither enabled by default. For the installed
+Windows service, this setting belongs in protected `config.json` under `settings`;
+the native host clears ambient environment values. VM `allowedLogSources` metadata
+does not grant local collection permission. Synthetic Windows filters match the native literal,
+case-insensitive query and service-state/protocol contracts.
+
+Native collector smoke evidence includes a bounded timeline for its first real
+collector call: trust checks, spawn, received stages, the collector timer,
+exit and close, plus an event-loop lag summary. The observer is enabled only by
+the smoke harness and records no raw output or input. These are parent receipt
+times, not native execution durations. A failed first call remains failed;
+later diagnostic timings do not qualify cold startup or establish its cause.
+The fixed host collector now allows ten seconds; other collectors retain eight
+seconds. Windows tool, service initialization, installer doctor and backend
+command deadlines remain 12, 15, 20 and 25 seconds respectively. There is no retry
+or prewarming. The optional first-call CI diagnostic measures native lifetime
+and CPU separately and has its own twelve-second cleanup watchdog; see the
+[qualification decision](design-docs/windows-qualification-decision.md).
+
+`dist/windows-service-entry.js --config <absolute protected JSON path>` is a
+private child entrypoint for the separately reviewed native SCM host. It waits
+for strict newline JSON START before importing runtime/config modules. START
+contains `trustedSystemDirectory` and a strict `launch` object with UUID
+`launchId`, hexadecimal SHA-256 `configSha256`, and absolute `stateDirectory`. The host supplies the trusted directory
+from OS APIs only after assigning the child to its Job Object. It sends
+`{"command":"STOP"}` for shutdown. STOP during asynchronous startup is retained;
+EOF after START requests shutdown. START has a 10-second deadline, runtime
+startup/shutdown each have a 15-second deadline, lines are capped at 4096 bytes
+and total control input at 8192 bytes. Runtime shutdown is idempotent.
+
+The config is at most 64 KiB and has the strict shape
+`{"version":1,"settings":{"ACORNOPS_AGENT_PLATFORM_URL":"https://...","ACORNOPS_TARGET_ID":"...","ACORNOPS_AGENT_KEY":"..."}}`.
+Only named AgentV settings are projected. The service entry enforces
+Windows/SCM/live/read-only settings; conflicting values, arbitrary keys and
+non-string values fail. Node/runtime/system-directory paths are outside config.
+The repository Framework 4.8 host is being qualified separately. It derives
+ProgramData from OS folder APIs, fixes config at `AcornOps\AgentV\config.json`,
+and grants the service SID access only to the protected runtime/config and its
+own log/state directories. Before START it clears old authentication evidence,
+hashes config, assigns Node to a kill-on-close Job Object, and sends a fresh
+launch identity. The child checks that config hash before importing the runtime.
+Validated Windows provisional authentication publishes a launch/config-bound
+verification receipt in `authenticated.json` with phase `provisional`. The backend
+immediately closes that connection; the receipt survives reconnects with its
+original timestamp. The installer accepts it for at most 30 seconds, together
+with authenticated backend `verified` status. Activation replaces it with phase
+`active`, which is removed immediately on disconnect. Runtime stop and a new
+service launch clear either phase. Provisional verification never enables tools,
+snapshots or heartbeat and cannot substitute for active readiness. This file
+grants no recovery authority.
+
+The native host has no enrollment HTTP or installer logic. SCM crash recovery
+uses 10/30/60-second restart delays and a one-day reset. Orderly stop waits up to
+15 seconds, terminates remaining job members, and observes zero active processes
+within a further 5 seconds. Child stdout/stderr use 5 MiB current files and three
+retained rotations each. Sink failure drains/discards data. Hosted native results,
+transactional installation and reboot qualification remain required before any
+Windows onboarding activation.
+
+## Windows installer preview (rollout disabled)
+
+The versioned Windows bootstrap accepts `-ReleaseBaseUrl`, `-PlatformUrl`,
+`-TargetId`, optional `-EnrollmentToken` and `-ReplaceCredential`, matching the
+Windows control-plane instruction builder. Optional `-NodePath` selects an
+already installed trusted Node22/24 x64 runtime; `-AdditionalCaBundleFile`
+selects a trusted readable CA bundle for HTTPS and service transport. Elevated
+x64 PowerShell5.1, Windows Server2022/2025 and enabled Framework4.8 are required.
+No machine prerequisites are installed automatically.
+
+The installer validates prerequisites, archive/package hashes and trusted paths,
+then runs an outbound-free candidate doctor before exchange. Immutable releases
+live under Program Files; protected configuration, journal and lock live under
+ProgramData. The unique service SID can read configuration and write only its
+state/log directories. The fixed `AcornOpsAgentVRecovery` SYSTEM task owns
+interrupted installation recovery; its protected launcher and version/checksum
+selection are installed and exercised before cutover. Transaction secrets and
+backups remain Administrators/SYSTEM-only.
+
+After restoring connectivity, an administrator can invoke the installed fixed
+`%ProgramFiles%\AcornOps\AgentV\maintenance\recover.ps1` using elevated
+PowerShell. Pending/unknown outcomes retain protected recovery state. An active marker with
+a missing journal is an error requiring manual support; recovery preserves the
+marker and does not report idle or invent a replacement journal. Automatic
+recovery is limited to twelve attempts, with five-minute triggers plus startup;
+manual recovery resets that bounded attempt count. Each reentry disables the
+owned service and drains queued SCM restarts for a full monotonic65seconds
+before selecting a runtime. A lost exchange response cannot recover the lost
+credential from the existing protocol; the original configuration remains and
+a new token may be needed. Lost commit/rollback responses are resolved through
+authenticated backend status and fresh local authentication evidence.
+
+For a rollback-denied transaction whose exact candidate is still active, an
+administrator may pass `-AcceptCommittedCandidate` to that fixed launcher.
+This explicit manual action requires a fresh candidate launch, matching config
+hash, local active authentication and authoritative backend connection proof.
+It rechecks before finalization and persists the operator intent so interruption
+can resume with new proof. Default/scheduled recovery remains pending; the
+option cannot be combined with `-Automatic` or `-Uninstall` and cannot select
+an old credential.
+
+The same protected launcher accepts `-Uninstall` after transactions are
+resolved. It stops/removes the owned service and recovery task, retaining durable
+configuration and credentials; it does not revoke a backend key. A later
+no-token bootstrap can repair this retained installation only when ownership,
+config, selected immutable release, checksums and ACLs still validate. It
+recreates absent registrations and requires fresh authentication without changing
+the target/key/CA; conflicting existing registrations or unresolved state are
+refused. Do not remove or edit a pending journal to force progress. Native packaging interruption and
+real reboot qualification remain incomplete; these scripts are preview assets,
+not an enabled installation offer.
+
+Preview manual-support limits: a completed candidate that is now `grace` or
+`revoked`, or a retained credential that can no longer authenticate, stays
+unresolved with protected state intact. Automatic recovery does not select a
+historical credential or claim rollback success. A new enrollment is refused
+while that protected transaction remains unresolved. These cases require manual
+support and are not qualified recovery paths in this preview; there is no
+supported journal-deletion or credential-retirement shortcut. Explicit acceptance
+of a committed candidate applies only to a still-active candidate with fresh
+local and backend proof; it does not resolve non-active credentials. Windows
+onboarding remains disabled pending the full qualification/review gates.
+
+## Windows qualification preparation
+
+See [candidate artifacts and reboot evidence](windows-qualification.md) for the
+separate candidate workflow and read-only prepare/verify procedure. Hosted
+fixtures do not qualify a real reboot; rollout remains disabled.

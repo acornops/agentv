@@ -1,0 +1,302 @@
+// Windows Framework 4.8; deliberately no packages, dynamic compilation, or HTTP.
+using System;
+using System.Collections.Generic;
+using System.ComponentModel;
+using System.Diagnostics;
+using System.IO;
+using System.Runtime.InteropServices;
+using System.Security.AccessControl;
+using System.Security.Cryptography;
+using System.Security.Principal;
+using System.ServiceProcess;
+using System.Text;
+using System.Threading;
+using System.Web.Script.Serialization;
+
+namespace AcornOps.AgentV {
+    internal static class Program {
+        internal const string Name = "AcornOpsAgentV";
+        internal static readonly string Root = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.CommonApplicationData), "AcornOps", "AgentV");
+        internal static readonly string Release = AppDomain.CurrentDomain.BaseDirectory.TrimEnd(Path.DirectorySeparatorChar);
+        internal static readonly string State = Path.Combine(Root, "state");
+        internal static readonly string Logs = Path.Combine(Root, "logs");
+        internal static readonly string Config = Path.Combine(Root, "config.json");
+        static int Main(string[] args) {
+            if (args.Length != 2 || args[0] != "--node" || !Environment.Is64BitProcess) return 2;
+            try { ServiceBase.Run(new Host(args[1])); return 0; }
+            catch { return 1; }
+        }
+    }
+
+    internal sealed class TrustFailure : IOException {
+        internal readonly int Reason, Depth, Rights, Propagation, Principal;
+        internal TrustFailure(int reason, int depth = -1, int rights = 0, int propagation = 0, int principal = 0) : base("Windows trust validation failed") { Reason = reason; Depth = depth; Rights = rights; Propagation = propagation; Principal = principal; }
+    }
+    internal static class TrustedPaths {
+        internal static void Check(string path, bool directory) {
+            if (!Path.IsPathRooted(path) || Path.GetFullPath(path) != path || path.StartsWith(@"\\")) throw new TrustFailure(1);
+            string current = path;
+            bool leaf = true; int depth = 0;
+            while (current != null) {
+                FileAttributes attributes = File.GetAttributes(current);
+                if ((attributes & FileAttributes.ReparsePoint) != 0) throw new TrustFailure(2);
+                bool isDirectory = (attributes & FileAttributes.Directory) != 0;
+                if (leaf && directory != isDirectory) throw new TrustFailure(3);
+                FileSystemSecurity acl = isDirectory ? (FileSystemSecurity)Directory.GetAccessControl(current) : File.GetAccessControl(current);
+                string owner = acl.GetOwner(typeof(SecurityIdentifier)).Value;
+                if (!Privileged(owner)) throw new TrustFailure(4);
+                FileSystemRights writes = FileSystemRights.ChangePermissions | FileSystemRights.TakeOwnership | FileSystemRights.Delete | FileSystemRights.DeleteSubdirectoriesAndFiles;
+                if (leaf) writes |= FileSystemRights.Write;
+                foreach (FileSystemAccessRule rule in acl.GetAccessRules(true, true, typeof(SecurityIdentifier))) {
+                    // InheritOnly grants nothing on this object. Descendants are checked separately.
+                    bool effective = (rule.PropagationFlags & PropagationFlags.InheritOnly) == 0;
+                    bool genericWrite = (unchecked((uint)rule.FileSystemRights) & 0x50000000u) != 0;
+                    if (effective && rule.AccessControlType == AccessControlType.Allow && ((rule.FileSystemRights & writes) != 0 || genericWrite) && !Privileged(rule.IdentityReference.Value)) throw new TrustFailure(5, depth, (int)rule.FileSystemRights, (int)rule.PropagationFlags, PrincipalKind(rule.IdentityReference.Value));
+                }
+                current = Path.GetDirectoryName(current); leaf = false; depth++;
+                if (String.IsNullOrEmpty(current)) break;
+            }
+        }
+        internal static void Tree(string path) {
+            Check(path, true);
+            foreach (string item in Directory.GetFileSystemEntries(path)) {
+                if ((File.GetAttributes(item) & FileAttributes.Directory) != 0) Tree(item); else Check(item, false);
+            }
+        }
+        static int PrincipalKind(string sid) {
+            if (sid == "S-1-5-18") return 1;
+            if (sid == "S-1-5-32-544") return 2;
+            if (sid == "S-1-3-0") return 4;
+            if (sid == "S-1-5-32-545") return 5;
+            if (sid == "S-1-5-11") return 6;
+            if (sid == "S-1-1-0") return 7;
+            return 9;
+        }
+        static bool Privileged(string sid) {
+            return sid == "S-1-5-18" || sid == "S-1-5-32-544" || sid == "S-1-5-80-956008885-3418522649-1831038044-1853292631-2271478464";
+        }
+        internal static void Node(string path) {
+            Check(path, false);
+            // Protect the loader search directory and existing adjacent dependencies too.
+            Tree(Path.GetDirectoryName(path));
+            int major = FileVersionInfo.GetVersionInfo(path).FileMajorPart;
+            if (major != 22 && major != 24) throw new TrustFailure(6);
+            using (BinaryReader reader = new BinaryReader(File.OpenRead(path))) {
+                reader.BaseStream.Position = 0x3c; int pe = reader.ReadInt32(); reader.BaseStream.Position = pe;
+                if (reader.ReadUInt32() != 0x4550 || reader.ReadUInt16() != 0x8664) throw new TrustFailure(7);
+            }
+        }
+    }
+
+    internal sealed class Host : ServiceBase {
+        readonly string node;
+        Process child;
+        Job job;
+        readonly TreeTeardown teardown;
+        internal Host(string nodePath) {
+            node = nodePath; ServiceName = Program.Name; CanStop = true; CanShutdown = true; AutoLog = false;
+            teardown = new TreeTeardown(GracefulStop, TerminateTree, DisposeTree, UnexpectedExit);
+        }
+        protected override void OnStart(string[] args) {
+            string stage = "node-trust";
+            try {
+                TrustedPaths.Node(node);
+                stage = "release-trust"; TrustedPaths.Tree(Program.Release);
+                stage = "config-trust"; TrustedPaths.Check(Program.Config, false);
+                // Logs/state deliberately have SID write ACLs, established by the installer.
+                stage = "state-paths"; NoReparse(Program.State); NoReparse(Program.Logs);
+                File.Delete(Path.Combine(Program.State, "authenticated.json"));
+                stage = "config-digest";
+                string digest;
+                using (FileStream config = File.OpenRead(Program.Config)) {
+                    if (config.Length > 65536) throw new IOException("Config too large");
+                    using (SHA256 hash = SHA256.Create()) digest = BitConverter.ToString(hash.ComputeHash(config)).Replace("-", "").ToLowerInvariant();
+                }
+                Dictionary<string, object> launch = new Dictionary<string, object> { { "launchId", Guid.NewGuid().ToString() }, { "configSha256", digest }, { "stateDirectory", Program.State } };
+                JavaScriptSerializer json = new JavaScriptSerializer();
+                stage = "launch-evidence"; File.WriteAllText(Path.Combine(Program.State, "launch.json"), json.Serialize(launch), new UTF8Encoding(false));
+                stage = "job-create"; job = new Job();
+                ProcessStartInfo start = new ProcessStartInfo(node, Quote(Path.Combine(Program.Release, "dist", "windows-service-entry.js")) + " --config " + Quote(Program.Config));
+                start.UseShellExecute = false; start.CreateNoWindow = true;
+                start.RedirectStandardInput = true; start.RedirectStandardOutput = true; start.RedirectStandardError = true;
+                start.WorkingDirectory = Program.Release;
+                start.EnvironmentVariables.Clear();
+                string system = Environment.SystemDirectory;
+                start.EnvironmentVariables["SystemRoot"] = Path.GetDirectoryName(system);
+                start.EnvironmentVariables["WINDIR"] = Path.GetDirectoryName(system);
+                start.EnvironmentVariables["PATH"] = system;
+                start.EnvironmentVariables["TEMP"] = Program.State; start.EnvironmentVariables["TMP"] = Program.State;
+                stage = "node-create"; child = Process.Start(start);
+                stage = "job-assign"; try { job.Assign(child.Handle); } catch { child.Kill(); child.WaitForExit(5000); throw; }
+                Drain(child.StandardOutput.BaseStream, "stdout"); Drain(child.StandardError.BaseStream, "stderr");
+                stage = "start-gate"; child.StandardInput.WriteLine(json.Serialize(new Dictionary<string, object> { { "command", "START" }, { "trustedSystemDirectory", system }, { "launch", launch } }));
+                child.StandardInput.Flush();
+                Thread watcher = new Thread(Watch); watcher.IsBackground = true; watcher.Start();
+            } catch (Exception error) {
+                teardown.StartupFailed();
+                if (job != null) { job.TerminateAndWait(); job.Dispose(); }
+                Win32Exception native = error as Win32Exception;
+                TrustFailure trust = error as TrustFailure;
+                Diagnostic("Service startup failed stage=" + stage + " hresult=" + error.HResult + " native=" + (native == null ? 0 : native.NativeErrorCode) + " trust=" + (trust == null ? 0 : trust.Reason) + " depth=" + (trust == null ? -1 : trust.Depth) + " rights=" + (trust == null ? 0 : trust.Rights) + " propagation=" + (trust == null ? 0 : trust.Propagation) + " principal=" + (trust == null ? 0 : trust.Principal), true);
+                throw new InvalidOperationException("AgentV service startup failed");
+            }
+        }
+        static void NoReparse(string path) {
+            string current = path;
+            while (!String.IsNullOrEmpty(current)) {
+                if ((File.GetAttributes(current) & FileAttributes.ReparsePoint) != 0) throw new IOException("Reparse state path");
+                current = Path.GetDirectoryName(current);
+            }
+        }
+        internal static string Quote(string value) {
+            if (value.IndexOf('"') >= 0 || value.EndsWith("\\")) throw new IOException("Invalid launch path");
+            return "\"" + value + "\"";
+        }
+        void Watch() { child.WaitForExit(); teardown.ChildExited(); }
+        void UnexpectedExit() {
+            Diagnostic("Agent process exited unexpectedly");
+            // An unexpected host exit, without SERVICE_STOPPED, invokes SCM crash recovery.
+            Environment.Exit(1);
+        }
+        protected override void OnStop() { StopTree(); }
+        protected override void OnShutdown() { StopTree(); }
+        void StopTree() {
+            RequestAdditionalTime(22000);
+            if (!teardown.Stop()) { ExitCode = 1; Diagnostic("Process tree termination could not be confirmed"); }
+        }
+        void GracefulStop() {
+            if (child != null && !child.HasExited) {
+                try { child.StandardInput.WriteLine("{\"command\":\"STOP\"}"); child.StandardInput.Flush(); } catch (IOException) { }
+                child.WaitForExit(15000);
+            }
+        }
+        bool TerminateTree() { return job == null || job.TerminateAndWait(); }
+        void DisposeTree() { if (job != null) job.Dispose(); }
+        static void Drain(Stream source, string name) {
+            Thread drain = new Thread(delegate() {
+                byte[] buffer = new byte[16384];
+                RotatingSink sink = new RotatingSink(Path.Combine(Program.Logs, name + ".log"));
+                bool warned = false;
+                try {
+                    int count;
+                    while ((count = source.Read(buffer, 0, buffer.Length)) != 0) {
+                        if (sink == null) continue;
+                        try { sink.Write(buffer, count); } catch {
+                            sink.Dispose(); sink = null;
+                            if (!warned) { warned = true; Diagnostic("Child log sink unavailable; draining without storage"); }
+                        }
+                    }
+                } catch (IOException) { }
+                finally { if (sink != null) sink.Dispose(); }
+            });
+            drain.IsBackground = true; drain.Start();
+        }
+        static void Diagnostic(string message, bool wait = false) {
+            Thread thread = new Thread(delegate() {
+                try { using (RotatingSink sink = new RotatingSink(Path.Combine(Program.Logs, "host.log"))) { byte[] bytes = Encoding.UTF8.GetBytes(message + "\r\n"); sink.Write(bytes, bytes.Length); } } catch { }
+            }); thread.IsBackground = true; thread.Start(); if (wait) thread.Join(500);
+        }
+    }
+
+    // Internal arbitration only. Production delegates always use the owned
+    // child, native Job and unexpected host exit; no runtime fault switches.
+    internal sealed class TreeTeardown {
+        readonly Action graceful, dispose, unexpectedExit;
+        readonly Func<bool> terminate;
+        readonly object completion = new object();
+        bool completed, empty;
+        // 0 running, 1 deliberate stop, 2 watcher teardown, 3 crash committed.
+        int stopping;
+        internal TreeTeardown(Action gracefulStop, Func<bool> terminateAndObserve, Action disposeJob, Action crash) {
+            graceful = gracefulStop; terminate = terminateAndObserve; dispose = disposeJob; unexpectedExit = crash;
+        }
+        internal void StartupFailed() { Interlocked.Exchange(ref stopping, 1); }
+        internal void ChildExited() {
+            if (Interlocked.CompareExchange(ref stopping, 2, 0) != 0) return;
+            Observe(false);
+            // A deliberate stop can take over the outcome while the watcher
+            // owns teardown. Once crash is committed it cannot claim clean stop.
+            if (Interlocked.CompareExchange(ref stopping, 3, 2) == 2) unexpectedExit();
+        }
+        internal bool Stop() {
+            int previous;
+            do {
+                previous = Volatile.Read(ref stopping);
+                if (previous == 3) return false;
+            } while (Interlocked.CompareExchange(ref stopping, 1, previous) != previous);
+            if (previous == 0) return Observe(true);
+            Stopwatch timer = Stopwatch.StartNew();
+            lock (completion) {
+                while (!completed) {
+                    long remaining = 20000 - timer.ElapsedMilliseconds;
+                    if (remaining <= 0) return false;
+                    Monitor.Wait(completion, (int)remaining);
+                }
+                return empty;
+            }
+        }
+        bool Observe(bool requestGraceful) {
+            bool observed = false;
+            try { if (requestGraceful) graceful(); observed = terminate(); }
+            catch { observed = false; }
+            finally {
+                try { dispose(); } catch { observed = false; }
+                lock (completion) { empty = observed; completed = true; Monitor.PulseAll(completion); }
+            }
+            return observed;
+        }
+    }
+
+    internal sealed class RotatingSink : IDisposable {
+        const long Limit = 5 * 1024 * 1024;
+        readonly string path;
+        FileStream stream;
+        internal RotatingSink(string path) { this.path = path; }
+        internal void Write(byte[] bytes, int count) {
+            if (stream == null) stream = new FileStream(path, FileMode.Append, FileAccess.Write, FileShare.Read);
+            if (stream.Length + count > Limit) {
+                stream.Dispose(); stream = null;
+                if (File.Exists(path + ".3")) File.Delete(path + ".3");
+                for (int index = 2; index >= 1; index--) if (File.Exists(path + "." + index)) File.Move(path + "." + index, path + "." + (index + 1));
+                File.Move(path, path + ".1");
+                stream = new FileStream(path, FileMode.CreateNew, FileAccess.Write, FileShare.Read);
+            }
+            stream.Write(bytes, 0, count); stream.Flush();
+        }
+        public void Dispose() { if (stream != null) { try { stream.Dispose(); } catch { } stream = null; } }
+    }
+
+    internal sealed class Job : IDisposable {
+        IntPtr handle;
+        internal Job() {
+            handle = CreateJobObject(IntPtr.Zero, null);
+            if (handle == IntPtr.Zero) throw new IOException("Cannot create job");
+            ExtendedLimit limits = new ExtendedLimit(); limits.Basic.LimitFlags = 0x2000; // KILL_ON_JOB_CLOSE; no breakaway.
+            if (!SetInformationJobObject(handle, 9, ref limits, (uint)Marshal.SizeOf(typeof(ExtendedLimit)))) { Dispose(); throw new IOException("Cannot restrict job"); }
+        }
+        internal void Assign(IntPtr process) { if (!AssignProcessToJobObject(handle, process)) throw new IOException("Cannot contain agent"); }
+        internal bool TerminateAndWait() {
+            if (handle == IntPtr.Zero) return false;
+            TerminateJobObject(handle, 1);
+            Stopwatch timer = Stopwatch.StartNew();
+            do {
+                Accounting info;
+                if (!QueryInformationJobObject(handle, 1, out info, (uint)Marshal.SizeOf(typeof(Accounting)), IntPtr.Zero)) return false;
+                if (info.ActiveProcesses == 0) return true;
+                Thread.Sleep(25);
+            } while (timer.ElapsedMilliseconds < 5000);
+            return false;
+        }
+        public void Dispose() { if (handle != IntPtr.Zero) { CloseHandle(handle); handle = IntPtr.Zero; } }
+        [StructLayout(LayoutKind.Sequential)] struct BasicLimit { public long ProcessTime, JobTime; public uint LimitFlags; public UIntPtr MinimumWorkingSet, MaximumWorkingSet; public uint ActiveProcessLimit; public UIntPtr Affinity; public uint PriorityClass, SchedulingClass; }
+        [StructLayout(LayoutKind.Sequential)] struct IoCounters { public ulong ReadOperations, WriteOperations, OtherOperations, ReadBytes, WriteBytes, OtherBytes; }
+        [StructLayout(LayoutKind.Sequential)] struct ExtendedLimit { public BasicLimit Basic; public IoCounters Io; public UIntPtr ProcessMemory, JobMemory, PeakProcessMemory, PeakJobMemory; }
+        [StructLayout(LayoutKind.Sequential)] struct Accounting { public long UserTime, KernelTime, PeriodUserTime, PeriodKernelTime; public uint PageFaults, TotalProcesses, ActiveProcesses, TerminatedProcesses; }
+        [DllImport("kernel32.dll", CharSet = CharSet.Unicode, SetLastError = true)] static extern IntPtr CreateJobObject(IntPtr security, string name);
+        [DllImport("kernel32.dll", SetLastError = true)] static extern bool SetInformationJobObject(IntPtr job, int infoClass, ref ExtendedLimit info, uint size);
+        [DllImport("kernel32.dll", SetLastError = true)] static extern bool AssignProcessToJobObject(IntPtr job, IntPtr process);
+        [DllImport("kernel32.dll", SetLastError = true)] static extern bool TerminateJobObject(IntPtr job, uint code);
+        [DllImport("kernel32.dll", SetLastError = true)] static extern bool QueryInformationJobObject(IntPtr job, int infoClass, out Accounting info, uint size, IntPtr returned);
+        [DllImport("kernel32.dll")] static extern bool CloseHandle(IntPtr handle);
+    }
+}
