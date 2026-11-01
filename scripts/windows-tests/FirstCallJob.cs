@@ -44,8 +44,13 @@ public sealed class FirstCallJob : IDisposable {
     // Includes the assigned worker and all owned descendants. Query failure
     // is unavailable (-1), never proof of zero active processes.
     public long ActiveProcesses() {
-        Accounting value; uint length;
-        return QueryInformationJobObject(handle, 1, out value, (uint)Marshal.SizeOf(typeof(Accounting)), out length) ? (long)value.Active : -1;
+        lock (gate) {
+            // A NULL query targets the caller's current job, not this fixture.
+            // Serialize with Dispose so a closed/reused handle cannot escape.
+            if (handle == IntPtr.Zero) return -1;
+            Accounting value; uint length;
+            return QueryInformationJobObject(handle, 1, out value, (uint)Marshal.SizeOf(typeof(Accounting)), out length) ? (long)value.Active : -1;
+        }
     }
     public bool Empty() { return ActiveProcesses() == 0; }
     public void Dispose() {

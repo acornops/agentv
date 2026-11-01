@@ -39,5 +39,7 @@ $job = [FirstCallJob]::new()
 try {
     if ($job.ActiveProcesses() -ne 0 -or -not $job.Empty()) { throw 'New owned job accounting is not empty.' }
 } finally { $job.Dispose() }
+# NULL is a valid request for the caller's current job in the native API.
+# A disposed fixture must return unavailable without issuing that request.
 if ($job.ActiveProcesses() -ne -1 -or $job.Empty()) { throw 'Unavailable job accounting was treated as zero.' }
 Write-Output 'Composition completion, native count, cleanup and accounting checks passed.'
