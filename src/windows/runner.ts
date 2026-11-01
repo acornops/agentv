@@ -5,6 +5,8 @@ import { z } from 'zod';
 import { ToolExecutionError } from '../tools/errors.js';
 import { COLLECTOR_STAGES, scripts, type ScriptId } from './scripts.js';
 
+export const WINDOWS_HOST_COLLECTOR_TIMEOUT_MS = 10000;
+
 const resultSchema = z.object({ items: z.array(z.unknown()).max(1000), truncated: z.boolean(), status: z.enum(['ok', 'partial', 'unavailable', 'permission_denied']) }).strict();
 export type CollectorResult = z.infer<typeof resultSchema>;
 export interface CollectorObservation {
@@ -87,7 +89,7 @@ export class WindowsCollectorRunner implements CollectorRunner {
       let bytes = 0; const output: Buffer[] = []; let failure: ToolExecutionError | undefined;
       const kill = (error: ToolExecutionError) => { if (!failure) trace('kill_requested', snapshot()); failure ??= error; child.kill(); };
       const abort = () => kill(new ToolExecutionError('TOOL_TIMEOUT', 'Windows collection cancelled'));
-      const timer = setTimeout(() => { trace('timer_fired', snapshot()); kill(new ToolExecutionError('TOOL_TIMEOUT', 'Windows collector timed out')); }, 8000);
+      const timer = setTimeout(() => { trace('timer_fired', snapshot()); kill(new ToolExecutionError('TOOL_TIMEOUT', 'Windows collector timed out')); }, script === 'host' ? WINDOWS_HOST_COLLECTOR_TIMEOUT_MS : 8000);
       signal?.addEventListener('abort', abort, { once: true });
       const consume = (chunk: Buffer, retain: boolean) => {
         if (this.observer) {

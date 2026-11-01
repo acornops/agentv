@@ -6,6 +6,22 @@ const launch = { launchId: 'a747fa58-2486-4fb3-a050-a46eece839b0', configSha256:
 const startCommand = JSON.stringify({ command: 'START', trustedSystemDirectory: 'C:\\Windows\\System32', launch }) + '\n';
 
 describe('bounded private SCM child gate', () => {
+  it('rejects startup at 15000ms and stops a runtime that finishes after that deadline', async () => {
+    vi.useFakeTimers();
+    try {
+      const input = new PassThrough(); let release!: () => void;
+      const waiting = new Promise<void>((resolve) => { release = resolve; });
+      const stop = vi.fn(async () => undefined);
+      const observed = runWindowsServiceEntry({ input, configPath: 'C:\\protected\\config.json', start: async () => { await waiting; return { stop }; } }).then(() => 'resolved', (error) => error);
+      input.write(startCommand);
+      let settled = false; void observed.then(() => { settled = true; });
+      await vi.advanceTimersByTimeAsync(14999); expect(settled).toBe(false);
+      await vi.advanceTimersByTimeAsync(1);
+      expect(await observed).toMatchObject({ message: 'Windows runtime startup deadline exceeded' });
+      release(); await vi.advanceTimersByTimeAsync(0);
+      expect(stop).toHaveBeenCalledTimes(1); expect(vi.getTimerCount()).toBe(0);
+    } finally { vi.useRealTimers(); }
+  });
   it('imports runtime only after START and retains STOP during asynchronous startup', async () => {
     const input = new PassThrough(); let release!: () => void; const waiting = new Promise<void>((resolve) => { release = resolve; });
     const stop = vi.fn(async () => undefined); const load = vi.fn(async () => { await waiting; return { stop }; });

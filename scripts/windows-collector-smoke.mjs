@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { createHash } from 'node:crypto';
 import { mkdir, writeFile } from 'node:fs/promises';
-import { WindowsCollectorRunner } from '../dist/windows/runner.js';
+import { WindowsCollectorRunner, WINDOWS_HOST_COLLECTOR_TIMEOUT_MS } from '../dist/windows/runner.js';
 import { createEventLoopSummary, probeCollectorTiming } from './windows-collector-timing.mjs';
 import { WindowsLiveHost } from '../dist/windows/live.js';
 import { COLLECTOR_STAGES, scripts, WINDOWS_COLLECTOR_SCRIPT_VERSION } from '../dist/windows/scripts.js';
@@ -10,7 +10,7 @@ import { COLLECTOR_STAGES, scripts, WINDOWS_COLLECTOR_SCRIPT_VERSION } from '../
 assert.equal(process.platform, 'win32', 'Native collector smoke requires Windows');
 assert.equal(process.arch, 'x64');
 assert.ok([22, 24].includes(Number(process.versions.node.split('.')[0])));
-const firstCall = { diagnostic_only: true, production_timeout_ms: 8000, events: [], event_loop: null };
+const firstCall = { diagnostic_only: true, production_timeout_ms: WINDOWS_HOST_COLLECTOR_TIMEOUT_MS, events: [], event_loop: null };
 let observeFirstCall = true;
 const runner = new WindowsCollectorRunner(undefined, (event) => {
   if (observeFirstCall && firstCall.events.length < 64) firstCall.events.push(event);

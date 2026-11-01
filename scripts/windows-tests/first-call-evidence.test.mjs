@@ -2,6 +2,10 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { createFirstCallEvidence } from './first-call-evidence.mjs';
 
+test('reports the current production host bound for new diagnostics', () => {
+  assert.equal(createFirstCallEvidence([]).result().production_timeout_ms, 10000);
+});
+
 test('redacts untrusted event fields and rejects oversized and unknown observations', () => {
   const evidence = createFirstCallEvidence(['script_started']);
   evidence.observe({ event: 'stage', collector: 'host', at_ms: 4, stage: 'script_started', raw: 'private-command', pid: 123 });
