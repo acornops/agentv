@@ -86,7 +86,7 @@
 - [x] Add a bounded overlap check using real snapshot construction and tool execution, reporting only counts/status/timing/cleanup. State whether hosted hardware represents the minimum supported VM.
 - [x] Execute the changed experiment once on the relevant supported matrix and inspect artifacts. Retain first-call failures; no unchanged reruns to seek green.
 - [x] If evidence supports a narrow production correction, specify it as a separately reviewed follow-up before implementing. Otherwise retain the qualification blocker with the exact remaining missing evidence. No speculative queue, timeout or retry change.
-- [ ] Review fixture safety and causal conclusions independently.
+- [x] Review fixture safety and causal conclusions independently.
 
 ### Task 6: Separate shared VM status reconciliation
 
@@ -103,3 +103,27 @@ Disposition: the independently reviewed [backend repair plan](../../../../contro
 ## Final validation and handoff
 
 Run AgentV `npm run validate`, `npm run test:coverage:all`, `npm run smoke:package`, cross-repo contracts, and required checks for any other edited repository. Run final hosted Windows collector/service/installer and Ubuntu Node 22/24 lifecycle gates for the changed source. Record failures honestly. Perform one broad final source review; keep every PR draft and Windows rollout disabled until the independent qualification gates are met.
+
+## Completion summary — 2026-11-01
+
+The scoped hardening work and independent task/final/fix reviews are complete.
+Tasks 5 and 6 reached their explicit conditional outcomes: retained native
+qualification failures and a separate shared-status protocol design gate, not
+production repairs. Windows rollout and writes remain disabled. No merge,
+release, deployment or activation occurred; all changes remain on feature branches.
+
+- `npm run validate`: 255 tests/36 files and required lint/type/contracts/harness/build pass at `da13758`.
+- `npm run test:coverage:all`: 259 tests/37 files pass locally; final hosted Linux CI `41299915084` also passes both Ubuntu Node 22/24 systemd lifecycle gates. Optional tokenless Codecov upload fails; computed coverage passes.
+- `npm run smoke:package`: package/bootstrap checks pass. Backend full `npm run validate` passes 1,731 tests/255 suites, zero failures/skips, locally with disposable PostgreSQL/Redis and hosted `41295301987` at `0b589ae`.
+- Parent `node scripts/harness/check-platform-contracts.mjs` and `node --test scripts/harness/check-platform-contracts.test.mjs` pass. The latter now runs in default CI (`41300065611`, `933ab5c`); actionlint passes. Full parent validation remains blocked by preexisting dependency links and an unrelated platform-admin route harness mismatch.
+- Windows installer `41298109634`: 18 jobs and 22 inspected artifacts pass at `473698a`. Final service-host `41299915111`: all four cells/33 checks pass. Fixture-only `857d95a`, tested through `da13758`, passes native metadata/accounting/disposal/assignment checks in all four cells of `41299915070`; local PowerShell execution was unavailable, so hosted execution supplies that evidence.
+- Native qualification remains failed: the one component experiment `41298126115` retains two failed/two inconclusive cells; final normal collector `41299915070` retains three passed/one host timeout. No rerun seeks a green result and no speculative concurrency/retry/deadline change was made. Final installer `41299915031` passed both short fixture jobs before its redundant unchanged-runtime matrix was deliberately cancelled.
+
+Linux mock behavior is covered by compatibility/lifecycle tests; hosted Ubuntu
+gates exercise live systemd. Windows mock/live validation and actual native
+collectors are distinguished from synthetic data/transport in the retained
+[qualification decision](../../design-docs/windows-qualification-decision.md).
+Real reboot, Core/Desktop, representative sizing, combined native/backend
+deployment, release assets and shared outage-status repair remain separate gates.
+The selected 80 Linux-owned tracked blobs remain identical to baseline; shared
+seams use behavioral coverage. This is evidence against regressions, not a guarantee.

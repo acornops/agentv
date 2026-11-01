@@ -47,4 +47,6 @@ Linux CI passes 259 unit/E2E tests and both Node 22/24 systemd lifecycle gates.
 The bounded cold component experiment adds two unhealthy Windows samples; it
 does not establish a causal repair. Shared outage-status repair remains at a
 separate backend design gate. See the updated qualification decision for exact
-evidence and limits; the historical scores remain unchanged.
+evidence and limits; the historical scores remain unchanged. Final fixture checks
+pass on all four Windows cells, but the same run records another normal host
+collector timeout on Server 2022/Node 24. Earlier passing matrices do not erase it.

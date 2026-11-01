@@ -116,7 +116,7 @@ runs remain failed; the local path-alias repair did not resolve that native symp
 
 ## Review hardening and component observation
 
-The [focused hardening plan](../exec-plans/active/windows-review-hardening.md)
+The [focused hardening plan](../exec-plans/completed/windows-review-hardening.md)
 adds Windows-only reconnect snapshot scheduling, shared pure mock/live log-input
 validation, executable producer/consumer fixtures and bounded installer failure
 categories. Installer return values and recovery decisions are preserved. No Linux
@@ -146,6 +146,8 @@ native invocation, environment restoration and cleanup flags pass, including
 throwing/unavailable sinks. The native I/O executable is synthetic; the production
 API helper, ACL/JSON/cleanup paths and recovery decisions are real. Both generated
 HTTPS wrappers also pass six cases and owned cleanup, with a synthetic bootstrap.
+The full matrix finished 18/18 jobs; all 22 artifacts were inspected. Each OS/Node
+pair passed lifecycle 23, recovery 21, startup 9 and acceptance 21 checks.
 These results do not establish real-backend enrollment or reboot recovery.
 
 Backend [CI 41295301987](https://github.com/acornops/control-plane/actions/runs/41295301987)
@@ -186,6 +188,34 @@ processes with a live worker as aggregate corroboration and retains the exact
 known image label. It preserves all health, callback, cutoff and cleanup gates;
 original artifacts are not relabeled. Focused helper/negative checks now run in
 ordinary PR CI without executing another cold composition.
+
+Final fixture verification at `da137584c5775b835092ab8bd258fe3dc39471c6`,
+tested merge `361c1af7d42742a66baa0936415a1a0ee2f69bfb`, passes the amended
+PowerShell metadata, C# accounting/disposal and assignment-negative checks in
+all four cells of [41299915070](https://github.com/acornops/agentv/actions/runs/41299915070).
+**That run's normal collector smoke is three passed, one failed.** Server 2022 /
+Node 24 timed out its host collector at 10,019 ms with no stdout. The first script
+marker arrived at 6,103 ms, collection completed at 9,833 ms, the timer fired at
+10,008 ms and the child closed at 10,025 ms; observed Node event-loop lag peaked
+at 15 ms. The existing automatic post-failure diagnostic trials closed in 2,201
+and 1,424 ms under their separate 20-second diagnostic ceiling. Those later
+samples neither repair nor reclassify the failed production-bound call. No
+unchanged workflow rerun was requested; the native cause remains unknown.
+
+At the same final fixture checkpoint,
+[Linux CI 41299915084](https://github.com/acornops/agentv/actions/runs/41299915084)
+again passes 259 unit/E2E tests and both Ubuntu Node 22/24 lifecycle gates;
+[service host 41299915111](https://github.com/acornops/agentv/actions/runs/41299915111)
+passes all four cells with 33 checks each (all artifacts inspected). Both short
+installer jobs in [41299915031](https://github.com/acornops/agentv/actions/runs/41299915031)
+pass the added-file PowerShell parsing and recovery fixtures. The redundant
+transactional matrix was then deliberately cancelled: packaged/runtime source
+is unchanged since the completed 18-job run above. That cancelled matrix is not
+claimed successful. The parent gate regression now runs in default CI;
+[41300065611](https://github.com/acornops/acornops/actions/runs/41300065611)
+passes at `933ab5c`. Independent final source review found no Critical/Important
+issue; its one CI-wiring recommendation passed scoped re-review. These source
+and fixture results leave Windows rollout unqualified.
 
 This establishes a Windows composition qualification gap under existing bounds.
 It does not explain the native wait or justify a queue, retry, prewarming or

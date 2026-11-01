@@ -1,5 +1,7 @@
 # Completed Execution Plans
 
+- [Windows review hardening](windows-review-hardening.md) — Scoped Windows fixes and executable compatibility/diagnostic checks reviewed; native rollout and shared-status repair remain separately blocked.
+
 - [Restart state input](restart-state-input.md) — Released in experimental.14 after local and hosted live-systemd qualification; enrolled hosts require an explicit upgrade.
 
 - [Restart precondition guidance](restart-precondition-guidance.md) — Exact-input descriptions with unchanged runtime safety checks.
