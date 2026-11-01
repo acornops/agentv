@@ -2,8 +2,10 @@
 
 ## Scope
 
-This repository owns the Linux/systemd AgentV, host collectors, JSON-RPC/MCP
-tool bridge, outbound WebSocket lifecycle, and systemd packaging assets.
+This repository owns the Linux/systemd AgentV and read-only Windows/SCM preview,
+host collectors, JSON-RPC/MCP tool bridge, outbound WebSocket lifecycle, and
+OS-specific packaging assets. Windows rollout remains disabled pending the
+[qualification gates](design-docs/windows-qualification-decision.md#unmet-gates).
 
 ## Prerequisites
 

@@ -295,6 +295,29 @@ A two-line generation guard fixes those cases; it does not explain or repair the
 native collector timeout or installer sharing violation. The superseded installer
 run `41342700480` was cancelled before verifying the new runtime revision.
 
+Final source `de0ee0e`, tested merge `90a2a002`, passes
+[Linux CI](https://github.com/acornops/agentv/actions/runs/41343376083),
+[all four collector cells](https://github.com/acornops/agentv/actions/runs/41343376043),
+[all four service-host cells](https://github.com/acornops/agentv/actions/runs/41343376030),
+[all 16 installer scenarios](https://github.com/acornops/agentv/actions/runs/41343376075),
+and [candidate preparation](https://github.com/acornops/agentv/actions/runs/41343376164).
+The Server 2022/Node 22 host collector closes at 9,998 ms against its 10,000 ms
+bound. These passing samples do not resolve the retained native failures or
+qualify reboot, combined deployment, or production artifacts.
+
+## Release audit
+
+Source `582e3e6` repairs Windows enrollment verification: the backend immediately
+closes provisional sockets, so the installer needs a launch/config-bound receipt
+that survives reconnects. It retains the existing 30-second age and authenticated
+backend-status checks, never permits provisional tools/telemetry, and clears
+active readiness on disconnect and either phase on stop/new launch. The native
+fixture now reproduces the backend close. Three regressions fail before repair;
+a direct production-handshake probe changes from zero observed receipts to all
+eleven installer-style polls succeeding (credentials and collectors remain synthetic).
+See the [audit record](../exec-plans/completed/windows-release-audit.md) for final
+validation. The following native/release blockers remain open.
+
 ## Unmet gates
 
 1. **Explain and resolve native collector reliability failures.** Preserve failed

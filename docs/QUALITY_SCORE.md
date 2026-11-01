@@ -69,9 +69,17 @@ remain open. The full final Windows installer matrix passes all eighteen jobs;
 see [the completion evidence](exec-plans/completed/windows-qualification-preparation.md)
 and [tooling guide](windows-qualification.md).
 
-Final catch-all (2026-11-02): current Linux lifecycle and all four Windows host
-cells pass. Native collectors still time out, and one rollback-finalization path
-now records an unresolved sharing violation with retained recovery state. These
-are release blockers; see the [current qualification evidence](design-docs/windows-qualification-decision.md#final-catch-all-audit).
+Final catch-all (2026-11-02): final source `de0ee0e` passes Linux lifecycle and
+all Windows collector, host and installer cells. Earlier native collector
+timeouts and a rollback-finalization sharing violation remain unexplained;
+one passing host read still takes 9,998 ms. These remain release blockers; see
+the [qualification evidence](design-docs/windows-qualification-decision.md#final-catch-all-audit).
 Six deterministic cases separately cover a generation guard for stale provisional
 reconnect timers, preserving the normal Linux/Windows retry schedule.
+
+Release audit (2026-11-02): the backend's immediate provisional close exposed a
+Windows installer polling defect hidden by the native fixture. A scoped Windows
+verification-receipt repair and corrected fixture preserve active-disconnect and
+Linux behavior. AgentV validation passes 264 unit cases plus 28 Node fixtures;
+coverage passes 268 tests. See the [audit record](exec-plans/completed/windows-release-audit.md)
+for hosted results and unchanged qualification limits.

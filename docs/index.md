@@ -57,3 +57,5 @@ This `docs/` tree is the repository-local system of record for agent-readable de
 - [Windows qualification preparation plan](exec-plans/completed/windows-qualification-preparation.md).
 
 - [Windows VM final catch-all](exec-plans/completed/windows-final-catch-all.md).
+
+- [Windows VM release audit](exec-plans/completed/windows-release-audit.md).

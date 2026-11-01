@@ -17,7 +17,13 @@
 
 ## Status
 
-This repository owns the AgentV code, systemd packaging assets, production image, AgentV protocol contract, and agent-level docs. Central platform deployment wiring belongs in `acornops-deployment`.
+This repository owns the AgentV code, systemd and Windows packaging assets, production image, AgentV protocol contract, and agent-level docs. Central platform deployment wiring belongs in `acornops-deployment`.
+
+Windows/SCM is a read-only preview with rollout disabled. Its explicit OS selection
+preserves Linux defaults; synthetic Windows data runs on any OS. See the
+[Windows read contract](docs/contracts/windows-read-runtime.md) and
+[qualification decision](docs/design-docs/windows-qualification-decision.md)
+for implemented boundaries and unresolved native/reboot release gates.
 
 ## Agent-Assisted Development
 
@@ -67,7 +73,9 @@ Primary docs:
 
 ## Configuration
 
-The agent is configured with environment variables:
+Linux and development entrypoints use environment variables. The installed Windows
+service accepts only an allowlisted subset in protected `config.json`; see the
+[operations guide](docs/OPERATIONS.md#windows-installer-preview-rollout-disabled).
 
 | Variable | Description | Default |
 | --- | --- | --- |
@@ -80,10 +88,11 @@ The agent is configured with environment variables:
 | `ACORNOPS_AGENT_SNAPSHOT_INTERVAL_MS` | Local snapshot cadence used unless the authenticated remote value is within local bounds. | `60000` |
 | `ACORNOPS_AGENT_MAX_SNAPSHOT_BYTES` | Maximum serialized snapshot payload size. | `1048576` |
 | `ACORNOPS_AGENT_LOG_LEVEL` | Logging level (`debug`, `info`, `warn`, `error`). | `info` |
-| `ACORNOPS_VM_OS_FAMILY` | VM operating system family. The current contract supports `linux`. | `linux` |
-| `ACORNOPS_VM_SERVICE_MANAGER` | VM service manager. The current contract supports `systemd`. | `systemd` |
+| `ACORNOPS_VM_OS_FAMILY` | `linux`, or explicit `windows` for the preview. | `linux` |
+| `ACORNOPS_VM_SERVICE_MANAGER` | Must pair `systemd` with Linux or `scm` with Windows. | `systemd` |
 | `ACORNOPS_VM_ALLOWED_LOG_UNITS` | Comma-separated exact systemd units accepted by `query_logs`. | Empty |
-| `ACORNOPS_VM_COLLECTOR_MODE` | Collector mode: `live` for Linux/systemd hosts, `mock` for local and CI development. | `live` |
+| `ACORNOPS_VM_ALLOWED_LOG_CHANNELS` | Windows only: comma-separated `Application` and/or `System`; neither is enabled by default. | Empty |
+| `ACORNOPS_VM_COLLECTOR_MODE` | `live` for native collectors on the selected OS; `mock` for synthetic local/CI data. | `live` |
 | `ACORNOPS_AGENT_WRITE_ENABLED` | Locally permit helper-backed writes. The helper policy and remote session must also permit them. | `false` |
 | `ACORNOPS_AGENT_MOCK_ACTIONS_ENABLED` | Simulate an allowlisted `ssh.service` restart for the Docker-only mock fixture. Requires mock collector mode and local writes; never enables production writes. | `false` |
 | `ACORNOPS_AGENT_ACTIONS_SOCKET` | Root-owned action helper socket. | `/run/acornops-agentv/actions.sock` |
@@ -193,9 +202,3 @@ against real systemd, journald, procfs, socket inspection, and the privileged
 helper. It covers install, doctor, allowlisted restart, idempotent replay,
 upgrade, rollback, and uninstall preservation. The script intentionally refuses
 to run unless both `CI=true` and `AGENTV_SYSTEMD_SMOKE_ALLOW=true` are present.
-
-Windows read-only runtime development uses explicit Windows/SCM configuration
-and separate native schemas; synthetic mock mode runs on any OS. See the
-[Windows read runtime contract](docs/contracts/windows-read-runtime.md) and
-[development checks](docs/DEVELOPMENT.md). Hosted native collector CI does not
-yet qualify service packaging, reboot recovery or Core/Desktop Experience.

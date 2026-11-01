@@ -21,3 +21,5 @@ Completed plans live here for durable handoff and audit history.
 - [Node runtime selection implementation and validation](node-runtime-selection-implementation.md)
 
 - [Windows VM final catch-all](windows-final-catch-all.md) — Scoped audit fixes, redundancy removal and verification evidence.
+
+- [Windows VM release audit](windows-release-audit.md) — Provisional receipt repair, production-close fixture, documentation reconciliation and final validation.
