@@ -211,3 +211,18 @@ replacement commit response and uninstall. Full interruption and upgrade
 qualification is still in progress; do not interpret those initial cases as
 reboot or production rollout qualification. Evidence contains fixed stages,
 assertion names and sanitized numeric failure details, never fixture secrets.
+
+## Candidate and reboot evidence tooling
+
+See [Windows qualification tools](windows-qualification.md). Run the pure
+decision/CLI suite locally with
+`node --test scripts/windows-qualification/reboot-evidence.test.mjs`. The separate
+Windows candidate workflow builds and verifies downloadable unqualified assets
+and exercises the PowerShell5.1-to-Node CLI boundary. The installer startup
+scenario runs the actual prepare/verify probe on its disposable installation.
+
+For a focused manual installer workflow dispatch, `startup_only=true` runs the
+four startup/probe cells after recovery-state fixtures; the default and every PR
+run retain all sixteen installation scenarios. A focused run does not replace
+full qualification. The native probe never reboots the runner, and neither the
+synthetic decision tests nor same-boot observations qualify a real reboot.

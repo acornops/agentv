@@ -71,3 +71,6 @@ Companion control-plane tests use real PostgreSQL/Redis to preserve committed
 replacement identity and characterize the existing intermediate offline state
 when a missing Redis response is delayed across a replacement claim. They do not
 repair orphaned status after an outage or establish cross-store atomicity.
+
+Exact source revisions, hosted runs, retained failure evidence and remaining
+gates are recorded in the [completed preparation plan](exec-plans/completed/windows-qualification-preparation.md).

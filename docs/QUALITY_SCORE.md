@@ -57,3 +57,14 @@ coverage pass 260 tests; both hosted Ubuntu Node 22/24 lifecycle gates pass.
 Optional unconfigured Codecov publication skips cleanly while coverage and its
 GitHub artifact remain mandatory. Independent review has no findings. This adds
 regression evidence without changing live Linux code or Windows qualification.
+
+Qualification preparation (2026-11-01): a separate Windows candidate artifact
+workflow and protected read-only reboot probe are implemented. The 32 decision/CLI
+tests and all four native startup/probe cells pass. Native testing exposed a
+PowerShell UTF8 BOM at the stdin boundary; a reproducing test and one-prefix
+parser fix resolve that tooling failure. It is unrelated to the open collector
+timeout. Real-store backend characterization passes ten new races without a
+production source change. Actual reboot and production release qualification
+remain open. The full final Windows installer matrix passes all eighteen jobs;
+see [the completion evidence](exec-plans/completed/windows-qualification-preparation.md)
+and [tooling guide](windows-qualification.md).

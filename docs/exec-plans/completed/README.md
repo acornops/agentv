@@ -1,5 +1,7 @@
 # Completed Execution Plans
 
+- [Windows qualification preparation](windows-qualification-preparation.md) — Verified candidate assets, protected reboot probe and real-store race coverage; real reboot and production rollout remain unqualified.
+
 - [Deterministic follow-up fixes](windows-confident-gap-fixes.md) — Mock summary contract, linked-workspace validation and optional coverage publication corrected; live VM implementations and rollout gates unchanged.
 
 - [Windows review hardening](windows-review-hardening.md) — Scoped Windows fixes and executable compatibility/diagnostic checks reviewed; native rollout and shared-status repair remain separately blocked.
