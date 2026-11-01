@@ -58,7 +58,7 @@ jobs:
           AGENTV_OVERLAP_ALLOW: 'true'
         run: ./scripts/windows-tests/overlap-native.ps1 -AllowDisposableCi
       - name: Verify composition redaction and fail-closed assignment
-        if: always() && github.event_name == 'workflow_dispatch' && inputs.component_composition && !inputs.first_call_diagnostic
+        if: always() && (github.event_name == 'pull_request' || (github.event_name == 'workflow_dispatch' && inputs.component_composition)) && !(inputs.first_call_diagnostic && inputs.component_composition)
         shell: pwsh
         env:
           AGENTV_OVERLAP_ALLOW: 'true'

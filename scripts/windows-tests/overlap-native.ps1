@@ -18,7 +18,7 @@ $report = [ordered]@{
     watchdog_fired = $false; watchdog_termination_succeeded = $false; supervisor_deadline_reached = $false
     worker_exited = $false; owned_job_empty = $false; cleanup_confirmed = $false
     job_count_convention = 'includes_worker_and_all_owned_descendants'; job_sampling_interval_ms = 100
-    owned_job_peak_including_worker = 0; owned_ten_processes_with_live_worker = $false
+    owned_job_peak_including_worker = 0; owned_process_count_corroborated = $false
     job_sample_failures = 0; job_samples = @()
 }
 # Source/run/image provenance only; no arbitrary environment or paths.
@@ -26,9 +26,10 @@ foreach ($entry in @(
     @('revision', $env:GITHUB_SHA, '^[0-9a-f]{40}$'),
     @('run_id', $env:GITHUB_RUN_ID, '^[0-9]{1,20}$'),
     @('run_attempt', $env:GITHUB_RUN_ATTEMPT, '^[0-9]{1,6}$'),
-    @('image', $env:ImageOS, '^win(22|25)$'),
     @('image_version', $env:ImageVersion, '^[0-9.]{1,32}$')
 )) { if ($entry[1] -cmatch $entry[2]) { $report.provenance[$entry[0]] = $entry[1] } }
+$image = Get-OverlapImageLabel $env:ImageOS
+if ($null -ne $image) { $report.provenance.image = $image }
 $job = $null; $worker = $null; $assigned = $false; $operation = 'setup'; $bytes = 0
 try {
     $job = [FirstCallJob]::new()
@@ -59,7 +60,7 @@ try {
                 $workerAlive = -not $worker.HasExited
                 $report.job_samples += @{ at_ms = $clock.ElapsedMilliseconds; active_including_worker = $active; worker_alive = $workerAlive }
                 $report.owned_job_peak_including_worker = [math]::Max($report.owned_job_peak_including_worker, $active)
-                if ($workerAlive -and $active -eq 10) { $report.owned_ten_processes_with_live_worker = $true }
+                if (Test-OverlapOwnedProcessCorroboration $active $workerAlive) { $report.owned_process_count_corroborated = $true }
             }
         }
         if ($pending.IsCompleted) {

@@ -5,12 +5,33 @@ $report = @{
     worker = @{ completed = $true; cleanup_complete = $true; status = 'passed' }
     worker_exit_code = 0; cleanup_confirmed = $true; owned_job_empty = $true
     watchdog_fired = $false; supervisor_deadline_reached = $false
-    owned_ten_processes_with_live_worker = $true; job_sample_failures = 0
+    owned_process_count_corroborated = $true; job_sample_failures = 0
+}
+foreach ($case in @(
+    @{ active = 10; alive = $true; corroborated = $true; status = 'passed' },
+    @{ active = 19; alive = $true; corroborated = $true; status = 'passed' },
+    @{ active = 9; alive = $true; corroborated = $false; status = 'inconclusive' },
+    @{ active = -1; alive = $true; corroborated = $false; status = 'inconclusive' },
+    @{ active = 19; alive = $false; corroborated = $false; status = 'inconclusive' },
+    @{ active = 1001; alive = $true; corroborated = $false; status = 'inconclusive' }
+)) {
+    $report.owned_process_count_corroborated = Test-OverlapOwnedProcessCorroboration $case.active $case.alive
+    if ($report.owned_process_count_corroborated -ne $case.corroborated -or (Get-OverlapStatus $report) -ne $case.status) { throw 'Aggregate owned-process corroboration misclassified.' }
+}
+$report.owned_process_count_corroborated = Test-OverlapOwnedProcessCorroboration 19 $true
+$report.worker.status = 'failed'
+if ((Get-OverlapStatus $report) -ne 'failed') { throw 'Nineteen owned processes manufactured healthy results.' }
+$report.worker.status = 'passed'
+foreach ($label in @('win22', 'win25', 'win25-vs2026')) {
+    if ((Get-OverlapImageLabel $label) -cne $label) { throw 'Known image label omitted.' }
+}
+foreach ($label in @('', 'win25-vs2027', 'win22-private', 'WIN25', 'private-credential', ('x' * 10000))) {
+    if ($null -ne (Get-OverlapImageLabel $label)) { throw 'Unknown image label entered provenance.' }
 }
 if ((Get-OverlapStatus $report) -ne 'passed') { throw 'Complete owned composition evidence rejected.' }
-$report.owned_ten_processes_with_live_worker = $false
+$report.owned_process_count_corroborated = $false
 if ((Get-OverlapStatus $report) -ne 'inconclusive') { throw 'Observed callback overlap alone falsely proves native overlap.' }
-$report.owned_ten_processes_with_live_worker = $true; $report.job_sample_failures = 1
+$report.owned_process_count_corroborated = $true; $report.job_sample_failures = 1
 if ((Get-OverlapStatus $report) -ne 'inconclusive') { throw 'Failed accounting query falsely proves native overlap.' }
 $report.job_sample_failures = 0; $report.watchdog_fired = $true
 if ((Get-OverlapStatus $report) -ne 'incomplete') { throw 'Watchdog truncation manufactured success.' }
