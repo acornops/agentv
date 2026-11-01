@@ -1,5 +1,7 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
+import { spawnSync } from 'node:child_process';
+import { fileURLToPath } from 'node:url';
 import { evaluateRebootEvidence } from './reboot-evidence.mjs';
 
 // Synthetic observations test decisions only; they never qualify a host reboot.
@@ -75,4 +77,17 @@ test('invalid or missing baseline and unknown modes fail closed without echoing 
   }
   assert.equal(evaluateRebootEvidence('other', observation()).status, 'failed');
   assert.equal(evaluateRebootEvidence('prepare', null).status, 'failed');
+});
+test('CLI reads bounded stdin and returns preparation or rejection with the correct exit code', () => {
+  for (const [input, code, status] of [
+    [JSON.stringify({ mode: 'prepare', current: observation() }), 0, 'prepared'],
+    [JSON.stringify({ mode: 'verify', current: observation(), before: observation() }), 1, 'failed'],
+    ['private-invalid-input', 1, 'failed'],
+    ['x'.repeat(32769), 1, 'failed'],
+  ]) {
+    const result = spawnSync(process.execPath, [fileURLToPath(new URL('./reboot-evidence.mjs', import.meta.url))], { input, encoding: 'utf8', timeout: 5000 });
+    assert.equal(result.status, code);
+    assert.equal(JSON.parse(result.stdout).status, status);
+    assert.ok(!result.stdout.includes('private-invalid-input'));
+  }
 });

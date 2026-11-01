@@ -24,6 +24,9 @@ jobs:
       - name: Parse qualification scripts with PowerShell 5.1
         shell: powershell
         run: ./scripts/windows-tests/parse-package-tests.ps1
+      - name: Exercise native reboot evaluator CLI (synthetic)
+        shell: powershell
+        run: ./scripts/windows-tests/reboot-cli-tests.ps1
       - name: Build candidate assets without publishing
         shell: powershell
         run: ./scripts/build-windows-archive.ps1

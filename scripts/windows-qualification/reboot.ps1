@@ -75,19 +75,26 @@ try {
     $latest=Read-AgentVJson -Path $paths.Selection -Secret
     $latestService=CimCmdlets\Get-CimInstance Win32_Service -Filter "Name='AcornOpsAgentV'"
     if (($latest|ConvertTo-Json -Compress) -cne ($selection|ConvertTo-Json -Compress) -or (Get-FileHash $paths.Config -Algorithm SHA256).Hash.ToLowerInvariant() -cne $configHash -or $null -eq $latestService -or $latestService.ProcessId -ne $service.ProcessId -or $latestService.State -cne $service.State) { throw 'Installation changed during observation.' }
-    $stage='evaluation'
+    $stage='evaluation-command'
     $json=@{mode=$Mode;current=$current;before=$before}|ConvertTo-Json -Depth 6 -Compress
     $output=$json | & $NodePath (Join-Path $PSScriptRoot 'reboot-evidence.mjs')
     $code=$LASTEXITCODE
+    $stage='evaluation-parse'
     $report=$output|ConvertFrom-Json
+    $stage='report'
     Write-AgentVDurableJson -Path $reportPath -Value $report
     $reportWritten=$true
-    if ($code -ne 0 -or $report.status -notin @('prepared','observed-reboot-pass')) { throw 'Reboot evidence checks failed.' }
-    if ($Mode -eq 'prepare') { Write-AgentVDurableJson -Path $checkpoint -Value $current }
+    # Fixed check IDs and booleans are safe on failure too; never print observations.
     Write-Output ($report|ConvertTo-Json -Depth 5 -Compress)
+    $stage='evaluation-result'
+    if ($code -ne 0 -or $report.status -notin @('prepared','observed-reboot-pass')) { throw 'Reboot evidence checks failed.' }
+    $stage='checkpoint'
+    if ($Mode -eq 'prepare') { Write-AgentVDurableJson -Path $checkpoint -Value $current }
 } catch {
     if ($reportPath -and $lock -and -not $reportWritten) {
-        Write-AgentVDurableJson -Path $reportPath -Value @{schema='acornops.agentv-reboot-report.v1';status='failed';checks=@(@{id=$stage;passed=$false})}
+        $failure=@{schema='acornops.agentv-reboot-report.v1';status='failed';checks=@(@{id=$stage;passed=$false});diagnostic=@{type=$_.Exception.GetType().FullName;hresult=$_.Exception.HResult;line=$_.InvocationInfo.ScriptLineNumber}}
+        Write-AgentVDurableJson -Path $reportPath -Value $failure
+        Write-Output ($failure|ConvertTo-Json -Depth 5 -Compress)
     }
     throw ('Windows reboot qualification did not pass; stage='+$stage+'. No installation changes were requested.')
 } finally { if ($null -ne $lock) { $lock.Dispose() } }

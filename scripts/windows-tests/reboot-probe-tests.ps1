@@ -4,7 +4,12 @@ $qualification=Join-Path $work 'reboot-qualification'
 $checkpoint=Join-Path $qualification 'checkpoint.json'
 $beforeConfig=(Get-FileHash $paths.Config -Algorithm SHA256).Hash
 $beforeSelection=(Get-FileHash $paths.Selection -Algorithm SHA256).Hash
-& $probe -Mode prepare -EvidenceDirectory $qualification -NodePath $node
+try { & $probe -Mode prepare -EvidenceDirectory $qualification -NodePath $node }
+finally {
+    if (Test-Path (Join-Path $qualification 'report.json')) {
+        $script:evidence.rebootProbe=@{qualification='not-executed';fixture='native-prepare';report=(Read-AgentVJson -Path (Join-Path $qualification 'report.json') -Secret)}
+    }
+}
 $prepared=Read-AgentVJson -Path (Join-Path $qualification 'report.json') -Secret
 Assert-Ci ($prepared.status -ceq 'prepared') 'Native reboot probe prepares evidence without claiming a reboot'
 $checkpointHash=(Get-FileHash $checkpoint -Algorithm SHA256).Hash

@@ -2,6 +2,11 @@ name: Windows installer recovery
 
 on:
   workflow_dispatch:
+    inputs:
+      startup_only:
+        description: Run only startup and reboot-probe checks after recovery-state fixtures
+        type: boolean
+        default: false
   pull_request:
     branches: [main]
 
@@ -93,7 +98,7 @@ jobs:
       matrix:
         os: [windows-2022, windows-2025]
         node: [22, 24]
-        scenario: [lifecycle, recovery, startup, acceptance]
+        scenario: ${{ fromJSON(inputs.startup_only && '["startup"]' || '["lifecycle","recovery","startup","acceptance"]') }}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
