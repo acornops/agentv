@@ -101,3 +101,7 @@ replacement remain open. Persistent outage-status repair is separate from
 heartbeat reporting. Future standalone modal callers must arrange expiry
 updates, as both current callers do. Unrelated parent/admin work retains its
 separate history. No merge, deployment, release or activation is included.
+
+Hosted follow-up adds an unresolved rollback-finalization sharing violation,
+alongside another cold collector timeout; see the [qualification evidence](../../design-docs/windows-qualification-decision.md#final-catch-all-audit).
+Source review completion does not close these native release blockers.

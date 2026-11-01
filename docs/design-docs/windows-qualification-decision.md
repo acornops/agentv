@@ -275,6 +275,18 @@ Shared heartbeat reporting now expires stale observations (see the
 persistent outage-status/event reconciliation remains separate. Exact-revision
 hosted evidence for this pass is recorded on the coordinated draft PRs.
 
+At source `c23aec0`, tested merge `7c525bd`, Linux CI, all four service-host
+cells and candidate preparation pass. [Collectors 41340471577](https://github.com/acornops/agentv/actions/runs/41340471577)
+still fail: Server 2022/Node 22 reaches 10,021 ms without output or a script
+marker. [Installer 41340471384](https://github.com/acornops/agentv/actions/runs/41340471384)
+adds a distinct Server 2025/Node 24 rollback-finalization failure: atomic
+replacement at `Paths.psm1:95` returns sharing violation `0x80070020` after a
+lost rollback response. The journal remains at `finalize-intent`, selecting
+`previous`; the service is running, but transaction completion is not verified.
+The artifact does not identify the locked destination or holder. Concurrent
+recovery reads are a hypothesis, not an established cause or an implemented fix.
+Neither timeout retries nor file-sharing/locking changes were made speculatively.
+
 ## Unmet gates
 
 1. **Explain and resolve native collector reliability failures.** Preserve failed
@@ -301,6 +313,10 @@ hosted evidence for this pass is recorded on the coordinated draft PRs.
    evidence. Activation requires independently pinned qualified Windows artifacts
    and that native evidence. Arbitrary mixed old/new backend versions remain
    unqualified. No release or activation is authorized by the implementation tasks.
+5. **Resolve rollback-finalization sharing violations.** Capture the allowlisted
+   destination and owning handle in the failed path above, reproduce the overlap,
+   then validate a scoped repair across the native recovery matrix. Retained
+   recovery state and later passing samples do not establish successful repair.
 
 ## Source review and handoff
 
