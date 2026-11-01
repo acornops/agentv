@@ -41,10 +41,13 @@ public sealed class FirstCallJob : IDisposable {
         public long User, Kernel, PeriodUser, PeriodKernel;
         public uint Faults, Total, Active, Terminated;
     }
-    public bool Empty() {
+    // Includes the assigned worker and all owned descendants. Query failure
+    // is unavailable (-1), never proof of zero active processes.
+    public long ActiveProcesses() {
         Accounting value; uint length;
-        return QueryInformationJobObject(handle, 1, out value, (uint)Marshal.SizeOf(typeof(Accounting)), out length) && value.Active == 0;
+        return QueryInformationJobObject(handle, 1, out value, (uint)Marshal.SizeOf(typeof(Accounting)), out length) ? (long)value.Active : -1;
     }
+    public bool Empty() { return ActiveProcesses() == 0; }
     public void Dispose() {
         StopWatchdog();
         lock (gate) { if (handle != IntPtr.Zero) { CloseHandle(handle); handle = IntPtr.Zero; } }

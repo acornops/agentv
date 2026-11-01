@@ -9,6 +9,10 @@ on:
         description: Capture one production-bounded first call on disposable hosted runners
         type: boolean
         default: false
+      component_composition:
+        description: Observe one cold snapshot plus four tool reads (not startup qualification)
+        type: boolean
+        default: false
 
 permissions:
   contents: read
@@ -29,6 +33,10 @@ jobs:
         node: [22, 24]
     steps:
       - uses: actions/checkout@v4
+      - name: Reject ambiguous diagnostic selection before any collectors
+        if: github.event_name == 'workflow_dispatch' && inputs.first_call_diagnostic && inputs.component_composition
+        shell: pwsh
+        run: throw 'Select exactly one native observation.'
       - uses: actions/setup-node@v4
         with:
           node-version: ${{ matrix.node }}
@@ -38,13 +46,29 @@ jobs:
       - name: Verify Windows read runtime and service entry gate
         run: npx vitest run src/config.spec.ts src/windows-runtime.spec.ts src/windows-service-entry.spec.ts src/windows
       - name: Measure the first native call in an owned diagnostic job
-        if: github.event_name == 'workflow_dispatch' && inputs.first_call_diagnostic
+        if: github.event_name == 'workflow_dispatch' && inputs.first_call_diagnostic && !inputs.component_composition
         shell: pwsh
         env:
           AGENTV_FIRST_CALL_ALLOW: 'true'
         run: ./scripts/windows-tests/first-call-native.ps1 -AllowDisposableCi
+      - name: Observe cold component composition in an owned diagnostic job
+        if: github.event_name == 'workflow_dispatch' && inputs.component_composition && !inputs.first_call_diagnostic
+        shell: pwsh
+        env:
+          AGENTV_OVERLAP_ALLOW: 'true'
+        run: ./scripts/windows-tests/overlap-native.ps1 -AllowDisposableCi
+      - name: Verify composition redaction and fail-closed assignment
+        if: always() && github.event_name == 'workflow_dispatch' && inputs.component_composition && !inputs.first_call_diagnostic
+        shell: pwsh
+        env:
+          AGENTV_OVERLAP_ALLOW: 'true'
+        run: |
+          node --test scripts/windows-tests/overlap-evidence.test.mjs
+          if ($LASTEXITCODE -ne 0) { throw 'Composition fixture checks failed.' }
+          ./scripts/windows-tests/overlap-metadata-tests.ps1
+          ./scripts/windows-tests/overlap-native.ps1 -AllowDisposableCi -TestAssignmentFailure
       - name: Verify diagnostic redaction and independent watchdog cleanup
-        if: always() && github.event_name == 'workflow_dispatch' && inputs.first_call_diagnostic
+        if: always() && github.event_name == 'workflow_dispatch' && (inputs.first_call_diagnostic || inputs.component_composition) && !(inputs.first_call_diagnostic && inputs.component_composition)
         shell: pwsh
         env:
           AGENTV_FIRST_CALL_ALLOW: 'true'
@@ -54,7 +78,7 @@ jobs:
           ./scripts/windows-tests/first-call-metadata-tests.ps1
           ./scripts/windows-tests/first-call-native.ps1 -AllowDisposableCi -TestWatchdog
       - name: Read native collectors and capture sanitized structural evidence
-        if: github.event_name != 'workflow_dispatch' || !inputs.first_call_diagnostic
+        if: github.event_name != 'workflow_dispatch' || (!inputs.first_call_diagnostic && !inputs.component_composition)
         run: node scripts/windows-collector-smoke.mjs
       - name: Upload structural evidence and runner provenance
         if: always()
@@ -65,5 +89,7 @@ jobs:
             artifacts/windows-collectors/native-structure.json
             artifacts/windows-collectors/first-call-diagnostic.json
             artifacts/windows-collectors/first-call-watchdog-test.json
+            artifacts/windows-collectors/overlap-native.json
+            artifacts/windows-collectors/overlap-assignment-test.json
           if-no-files-found: warn
           retention-days: 14
