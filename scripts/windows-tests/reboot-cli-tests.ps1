@@ -13,6 +13,10 @@ $current=@{
 }
 foreach ($mode in @('prepare','verify')) {
     $inputJson=@{mode=$mode;current=$current;before=$current}|ConvertTo-Json -Depth 6 -Compress
+    # Only synthetic input: retain the first three actual stdin bytes to establish
+    # the native encoding boundary, without echoing observations or credentials.
+    $prefix=$inputJson | & node.exe -e 'process.stdout.write(require(''node:fs'').readFileSync(0).subarray(0,3).toString(''hex''))'
+    Write-Output ('Synthetic PowerShell stdin prefix='+$prefix)
     $output=$inputJson | & node.exe $evaluator
     $code=$LASTEXITCODE
     if (-not $output) { throw 'Native reboot evaluator CLI emitted no result.' }

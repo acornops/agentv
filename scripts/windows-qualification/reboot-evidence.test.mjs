@@ -81,6 +81,7 @@ test('invalid or missing baseline and unknown modes fail closed without echoing 
 test('CLI reads bounded stdin and returns preparation or rejection with the correct exit code', () => {
   for (const [input, code, status] of [
     [JSON.stringify({ mode: 'prepare', current: observation() }), 0, 'prepared'],
+    ['\uFEFF' + JSON.stringify({ mode: 'prepare', current: observation() }), 0, 'prepared'],
     [JSON.stringify({ mode: 'verify', current: observation(), before: observation() }), 1, 'failed'],
     ['private-invalid-input', 1, 'failed'],
     ['x'.repeat(32769), 1, 'failed'],

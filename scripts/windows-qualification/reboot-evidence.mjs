@@ -52,7 +52,9 @@ if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) 
       if (bytes > 32768) throw new Error('Oversized evidence');
       input += chunk.toString('utf8');
     }
-    const { mode, current, before } = JSON.parse(input);
+    // Windows PowerShell can prefix native stdin with the UTF-8 BOM. Accept
+    // exactly that optional prefix, retaining the original byte-size bound.
+    const { mode, current, before } = JSON.parse(input.startsWith('\uFEFF') ? input.slice(1) : input);
     const result = evaluateRebootEvidence(mode, current, before);
     process.stdout.write(JSON.stringify(result));
     if (result.status === 'failed') process.exitCode = 1;
