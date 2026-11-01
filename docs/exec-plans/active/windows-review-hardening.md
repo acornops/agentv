@@ -45,11 +45,11 @@
 
 **Interfaces:** A pure helper validates `WindowsLogsInput` against allowed channels and an explicit clock value, returning normalized `since`/`until` ISO strings. Both hosts call it; live supplies those values to the existing runner. Retain current live error codes/messages and defaults.
 
-- [ ] Demonstrate RED through both hosts for the same validly shaped 48-hour request: both must reject with `INVALID_ARGUMENTS`, without calling the native runner.
-- [ ] Cover allowed/denied channels, default one-hour window, exactly 24 hours and over, reversed/invalid dates, 60-second future boundary, row and byte bounds. Use one table of cases across both hosts and a controlled clock.
-- [ ] Extract only the existing pure live validation and use it in both hosts; retain native collection/filter/output behavior and synthetic mock output.
-- [ ] Run focused parity/collector/mock tests, `npm test`, and `npm run typecheck`; record RED/GREEN evidence and commit the scoped change.
-- [ ] Independent spec/quality review before completion.
+- [x] Demonstrate RED through both hosts for the same validly shaped 48-hour request: both must reject with `INVALID_ARGUMENTS`, without calling the native runner.
+- [x] Cover allowed/denied channels, default one-hour window, exactly 24 hours and over, reversed/invalid dates, 60-second future boundary, row and byte bounds. Use one table of cases across both hosts and a controlled clock.
+- [x] Extract only the existing pure live validation and use it in both hosts; retain native collection/filter/output behavior and synthetic mock output.
+- [x] Run focused parity/collector/mock tests, `npm test`, and `npm run typecheck`; record RED/GREEN evidence and commit the scoped change.
+- [x] Independent spec/quality review before completion.
 
 ### Task 3: Make Windows cross-repository compatibility executable
 
