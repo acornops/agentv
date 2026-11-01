@@ -18,6 +18,26 @@ describe('AgentV tool contracts', () => {
     registerAllTools(new MockHostAdapter(), actions);
     expect(toolRegistry.getAll().map((tool) => tool.name)).toEqual(['get_host_summary', 'list_filesystems', 'list_processes', 'get_process', 'list_services', 'get_service', 'query_logs', 'list_listeners', 'restart_service']);
   });
+  it('keeps mock service lists within the summary contract and preserves detail preconditions', async () => {
+    registerAllTools(new MockHostAdapter(), actions);
+    const router = new McpRouter(new ToolExecutor(), createLogger('error'));
+    router.setSessionPolicy({ allowedTools: new Set(['list_services', 'get_service']), writeEnabled: false, generation: 1, targetId: 'vm-1' });
+    const catalog = await router.handleRequest({ jsonrpc: '2.0', id: 1, method: 'tools/list' }) as any;
+    const listSchema = catalog.result.tools.find((tool: any) => tool.name === 'list_services').outputSchema.properties.data.oneOf[0];
+    expect(listSchema.properties.items.items.additionalProperties).toBe(false);
+    const listed = await router.handleRequest({ jsonrpc: '2.0', id: 2, method: 'tools/call', params: { name: 'list_services', arguments: {} } }) as any;
+    expect(listed.result.isError).toBe(false);
+    expect(listed.result.structuredContent.data.items).toEqual([{
+      unit: 'ssh.service', description: 'OpenSSH server', load_state: 'loaded', active_state: 'active', sub_state: 'running',
+    }]);
+    expect(listed.result.structuredContent.data).toMatchObject({ original_count: 1, omitted_count: 0, health: { status: 'ok' } });
+    const detail = await router.handleRequest({ jsonrpc: '2.0', id: 3, method: 'tools/call', params: { name: 'get_service', arguments: { unit: 'ssh.service' } } }) as any;
+    expect(detail.result.isError).toBe(false);
+    expect(detail.result.structuredContent.data).toMatchObject({
+      unit: 'ssh.service', main_pid: 100, invocation_id: 'mock-invocation',
+      restart_preconditions: { active_state: 'active', sub_state: 'running', invocation_id: 'mock-invocation' },
+    });
+  });
   it('requires authenticated readiness and returns canonical metadata and envelope', async () => {
     registerAllTools(new MockHostAdapter(), actions);
     const router = new McpRouter(new ToolExecutor({ localWriteEnabled: () => false }), createLogger('error'));

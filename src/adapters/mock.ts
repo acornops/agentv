@@ -11,7 +11,10 @@ export class MockHostAdapter implements HostAdapter {
   async listFilesystems(input: Parameters<HostAdapter['listFilesystems']>[0]) { const items = [{ filesystem: '/dev/vda1', mount: '/', type: 'ext4', total_bytes: 1000, used_bytes: 500, free_bytes: 500, used_percent: 50, inode_used_percent: 10, read_only: false }].filter((item) => !input.mount || item.mount === input.mount); return { items, original_count: items.length, omitted_count: 0, truncated: false, health: health('filesystems') }; }
   async listProcesses() { return { items: [process], original_count: 1, omitted_count: 0, health: health('procfs') }; }
   async getProcess(pid: number) { if (pid !== 1) throw new ToolExecutionError('RESOURCE_NOT_FOUND', `Process ${pid} was not found`); return process; }
-  async listServices() { return { items: [service], original_count: 1, omitted_count: 0, health: health('systemd') }; }
+  async listServices() {
+    const { unit, description, load_state, active_state, sub_state } = service;
+    return { items: [{ unit, description, load_state, active_state, sub_state }], original_count: 1, omitted_count: 0, health: health('systemd') };
+  }
   async getService(unit: string) { if (unit !== service.unit) throw new ToolExecutionError('RESOURCE_NOT_FOUND', `Service ${unit} was not found`); return service; }
   async queryLogs(input: Parameters<HostAdapter['queryLogs']>[0]) {
     const entry = {
