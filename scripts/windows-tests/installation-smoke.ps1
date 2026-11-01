@@ -145,6 +145,7 @@ try {
     Assert-Ci (-not(Test-Path $paths.Journal) -and -not(Test-Path $paths.Marker)) 'Finalization removes protected transaction state'
     $config=Read-AgentVJson -Path $paths.Config -Secret -ServiceReadSid (Get-AgentVServiceSid);$key=$config.settings.ACORNOPS_AGENT_KEY
     Assert-Ci ($config.settings.ACORNOPS_AGENT_ADDITIONAL_CA_BUNDLE_FILE -ceq $ca) 'Initial trusted CA selection is persisted'
+    if ($Scenario -eq 'startup') { . (Join-Path $PSScriptRoot 'reboot-probe-tests.ps1') }
     switch($Scenario){
         'lifecycle' {. (Join-Path $PSScriptRoot 'lifecycle-scenario.ps1')}
         'recovery' {. (Join-Path $PSScriptRoot 'recovery-scenario.ps1')}

@@ -382,3 +382,9 @@ supported journal-deletion or credential-retirement shortcut. Explicit acceptanc
 of a committed candidate applies only to a still-active candidate with fresh
 local and backend proof; it does not resolve non-active credentials. Windows
 onboarding remains disabled pending the full qualification/review gates.
+
+## Windows qualification preparation
+
+See [candidate artifacts and reboot evidence](windows-qualification.md) for the
+separate candidate workflow and read-only prepare/verify procedure. Hosted
+fixtures do not qualify a real reboot; rollout remains disabled.

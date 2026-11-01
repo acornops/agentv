@@ -52,3 +52,6 @@ This `docs/` tree is the repository-local system of record for agent-readable de
 - [Generated Artifacts](/docs/generated/README.md)
 
 - [Windows read runtime contract](contracts/windows-read-runtime.md): isolated native schemas, snapshot and collector qualification.
+
+- [Windows candidate and reboot qualification tools](windows-qualification.md) — Preparation only; real reboot and rollout remain unqualified.
+- [Windows qualification preparation plan](exec-plans/active/windows-qualification-preparation.md).

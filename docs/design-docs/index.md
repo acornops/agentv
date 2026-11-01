@@ -12,3 +12,5 @@ Record durable design decisions here. Keep transient task notes in execution pla
 - [Windows installer recovery](windows-installer-recovery.md) — Reviewed transaction and SCM ordering; hosted interruption checks pass, reboot recovery remains unqualified.
 - [Windows qualification decision](windows-qualification-decision.md) — Unqualified for rollout or writes; native evidence, unmet gates and future action-design requirements.
 - [Windows review hardening](windows-review-hardening.md) — Authorized scoped fixes, executable compatibility checks and separate shared-status work.
+
+- [Windows qualification preparation](windows-qualification-preparation.md) — Candidate artifacts and read-only reboot evidence; no runtime changes.
