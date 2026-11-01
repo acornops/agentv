@@ -86,6 +86,9 @@ One additional Server 2022/Node 24 diagnostic capture passed without reproducing
 the failure and did not identify its cause. No further deadline increase, retry
 or prewarming was selected. Retain the measured host-only tolerance and the
 explicit rollout blocker; do not describe Windows reliability as fixed.
+The final code checkpoint `7913f67` also passes all four hosted workflows,
+including all 18 installation jobs and 20 inspected artifacts. This later
+sample does not close the retained failure or the unchecked qualification item.
 
 The complete generated HTTPS wrapper now passes both OS fixtures with a
 synthetic downloaded bootstrap. Real package/SCM tests remain a separate boundary.

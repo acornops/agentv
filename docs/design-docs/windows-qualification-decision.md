@@ -82,6 +82,17 @@ Native watchdog tests now require proof that the independent callback terminated
 the owned process tree before fallback cleanup. No raw trace, command line,
 environment, credentials or host observations are published by these diagnostics.
 
+Final code/fixture checkpoint `7913f6779ad38f3f6157e23a3b206941f992034c` was
+tested in merge `85f8dd3f235c929464e0e73a5470a9363505b2c0`; its parents were
+verified against main `3d86cfc` and that feature commit. Runtime remains `c2eaf24`.
+
+| Final checkpoint | Result |
+| --- | --- |
+| [Linux CI 41287130795](https://github.com/acornops/agentv/actions/runs/41287130795) | Validation, 190 unit/E2E tests in 34 files, package/bootstrap/curl checks and both Ubuntu 24.04 Node 22/24 live systemd lifecycle jobs passed. Computed coverage passed; the existing optional Codecov upload rejected tokenless upload and is not claimed successful. |
+| [Collectors 41287130794](https://github.com/acornops/agentv/actions/runs/41287130794) | All four cells passed; first closes 4,663–8,513 ms, with all four boundary checks per cell. This does not erase the earlier ten-second failure. |
+| [Service host 41287130829](https://github.com/acornops/agentv/actions/runs/41287130829) | All four cells passed 33 checks each; LocalService host reads 3,068–5,713 ms. |
+| [Installer recovery 41287130789](https://github.com/acornops/agentv/actions/runs/41287130789) | All 18 jobs passed; all 20 artifacts inspected: 16 scenarios, two teardown fixtures and two complete-wrapper fixtures. Each OS/Node pair passed lifecycle 23, recovery 21, startup 9 and acceptance 21 checks. |
+
 The full generated HTTPS command now passes on Server 2022 and 2025 in the two
 recovery-state jobs of [run 41287130789](https://github.com/acornops/agentv/actions/runs/41287130789),
 fixture source `7913f6779ad38f3f6157e23a3b206941f992034c`, tested merge
@@ -139,6 +150,12 @@ The single scoped re-review has no open findings. Draft PRs remain on
 [AgentV](https://github.com/acornops/agentv/pull/8),
 [console](https://github.com/acornops/management-console/pull/35), and
 [API docs](https://github.com/acornops/docs-website/pull/19).
+
+The focused follow-up's broad review at `342a933..9fa1f4f` found no new Critical
+or Important source defect. The existing expected-error logging Minor remains
+deferred. Source approval does not approve Windows readiness: the cold-start
+qualification item stays open, despite the final passing matrix. Later commits
+only append verified evidence; no runtime or fixture code follows `7913f67`.
 
 ## Requirements before any future native-action implementation
 
