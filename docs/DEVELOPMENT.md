@@ -63,6 +63,12 @@ npm run smoke:curl-compat
 reports under `coverage/`. `npm run test:coverage:all` also includes the local
 WebSocket E2E suite and enforces the CI non-regression floors.
 
+CI always computes coverage and retains the GitHub coverage artifact when that
+job succeeds. Optional Codecov publication runs only when `CODECOV_TOKEN` is
+available to the job; configure a valid repository or organization secret to
+enable it. A skipped Codecov step does not mean an external upload succeeded
+and does not skip the coverage thresholds or artifact upload.
+
 The release archive smoke verifies its checksum, safe paths, required units and
 entrypoints, production-only dependency tree, executable modes, and ability to
 load the installed helper client from the extracted artifact.
