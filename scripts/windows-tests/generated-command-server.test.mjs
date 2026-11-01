@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { execFileSync, spawn, spawnSync } from 'node:child_process';
-import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
+import { mkdtemp, readFile, rm, writeFile, symlink } from 'node:fs/promises';
 import https from 'node:https';
 import os from 'node:os';
 import path from 'node:path';
@@ -107,6 +107,17 @@ test('CLI PFX boundary reports unsupported, wrong-password and malformed inputs;
     const noEntry = spawnSync(process.execPath, ['--input-type=module', '-e', 'await import('+JSON.stringify(new URL('./generated-command-server.mjs', import.meta.url).href)+')', optionsPath], { env: environment, timeout: 10000 });
     assert.equal(noEntry.status, 0);
     await assert.rejects(readFile(noEntryStatus), { code: 'ENOENT' });
+    // Readiness must never replace a preexisting marker. If publishing it fails
+    // after startup status was created, retain the bounded causal failure.
+    const collision = { allowDisposableCi: true, pfx: path.join(work, 'modern.pfx'), passphrase: password, control: path.join(work, 'mode'), ready: path.join(work, 'occupied-ready'), startupStatus: path.join(work, 'collision.json') };
+    await writeFile(collision.ready, 'preserve-owned-test-sentinel');
+    await writeFile(optionsPath, JSON.stringify(collision));
+    const rejected = spawnSync(process.execPath, [executable, optionsPath], { env: environment, timeout: 10000 });
+    assert.equal(rejected.status, 1);
+    assert.equal(await readFile(collision.ready, 'utf8'), 'preserve-owned-test-sentinel');
+    const rejectedStatus = JSON.parse(await readFile(collision.startupStatus, 'utf8'));
+    assert.equal(rejectedStatus.phase, 'ready-write');
+    assert.equal(rejectedStatus.category, 'other');
     const options = { allowDisposableCi: true, pfx: path.join(work, 'modern.pfx'), passphrase: password, control: path.join(work, 'mode'), ready: path.join(work, 'ready'), startupStatus: path.join(work, 'modern.json') };
     await writeFile(optionsPath, JSON.stringify(options));
     child = spawn(process.execPath, [executable, optionsPath], { env: environment, stdio: ['pipe', 'pipe', 'pipe'] });
@@ -138,4 +149,24 @@ test('unexpected startup errors disclose only the fixed other category', () => {
   assert.equal(status.category, 'other');
   assert.equal(status.code, 'unclassified');
   assert.equal(JSON.stringify(status).includes('private'), false);
+});
+
+test('CLI starts through an alias of the same entry file', async () => {
+  const work = await mkdtemp(path.join(os.tmpdir(), 'agentv-wrapper-entry-'));
+  try {
+    const executable = fileURLToPath(new URL('./generated-command-server.mjs', import.meta.url));
+    const alias = path.join(work, 'entry-alias.mjs');
+    await symlink(executable, alias);
+    const options = { allowDisposableCi: true, pfx: path.join(work, 'missing.pfx'), passphrase: 'synthetic-only', startupStatus: path.join(work, 'startup.json') };
+    const optionsPath = path.join(work, 'options.json');
+    await writeFile(optionsPath, JSON.stringify(options));
+    const child = spawnSync(process.execPath, [process.platform === 'win32' ? alias.toUpperCase() : alias, optionsPath], { env: { ...process.env, CI: 'true', GITHUB_ACTIONS: 'true' }, timeout: 10000, encoding: 'utf8' });
+    // Reaching PFX-read proves CLI startup occurred despite argv/module spelling.
+    assert.equal(child.status, 1);
+    const status = JSON.parse(await readFile(options.startupStatus, 'utf8'));
+    assert.equal(status.phase, 'pfx-read');
+    assert.equal(status.category, 'file-missing');
+  } finally {
+    await rm(work, { recursive: true, force: true });
+  }
 });

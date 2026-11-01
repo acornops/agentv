@@ -1,6 +1,7 @@
 import { readFile, writeFile } from 'node:fs/promises';
+import { realpathSync } from 'node:fs';
 import https from 'node:https';
-import { pathToFileURL } from 'node:url';
+import { fileURLToPath } from 'node:url';
 
 // Synthetic assets only: no enrollment API, release package or agent runtime.
 export async function startGeneratedCommandServer(tls, control, port = 18443, phase = () => {}) {
@@ -43,8 +44,15 @@ export function generatedCommandStartupStatus(phase, error = null) {
   return { phase: phases.includes(phase) ? phase : 'unavailable', category, code: error ? codes.includes(error.code) ? error.code : 'unclassified' : 'none', node: version(process.versions.node), openssl: version(process.versions.openssl) };
 }
 
-if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
+// Node resolves the module's real path; argv can retain an alias or Windows
+// casing. Compare canonical files so an owned CLI launch cannot silently skip.
+const entryPath = value => {
+  const canonical = realpathSync(value);
+  return process.platform === 'win32' ? canonical.toLowerCase() : canonical;
+};
+if (process.argv[1] && entryPath(process.argv[1]) === entryPath(fileURLToPath(import.meta.url))) {
   let options;
+  let startupStatusOwned = false;
   let phase = 'authorization';
   try {
     if (process.env.CI !== 'true' || process.env.GITHUB_ACTIONS !== 'true') throw new Error('Disposable hosted CI required');
@@ -58,11 +66,13 @@ if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) 
     process.stdin.once('data', () => { server.close(() => process.exit(0)); server.closeAllConnections(); });
     process.stdin.resume();
     phase = 'ready-write';
-    await writeFile(options.ready, 'ready', { flag: 'wx' });
+    // Publish readiness only after the completed startup record is readable.
     await writeFile(options.startupStatus, JSON.stringify(generatedCommandStartupStatus('ready')), { flag: 'wx' });
+    startupStatusOwned = true;
+    await writeFile(options.ready, 'ready', { flag: 'wx' });
   } catch (error) {
     if (options?.startupStatus) {
-      try { await writeFile(options.startupStatus, JSON.stringify(generatedCommandStartupStatus(phase, error)), { flag: 'wx' }); } catch { /* Parent explicitly reports unavailable metadata. */ }
+      try { await writeFile(options.startupStatus, JSON.stringify(generatedCommandStartupStatus(phase, error)), { flag: startupStatusOwned ? 'w' : 'wx' }); } catch { /* Parent explicitly reports unavailable metadata. */ }
     }
     // Never emit certificate options, command arguments or raw errors.
     process.stderr.write('Synthetic HTTPS fixture failed.\n');
