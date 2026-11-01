@@ -10,3 +10,4 @@ acceptance gates are preserved in the release records.
 - [Windows VM assessment and Linux baseline](windows-vm-assessment.md) — Completed baseline and approved compatibility design.
 - [Windows VM implementation](windows-vm-implementation.md) — Staged implementation and regression gates on feature branches.
 - [Windows native reliability follow-up](windows-native-reliability.md) — Focused investigation, fixes and hosted installation coverage; rollout remains disabled.
+- [Windows review hardening](windows-review-hardening.md) — Reconnect snapshots, mock/live validation, contract checks and safe diagnostics; native qualification stays explicit.
