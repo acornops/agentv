@@ -155,6 +155,63 @@ test('unexpected startup errors disclose only the fixed other category', () => {
   assert.equal(JSON.stringify(status).includes('private'), false);
 });
 
+// The native parent leaves stdin open and eventually calls WriteLine('stop').
+// Preamble or unrelated input must not act as that explicit shutdown command.
+for (const [name, earlyInput] of [['preamble', '\uFEFF'], ['unrelated-line', 'not-stop\r\n'], ['no-preamble', '']]) {
+  test('CLI waits for a complete stop command despite premature stdin data: '+name, { timeout: 30000 }, async () => {
+    const work = await mkdtemp(path.join(os.tmpdir(), 'agentv-wrapper-stdin-'));
+    try {
+      const key = path.join(work, 'key.pem');
+      const cert = path.join(work, 'cert.pem');
+      const pfx = path.join(work, 'fixture.pfx');
+      const passphrase = 'synthetic-stdin-test';
+      execFileSync('openssl', ['req', '-x509', '-newkey', 'rsa:2048', '-nodes', '-subj', '/CN=localhost', '-days', '1', '-keyout', key, '-out', cert], { stdio: 'ignore' });
+      execFileSync('openssl', ['pkcs12', '-export', '-in', cert, '-inkey', key, '-out', pfx, '-passout', 'pass:'+passphrase, '-keypbe', 'AES-256-CBC', '-certpbe', 'AES-256-CBC', '-macalg', 'sha256'], { stdio: 'ignore' });
+      const options = { allowDisposableCi: true, pfx, passphrase, control: path.join(work, 'mode'), ready: path.join(work, name+'-ready'), startupStatus: path.join(work, name+'-startup.json') };
+      const optionsPath = path.join(work, name+'-options.json');
+      await writeFile(optionsPath, JSON.stringify(options));
+      const child = spawn(process.execPath, [fileURLToPath(new URL('./generated-command-server.mjs', import.meta.url)), optionsPath], { env: { ...process.env, CI: 'true', GITHUB_ACTIONS: 'true' }, stdio: ['pipe', 'pipe', 'pipe'] });
+      child.stdout.resume(); child.stderr.resume();
+      const exited = once(child, 'exit');
+      const assertRunning = async () => {
+        const outcome = await Promise.race([exited.then(() => 'exited'), new Promise(resolve => setTimeout(() => resolve('running'), 150))]);
+        assert.equal(outcome, 'running', 'stdin data without a complete stop command terminated the owned CLI');
+      };
+      try {
+        // Queue bytes before server startup/readiness, as an input preamble
+        // could arrive; this does not claim the native byte source is known.
+        child.stdin.write(earlyInput);
+        const deadline = Date.now()+10000;
+        while (true) {
+          assert.equal(child.exitCode, null, 'CLI exited before readiness after non-command input');
+          try { await readFile(options.ready); break; } catch (error) { if (error.code !== 'ENOENT') throw error; }
+          assert.ok(Date.now() < deadline, 'CLI readiness deadline');
+          await new Promise(resolve => setTimeout(resolve, 25));
+        }
+        await assertRunning();
+        assert.equal(JSON.parse(await readFile(options.startupStatus, 'utf8')).phase, 'ready');
+        if (earlyInput) {
+          child.stdin.write('st');
+          await assertRunning();
+          child.stdin.write('op');
+          await assertRunning();
+        }
+        // Match native WriteLine framing, keeping stdin open until exit.
+        child.stdin.write(earlyInput ? '\r\n' : 'stop\r\n');
+        let timer;
+        const result = await Promise.race([exited, new Promise(resolve => { timer = setTimeout(() => resolve('deadline'), 5000); })]);
+        clearTimeout(timer);
+        assert.deepEqual(result, [0, null], 'complete stop command must gracefully exit the owned CLI');
+      } finally {
+        if (child.exitCode === null && child.signalCode === null) { child.kill(); await exited; }
+        child.stdin.destroy();
+      }
+    } finally {
+      await rm(work, { recursive: true, force: true });
+    }
+  });
+}
+
 test('CLI starts through an alias of the same entry file', async () => {
   const work = await mkdtemp(path.join(os.tmpdir(), 'agentv-wrapper-entry-'));
   try {

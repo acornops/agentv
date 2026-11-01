@@ -1,6 +1,7 @@
 import { readFile, writeFile } from 'node:fs/promises';
 import { realpathSync } from 'node:fs';
 import https from 'node:https';
+import { createInterface } from 'node:readline';
 import { fileURLToPath } from 'node:url';
 
 // Synthetic assets only: no enrollment API, release package or agent runtime.
@@ -75,9 +76,15 @@ if (entryMatched) {
     phase = 'pfx-read';
     const tls = { pfx: await readFile(options.pfx), passphrase: options.passphrase };
     const server = await startGeneratedCommandServer(tls, options.control, 18443, value => { phase = value; });
-    // Parent requests graceful shutdown through the owned child's stdin.
-    process.stdin.once('data', () => { server.close(() => process.exit(0)); server.closeAllConnections(); });
-    process.stdin.resume();
+    // Only the parent's complete stop command requests graceful shutdown.
+    // Ignore unrelated input; tolerate an encoder's leading UTF-8 preamble.
+    const commands = createInterface({ input: process.stdin, terminal: false, crlfDelay: Infinity });
+    commands.on('line', line => {
+      if (line.replace(/^\uFEFF/, '') !== 'stop') return;
+      commands.close();
+      server.close(() => process.exit(0));
+      server.closeAllConnections();
+    });
     phase = 'ready-write';
     // Publish readiness only after the completed startup record is readable.
     await writeFile(options.startupStatus, JSON.stringify(generatedCommandStartupStatus('ready')), { flag: 'wx' });
