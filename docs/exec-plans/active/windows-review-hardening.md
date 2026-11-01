@@ -57,13 +57,13 @@
 
 **Interfaces:** Producer tests regenerate deterministic cases through actual production builders and compare committed JSON. Consumer tests parse/project the mirrored JSON through production consumers. Existing workspace contract gate compares counterpart fixture content. Native command tests continue consuming exact builder output. Each repository's own checks work without a sibling checkout or network access.
 
-- [ ] Add producer-generated snapshot cases covering healthy, denied, unavailable, partial and capped rows using the real `buildWindowsSnapshot`; compare actual serialized output to the checked-in artifact. Keep test-only faults outside production code.
-- [ ] Consume the same artifact with backend snapshot validation and collection projection; assert meaningful expected health/count/coverage and unchanged Linux behavior. Mirror comparison belongs in the existing parent gate.
-- [ ] Add a backend test comparing the real Windows installation command builder against the exact committed wrapper commands and inputs. Mirror those cases to the AgentV native fixture; check source provenance when source hashes are recorded.
-- [ ] Prove intentional fixture/source mismatches fail the relevant gates; do not invent a second command generator or duplicate the producer implementation.
-- [ ] Correct the backend runtime paragraph to host 10s/non-host 8s and add a maintained counterpart document/fixture check. Preserve security checks and protocol version.
-- [ ] Run affected producer/consumer tests, repository contract/harness checks and parent contract check. Run each changed repo's full test suite before commit; native wrapper execution is included in final hosted qualification.
-- [ ] Independent task review across the exact changed repository ranges.
+- [x] Add producer-generated snapshot cases covering healthy, denied, unavailable, partial and capped rows using the real `buildWindowsSnapshot`; compare actual serialized output to the checked-in artifact. Keep test-only faults outside production code.
+- [x] Consume the same artifact with backend snapshot validation and collection projection; assert meaningful expected health/count/coverage and unchanged Linux behavior. Mirror comparison belongs in the existing parent gate.
+- [x] Add a backend test comparing the real Windows installation command builder against the exact committed wrapper commands and inputs. Mirror those cases to the AgentV native fixture; check source provenance when source hashes are recorded.
+- [x] Prove intentional fixture/source mismatches fail the relevant gates; do not invent a second command generator or duplicate the producer implementation.
+- [x] Correct the backend runtime paragraph to host 10s/non-host 8s and add a maintained counterpart document/fixture check. Preserve security checks and protocol version.
+- [x] Run affected producer/consumer tests, repository contract/harness checks and parent contract check. Run each changed repo's full test suite before commit; native wrapper execution is included in final hosted qualification.
+- [x] Independent task review across the exact changed repository ranges.
 
 ### Task 4: Preserve safe installer failure categories
 
@@ -94,9 +94,11 @@
 
 **Interfaces:** Assess existing owner observations, identity-fenced VM transitions and service lifecycle/scheduler hooks. Any repair must work after dependency recovery/process restart without relying on an agent reconnect, and must not mark a live replacement offline on stale or uncertain observations.
 
-- [ ] Trace existing reconciliation/lease/worker patterns and select the smallest architecture that can repair persisted stale identity. Document inherited behavior and current Linux compatibility.
-- [ ] Write the separate implementation plan with exact lifecycle ownership, bounded batching, shutdown, outage, replacement and process-restart tests; independently review it before execution.
-- [ ] Execute that separately tracked plan if its reviewed implementation remains focused; otherwise record the concrete broader dependency and remaining work. Preserve current Windows feature isolation and all Linux/Windows lifecycle validation gates.
+- [x] Trace existing reconciliation/lease/worker patterns and select the smallest architecture that can repair persisted stale identity. Document inherited behavior and current Linux compatibility.
+- [x] Write the separate implementation plan with exact lifecycle ownership, bounded batching, shutdown, outage, replacement and process-restart tests; independently review it before execution.
+- [x] Execute that separately tracked plan if its reviewed implementation remains focused; otherwise record the concrete broader dependency and remaining work. Preserve current Windows feature isolation and all Linux/Windows lifecycle validation gates.
+
+Disposition: the independently reviewed [backend repair plan](../../../../control-plane/docs/exec-plans/active/vm-connection-status-repair.md) remains at its ownership/liveness design gate. No periodic shared writer was added; outage-induced stale status remains open.
 
 ## Final validation and handoff
 
