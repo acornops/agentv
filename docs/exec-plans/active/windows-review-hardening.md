@@ -71,16 +71,16 @@
 
 **Interfaces:** Preserve `Invoke-AgentVApi` result fields and all recovery decisions. Emit at most one bounded line per failed call with a fixed category and allowlisted numeric native/HTTP code. No raw exception/output/body/path/URL. Test the same production helper on hosted Windows.
 
-- [ ] Characterize existing unavailable/code/data outcomes for transport failure, invalid HTTP-status output, bounded malformed response and non-success HTTP response before editing behavior.
-- [ ] Add failing checks for useful sanitized categories and secret-bearing fake/native failure content; verify diagnostics never disclose injected secrets or change the existing result.
-- [ ] Add the smallest categorized diagnostic path, preserving catch/finally cleanup and every uncertainty/HTTP return value. Readability changes stay inside touched code.
-- [ ] Run relevant PowerShell/native checks on both supported Server versions, plus AgentV validation. Review the change before considering it complete.
+- [x] Characterize existing unavailable/code/data outcomes for transport failure, invalid HTTP-status output, bounded malformed response and non-success HTTP response before editing behavior.
+- [x] Add failing checks for useful sanitized categories and secret-bearing fake/native failure content; verify diagnostics never disclose injected secrets or change the existing result.
+- [x] Add the smallest categorized diagnostic path, preserving catch/finally cleanup and every uncertainty/HTTP return value. Readability changes stay inside touched code.
+- [x] Run relevant PowerShell/native checks on both supported Server versions, plus AgentV validation. Review the change before considering it complete.
 
 ### Task 5: Investigate overlapping native work and cold-start failures
 
-**Files:** Existing Windows collector/service-host smoke and bounded diagnostic helpers; at most a narrow overlap measurement fixture and workflow step. Qualification docs retain exact evidence.
+**Files:** Narrow `scripts/windows-tests/overlap-worker.mjs`, `overlap-evidence.mjs` and focused tests, plus `overlap-native.ps1` or a separate mode reusing the existing owned-job supervisor. `.github/workflows/windows-collectors.yml` gets a separate manual experiment flag/artifact. Qualification docs retain exact evidence. Qualification docs retain exact evidence.
 
-**Interfaces:** Use actual production Windows host/runner. Normal startup and current limits remain unchanged. Measure snapshot fan-out plus four tool reads as a distinct workload; do not infer failure causation from concurrency alone.
+**Interfaces:** Use actual production Windows host/runner. Normal startup and current limits remain unchanged. Measure snapshot fan-out plus four tool reads as a distinct cold component workload that deliberately bypasses the mandatory runtime host preflight; do not infer failure causation from concurrency alone. Use the existing 12-second independent watchdog, one owned cleanup budget, actual child peak distinct from requested calls, and at most 64 KiB allowlisted evidence. Hosted minimum-VM representativeness remains unknown.
 
 - [ ] Review retained failed samples and specify one new discriminating observation before changing diagnostics. Record the hypothesis, bounds and what an inconclusive result means.
 - [ ] Add a bounded overlap check using real snapshot construction and tool execution, reporting only counts/status/timing/cleanup. State whether hosted hardware represents the minimum supported VM.
