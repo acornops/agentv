@@ -96,7 +96,16 @@ public sealed class ApiThrowingWriter : TextWriter {
             $clean=@(Get-ChildItem (Join-Path $root 'http') -Force).Count -eq 0
             $external=($before+1) -eq (& $module {$script:ApiSyntheticResolutions}) -and (Test-Path $called) -and (Get-Item $called).Length -eq 1
             $restored=$true;foreach($name in $names){if([Environment]::GetEnvironmentVariable($name,'Process') -cne 'synthetic-environment-secret'){$restored=$false}}
-            $records.Add([pscustomobject]@{case=$case.name;sink=$sink;outcomePreserved=[bool]$outcome;diagnosticSafe=[bool]$diagnostic;cleaned=[bool]$clean;syntheticNativeInvoked=[bool]$external;environmentRestored=[bool]$restored})
+            # Observe legacy surprises without serializing arbitrary values or
+            # objects. Only known result codes and bounded shape flags leave CI.
+            $actualAvailable=$null;$actualCode='other';$actualDataPresent=$false;$actualMarkerMatches=$false
+            if($shape){
+                if($result.available -is [bool]){$actualAvailable=$result.available}
+                if($result.code -is [int] -and $result.code -in @(0,200,409,503,999)){$actualCode='code-'+$result.code}
+                $actualDataPresent=$null -ne $result.data
+                if($actualDataPresent -and $result.data.PSObject.Properties['marker']){$actualMarkerMatches=$result.data.marker -is [string] -and $result.data.marker -ceq 'synthetic-response-secret'}
+            }
+            $records.Add([pscustomobject]@{case=$case.name;sink=$sink;outcomePreserved=[bool]$outcome;diagnosticSafe=[bool]$diagnostic;cleaned=[bool]$clean;syntheticNativeInvoked=[bool]$external;environmentRestored=[bool]$restored;actualShape=[bool]$shape;actualAvailable=$actualAvailable;actualCode=$actualCode;actualDataPresent=[bool]$actualDataPresent;actualMarkerMatches=[bool]$actualMarkerMatches})
             $capture.Dispose();$throwing.Dispose()
         }
     }
