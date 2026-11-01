@@ -37,13 +37,35 @@ export async function buildWindowsSnapshot(host: WindowsHost, signal?: AbortSign
 export class WindowsSnapshotManager {
   private interval: NodeJS.Timeout | undefined;
   private controller: AbortController | undefined;
+  private active = false;
   private generation = 0;
   private inFlight = false;
+  private pending: { generation: number; maxBytes: number } | undefined;
   constructor(private readonly host: WindowsHost, private readonly send: (payload: Buffer) => boolean, private readonly logger: Logger, private readonly metrics: Observability) {}
-  start(intervalMs: number, maxBytes: number): void { this.stop(); const generation = this.generation; this.controller = new AbortController(); this.interval = setInterval(() => void this.collect(generation, maxBytes), intervalMs); this.interval.unref(); void this.collect(generation, maxBytes); }
-  stop(): void { this.generation++; clearInterval(this.interval); this.interval = undefined; this.controller?.abort(); }
-  private async collect(generation: number, maxBytes: number): Promise<void> {
-    if (this.inFlight) { this.metrics.increment('skipped_snapshots'); return; }
+  start(intervalMs: number, maxBytes: number): void {
+    this.stop();
+    this.active = true;
+    const generation = this.generation;
+    this.controller = new AbortController();
+    this.interval = setInterval(() => void this.collect(generation, maxBytes), intervalMs);
+    this.interval.unref();
+    void this.collect(generation, maxBytes, true);
+  }
+  stop(): void {
+    this.active = false;
+    this.generation++;
+    this.pending = undefined;
+    clearInterval(this.interval);
+    this.interval = undefined;
+    this.controller?.abort();
+  }
+  private async collect(generation: number, maxBytes: number, startup = false): Promise<void> {
+    if (!this.active || generation !== this.generation) return;
+    if (this.inFlight) {
+      this.metrics.increment('skipped_snapshots');
+      if (startup) this.pending = { generation, maxBytes };
+      return;
+    }
     this.inFlight = true;
     try {
       const snapshot = await buildWindowsSnapshot(this.host, this.controller?.signal);
@@ -56,6 +78,11 @@ export class WindowsSnapshotManager {
       if (bytes.length > maxBytes) { this.metrics.increment('dropped_snapshots'); return; }
       const compressed = gzipSync(bytes);
       if (compressed.length > maxBytes || !this.send(compressed)) this.metrics.increment('dropped_snapshots');
-    } catch { this.logger.warn({}, 'Windows snapshot unavailable'); } finally { this.inFlight = false; }
+    } catch { this.logger.warn({}, 'Windows snapshot unavailable'); } finally {
+      this.inFlight = false;
+      const pending = this.pending;
+      this.pending = undefined;
+      if (this.active && pending) void this.collect(pending.generation, pending.maxBytes);
+    }
   }
 }
