@@ -6,7 +6,7 @@
 
 **Architecture:** Keep the existing isolated Windows runtime and package. Diagnose the failing native boundary before selecting a production fix. Extend the existing disposable hosted fixtures for installation coverage; preserve authenticated transport and credential transactions.
 
-**Tech stack:** Node 22/24, Windows Server 2022/2025 x64, PowerShell 5.1, Windows Performance Recorder, existing TypeScript backend.
+**Tech stack:** Node 22/24, Windows Server 2022/2025 x64, PowerShell 5.1, bounded native process diagnostics, existing TypeScript backend.
 
 **Spec:** [Approved compatibility design](../../design-docs/windows-vm-linux-compatibility.md) and [open qualification gates](../../design-docs/windows-qualification-decision.md).
 
@@ -39,15 +39,30 @@ is incremental: the exact repair is specified only after causal evidence exists.
 
 **Interfaces:** Consume the real `WindowsCollectorRunner` observer and existing fixed collector/service fixtures. Produce a sanitized report distinguishing process execution/initialization, native waits and parent-observation delay for the first bounded call; preserve native gate outcomes separately.
 
-- [ ] Read the saved cold-start investigation and failing artifacts. Document one concrete hypothesis and the smallest observation that distinguishes it; validate available native tooling from primary documentation.
-- [ ] Add opt-in hosted diagnostic capture using installed Windows tooling. Prefer an isolated WPR memory trace capped at 64 MiB, with target-process scheduling/module categories and process CPU versus wall time. Keep raw traces local and remove them after producing a report capped at 64 KiB. If a reliable narrow summarizer is unavailable, report that limitation and propose the next smallest observation instead of building a generic profiling framework.
-- [ ] Bound first-call capture independently of the production collector. Use a 12-second diagnostic watchdog for the standalone first call; recorder start/stop each have a five-second bound. Do not affect the ordinary non-diagnostic CI path. An optional warm control is limited to one call with the same production bound and is labeled comparison evidence.
-- [ ] Ensure contained service-identity failures preserve the failing operation/code/stage/timeline before cleanup. Reuse existing diagnostics where sufficient; add tracing only at a specifically identified missing boundary.
-- [ ] Exercise redaction, bounded output and failure/cleanup behavior with focused meaningful tests. Run normal AgentV validation once before the review checkpoint. Keep diagnostic source and any later production repair in separate commits.
-- [ ] Run one explicitly identified diagnostic matrix on Server 2022/2025 and Node 22/24, inspect every failure and preserve provenance. Do not repeatedly dispatch unchanged experiments merely to obtain a pass.
-- [ ] Independently review the diagnostic change and record the causal conclusion or remaining uncertainty. Specify any production repair as the next bounded task before implementing it.
+- [x] Read the saved cold-start investigation and failing artifacts. Document one concrete hypothesis and the smallest observation that distinguishes it; validate available native tooling from primary documentation.
+- [x] Add opt-in hosted diagnostic capture using installed Windows tooling. Prefer an isolated WPR memory trace capped at 64 MiB, with target-process scheduling/module categories and process CPU versus wall time. Keep raw traces local and remove them after producing a report capped at 64 KiB. If a reliable narrow summarizer is unavailable, report that limitation and propose the next smallest observation instead of building a generic profiling framework.
+- [x] Bound first-call capture independently of the production collector. Use a 12-second diagnostic watchdog for the standalone first call; recorder start/stop each have a five-second bound. Do not affect the ordinary non-diagnostic CI path. An optional warm control is limited to one call with the same production bound and is labeled comparison evidence.
+- [x] Ensure contained service-identity failures preserve the failing operation/code/stage/timeline before cleanup. Reuse existing diagnostics where sufficient; add tracing only at a specifically identified missing boundary.
+- [x] Exercise redaction, bounded output and failure/cleanup behavior with focused meaningful tests. Run normal AgentV validation once before the review checkpoint. Keep diagnostic source and any later production repair in separate commits.
+- [x] Run one explicitly identified diagnostic matrix on Server 2022/2025 and Node 22/24, inspect every failure and preserve provenance. Do not repeatedly dispatch unchanged experiments merely to obtain a pass.
+- [x] Independently review the diagnostic change and record the causal conclusion or remaining uncertainty. Specify any production repair as the next bounded task before implementing it.
 
-### Task 2: Execute the generated outer HTTPS wrapper
+### Task 2: Give the Windows host read bounded cold-start headroom
+
+**Files:** `src/windows/runner.ts`, its Windows tests, existing Windows runtime/service-entry tests only where needed, and Windows diagnostic reports/helpers that name the production host timeout. No Linux, backend, installer or shared executor implementation changes.
+
+**Evidence and scope:** Native experiment `41282917589` at `3a1efa4` reproduced the host timeout on Server2022/Node22: PowerShell lifetime8,016ms, CPU719ms, Node event-loop max lag13ms, native collection complete at7,949ms, kill at8,016ms before JSON output. Three other first calls completed in5,174–7,748ms of native lifetime. This rules out multi-second Node event-loop/close observation delay for this sample; it does not attribute module/I/O/scheduler/scanner waits. The killed sample is censored, so completion within ten seconds is a candidate to validate, not an established fact. The historical service error remains unattributed.
+
+**Decision:** Permit at most10,000ms for the fixed `host` collector only. Preserve8,000ms for every other Windows collector. Preserve the existing12,000ms Windows tool deadline (including queue/trust/parse),15,000ms service initialization deadline,20,000ms installer doctor deadline and25,000ms backend command deadline. This is a bounded tolerance for observed cold native latency, not a claim that the native wait itself has been optimized or every historical failure resolved.
+
+- [ ] Before implementation, reproduce rejection of a valid host envelope arriving at8,369ms with the current8,000ms runner in a focused regression. Show an ordinary non-host collector still times out at8,000ms.
+- [ ] Make the smallest Windows-only host timeout change, exposing its fixed value for diagnostic provenance rather than duplicating stale8,000ms labels. Preserve fixed scripts/arguments/SHA, trusted executable, credential-free environment,1MiB output cap, cancellation, original error retention, and close/stop behavior. No retries, prewarming, configurable timeouts or helper privilege changes.
+- [ ] Verify host collection can complete after8,000ms but before10,000ms; that it is killed at10,000ms; and cancellation/output limits still stop it promptly. Check relevant outer tool/startup boundaries with focused tests so extra host time cannot bypass caller cancellation or startup rejection. Do not raise any outer deadline to force a pass.
+- [ ] Update diagnostic metadata to use the actual host limit. The existing12-second independent diagnostic watchdog remains unchanged and must still be proven. Retain the failed8-second artifacts and do not relabel historical evidence.
+- [ ] Run targeted Windows tests, `npm run validate`, `npm run test:coverage:all`, and `npm run smoke:package`. Native acceptance requires the complete supported collectors/service-host/installer matrices and Ubuntu Node22/24 lifecycle gates at the final source. Also run the opt-in first-call diagnostic once for the changed host bound, retaining any failure. Do not respond to a failure by raising budgets again without a new causal assessment.
+- [ ] Independently review the exact change and nested deadline evidence. Describe the outcome as measured bounded headroom with residual native-wait uncertainty; do not close real reboot/Core/Desktop, old unattributed service failure, or combined native-backend/release-artifact gates on that basis.
+
+### Task 3: Execute the generated outer HTTPS wrapper
 
 **Files:** `scripts/windows-tests/generated-command-tests.ps1`, `scripts/windows-tests/generated-command-fixtures.json`, `.github/workflows/windows-installer.yml`; narrowly scoped companion fixture scripts under `scripts/windows-tests/` as needed. No production installer, backend or Linux changes.
 
