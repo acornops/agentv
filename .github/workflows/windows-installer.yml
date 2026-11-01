@@ -25,6 +25,17 @@ jobs:
       - name: Parse and bind actual generated control-plane commands
         shell: powershell
         run: ./scripts/windows-tests/generated-command-tests.ps1
+      - name: Execute exact generated HTTPS wrappers with synthetic bootstrap
+        shell: powershell
+        run: ./scripts/windows-tests/generated-command-https-tests.ps1 -AllowDisposableCi
+      - name: Upload sanitized generated-wrapper evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: windows-generated-wrapper-${{ matrix.os }}
+          path: artifacts/windows-generated-wrapper/evidence.json
+          if-no-files-found: warn
+          retention-days: 14
       - name: Characterize native child-process exit observation
         shell: powershell
         run: ./scripts/windows-tests/process-observation-tests.ps1 -AllowDisposableCi
