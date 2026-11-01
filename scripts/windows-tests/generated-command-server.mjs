@@ -3,8 +3,10 @@ import https from 'node:https';
 import { pathToFileURL } from 'node:url';
 
 // Synthetic assets only: no enrollment API, release package or agent runtime.
-export async function startGeneratedCommandServer(tls, control, port = 18443) {
+export async function startGeneratedCommandServer(tls, control, port = 18443, phase = () => {}) {
+  phase('bootstrap-read');
   const bootstrap = await readFile(new URL('./generated-command-bootstrap.ps1', import.meta.url));
+  phase('tls-create');
   const server = https.createServer(tls, async (request, response) => {
     try {
       let mode = '';
@@ -19,6 +21,7 @@ export async function startGeneratedCommandServer(tls, control, port = 18443) {
   });
   server.requestTimeout = 5000;
   server.headersTimeout = 5000;
+  phase('listen');
   await new Promise((resolve, reject) => {
     server.once('error', reject);
     server.listen({ host: '127.0.0.1', port, exclusive: true }, resolve);
@@ -26,17 +29,41 @@ export async function startGeneratedCommandServer(tls, control, port = 18443) {
   return server;
 }
 
+// All exported diagnostic values are fixed labels or bounded runtime versions.
+// Never include error.message, stacks, argv, paths, options or certificate data.
+export function generatedCommandStartupStatus(phase, error = null) {
+  const phases = ['authorization', 'options-read', 'pfx-read', 'bootstrap-read', 'tls-create', 'listen', 'ready-write', 'ready'];
+  const codes = ['ENOENT', 'EADDRINUSE', 'ERR_CRYPTO_UNSUPPORTED_OPERATION', 'ERR_OSSL_EVP_UNSUPPORTED'];
+  let category = error ? 'other' : 'none';
+  if (error?.code === 'ENOENT') category = 'file-missing';
+  else if (error?.code === 'EADDRINUSE') category = 'address-in-use';
+  else if (['ERR_CRYPTO_UNSUPPORTED_OPERATION', 'ERR_OSSL_EVP_UNSUPPORTED'].includes(error?.code) || ['unsupported', 'Unsupported PKCS12 PFX data'].includes(error?.message)) category = 'unsupported-pfx';
+  else if (error?.message === 'mac verify failure') category = 'pfx-password-or-mac';
+  const version = value => /^[0-9][A-Za-z0-9.+-]{0,31}$/.test(value) ? value : 'unavailable';
+  return { phase: phases.includes(phase) ? phase : 'unavailable', category, code: error ? codes.includes(error.code) ? error.code : 'unclassified' : 'none', node: version(process.versions.node), openssl: version(process.versions.openssl) };
+}
+
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
+  let options;
+  let phase = 'authorization';
   try {
     if (process.env.CI !== 'true' || process.env.GITHUB_ACTIONS !== 'true') throw new Error('Disposable hosted CI required');
-    const options = JSON.parse(await readFile(process.argv[2], 'utf8'));
+    phase = 'options-read';
+    options = JSON.parse(await readFile(process.argv[2], 'utf8'));
     if (options.allowDisposableCi !== true) throw new Error('Explicit authorization required');
-    const server = await startGeneratedCommandServer({ pfx: await readFile(options.pfx), passphrase: options.passphrase }, options.control);
-    await writeFile(options.ready, 'ready', { flag: 'wx' });
+    phase = 'pfx-read';
+    const tls = { pfx: await readFile(options.pfx), passphrase: options.passphrase };
+    const server = await startGeneratedCommandServer(tls, options.control, 18443, value => { phase = value; });
     // Parent requests graceful shutdown through the owned child's stdin.
     process.stdin.once('data', () => { server.close(() => process.exit(0)); server.closeAllConnections(); });
     process.stdin.resume();
-  } catch {
+    phase = 'ready-write';
+    await writeFile(options.ready, 'ready', { flag: 'wx' });
+    await writeFile(options.startupStatus, JSON.stringify(generatedCommandStartupStatus('ready')), { flag: 'wx' });
+  } catch (error) {
+    if (options?.startupStatus) {
+      try { await writeFile(options.startupStatus, JSON.stringify(generatedCommandStartupStatus(phase, error)), { flag: 'wx' }); } catch { /* Parent explicitly reports unavailable metadata. */ }
+    }
     // Never emit certificate options, command arguments or raw errors.
     process.stderr.write('Synthetic HTTPS fixture failed.\n');
     process.exit(1);

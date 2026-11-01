@@ -15,7 +15,8 @@ $ps=Join-Path ([Environment]::SystemDirectory) 'WindowsPowerShell\v1.0\powershel
 $node=(Get-Command node -CommandType Application|Select-Object -First 1).Source
 $certificate=$null;$owned=$false;$rootOwned=$false;$server=$null;$job=$null
 $processes=[Collections.Generic.List[Diagnostics.Process]]::new()
-$evidence=[ordered]@{schema=1;boundary='exact-generated-outer-https-wrapper-with-synthetic-bootstrap';controlPlaneRevision=$fixture.controlPlaneRevision;sourceSha256=$fixture.sourceSha256;configurationSourceSha256=$fixture.configurationSourceSha256;sourceRevision=(& git -C $repo rev-parse HEAD);powershell51=$true;stage='preflight';cases=@();passed=$false;cleanupConfirmed=$false}
+$startup=Join-Path $work 'server-startup.json'
+$evidence=[ordered]@{schema=1;boundary='exact-generated-outer-https-wrapper-with-synthetic-bootstrap';controlPlaneRevision=$fixture.controlPlaneRevision;sourceSha256=$fixture.sourceSha256;configurationSourceSha256=$fixture.configurationSourceSha256;sourceRevision=(& git -C $repo rev-parse HEAD);powershell51=$true;serverStartup=@{available=$false;processExitCode=$null};stage='preflight';cases=@();passed=$false;cleanupConfirmed=$false}
 function Assert-Wrapper([bool]$Condition,[string]$Message){if(-not $Condition){throw $Message}}
 function Wait-Wrapper([scriptblock]$Condition,[int]$Seconds){$clock=[Diagnostics.Stopwatch]::StartNew();while(-not(& $Condition)){if($clock.Elapsed.TotalSeconds -gt $Seconds){throw 'Owned wrapper fixture deadline exceeded.'};Start-Sleep -Milliseconds 100}}
 function Start-Wrapper([string]$Executable,[string[]]$Arguments){
@@ -69,7 +70,7 @@ try{
     $null=Export-PfxCertificate -Cert $certificate -FilePath $pfx -Password (ConvertTo-SecureString $password -AsPlainText -Force)
     $cer=Join-Path $work 'fixture.cer';$null=Export-Certificate -Cert $certificate -FilePath $cer
     $options=Join-Path $work 'server-options.json';$ready=Join-Path $work 'ready'
-    [IO.File]::WriteAllText($options,(@{allowDisposableCi=$true;pfx=$pfx;passphrase=$password;control=(Join-Path $work 'mode');ready=$ready}|ConvertTo-Json -Compress))
+    [IO.File]::WriteAllText($options,(@{allowDisposableCi=$true;pfx=$pfx;passphrase=$password;control=(Join-Path $work 'mode');ready=$ready;startupStatus=$startup}|ConvertTo-Json -Compress))
     $server=Start-Wrapper $node @((Join-Path $PSScriptRoot 'generated-command-server.mjs'),$options)
     Wait-Wrapper {if($server.HasExited){throw 'Owned HTTPS server exited before readiness.'};Test-Path -LiteralPath $ready} 15
     Run-Wrapper 'initial' 'untrusted'
@@ -91,6 +92,22 @@ try{
         if(-not $job.Empty()){$null=$job.Terminate()}
         try{Wait-Wrapper {$job.Empty()} 10}catch{$cleanup=$false}
         $job.Dispose()
+    }
+    if($null -ne $server -and $server.HasExited){$evidence.serverStartup.processExitCode=$server.ExitCode}
+    # Reconstruct allowlisted fields only; a missing or invalid status remains
+    # explicitly unavailable. No raw stderr/error message is ever published.
+    if($owned -and (Test-Path -LiteralPath $startup)){
+        try{
+            Assert-Wrapper ((Get-Item -LiteralPath $startup).Length -le 1024) 'Oversized startup status.'
+            $status=Get-Content -LiteralPath $startup -Raw|ConvertFrom-Json
+            foreach($field in @('phase','category','code','node','openssl')){Assert-Wrapper ($status.$field -is [string]) 'Nonliteral startup value.'}
+            Assert-Wrapper ($status.phase -cin @('unavailable','authorization','options-read','pfx-read','bootstrap-read','tls-create','listen','ready-write','ready')) 'Unknown startup phase.'
+            Assert-Wrapper ($status.category -cin @('none','other','file-missing','address-in-use','unsupported-pfx','pfx-password-or-mac')) 'Unknown startup category.'
+            Assert-Wrapper ($status.code -cin @('none','unclassified','ENOENT','EADDRINUSE','ERR_CRYPTO_UNSUPPORTED_OPERATION','ERR_OSSL_EVP_UNSUPPORTED')) 'Unknown startup code.'
+            Assert-Wrapper ($status.node -cmatch '^(?:[0-9][A-Za-z0-9.+-]{0,31}|unavailable)$' -and $status.openssl -cmatch '^(?:[0-9][A-Za-z0-9.+-]{0,31}|unavailable)$') 'Invalid runtime version.'
+            $evidence.serverStartup.available=$true
+            foreach($field in @('phase','category','code','node','openssl')){$evidence.serverStartup[$field]=$status.$field}
+        }catch{}
     }
     foreach($process in $processes){try{if(-not $process.WaitForExit(5000)){$process.Kill();if(-not $process.WaitForExit(5000)){$cleanup=$false}}}catch{$cleanup=$false}finally{$process.Dispose()}}
     if($rootOwned -and (Test-Path -LiteralPath ('Cert:\LocalMachine\Root\'+$certificate.Thumbprint))){try{Remove-Item -LiteralPath ('Cert:\LocalMachine\Root\'+$certificate.Thumbprint) -Force;Assert-Wrapper (-not(Test-Path -LiteralPath ('Cert:\LocalMachine\Root\'+$certificate.Thumbprint))) 'Owned root remains.'}catch{$cleanup=$false}}
