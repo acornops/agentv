@@ -24,4 +24,17 @@ describe('launch-bound Windows authentication evidence', () => {
     const state = createWindowsReadiness({ directory: '/not-an-agentv-state-directory', launchId: 'bad', configSha256: 'bad' });
     expect(() => state.authenticated()).toThrow();
   });
+  it('retains the original verification timestamp across retries and clears a previous launch receipt', async () => {
+    const directory = await mkdtemp(join(tmpdir(), 'agentv-readiness-'));
+    try {
+      const identity = { directory, launchId: 'a747fa58-2486-4fb3-a050-a46eece839b0', configSha256: 'a'.repeat(64) };
+      const state = createWindowsReadiness(identity);
+      state.provisionalAuthenticated();
+      const receipt = await readFile(join(directory, 'authenticated.json'), 'utf8');
+      state.disconnected(); state.disconnected();
+      expect(await readFile(join(directory, 'authenticated.json'), 'utf8')).toBe(receipt);
+      createWindowsReadiness({ ...identity, launchId: 'c747fa58-2486-4fb3-a050-a46eece839b0' }).disconnected();
+      expect(await readdir(directory)).toEqual([]);
+    } finally { await rm(directory, { recursive: true, force: true }); }
+  });
 });

@@ -24,10 +24,12 @@ capabilities, and required explicit OS/service-manager host features. It exposes
 tools, snapshots, or heartbeats until the response matches the target and
 contains a non-empty `workspaceId` plus a complete `sessionPolicy`.
 
-Pending enrollment credentials receive a provisional response. AgentV uses it
-only to prove local runtime readiness, exposes no tools or telemetry, and
-reconnects until the installer commits the credential. Normal readiness is
-recorded only after a non-provisional authenticated handshake.
+Pending enrollment credentials receive a provisional response followed by an
+immediate backend close. AgentV exposes no tools or telemetry and reconnects
+until the installer commits the credential. Windows retains a launch/config-bound
+verification receipt across these reconnects, accepted locally for at most
+30 seconds alongside authenticated transaction status. Normal readiness requires
+a non-provisional authenticated handshake and is invalidated on disconnect.
 
 Enrollment exchange returns a non-secret access-policy snapshot. Read-only
 requires an empty restart list. Read-write requires one to 32 unique exact

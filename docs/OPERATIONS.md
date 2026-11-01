@@ -269,7 +269,10 @@ host permissions or service installation. See the
 
 `ACORNOPS_VM_ALLOWED_LOG_CHANNELS` applies only to Windows; Linux ignores it
 and retains its exact systemd log-unit allowlist. Windows still permits only
-`Application` and `System`. Synthetic Windows filters match the native literal,
+`Application` and `System`, with neither enabled by default. For the installed
+Windows service, this setting belongs in protected `config.json` under `settings`;
+the native host clears ambient environment values. VM `allowedLogSources` metadata
+does not grant local collection permission. Synthetic Windows filters match the native literal,
 case-insensitive query and service-state/protocol contracts.
 
 Native collector smoke evidence includes a bounded timeline for its first real
@@ -307,10 +310,15 @@ and grants the service SID access only to the protected runtime/config and its
 own log/state directories. Before START it clears old authentication evidence,
 hashes config, assigns Node to a kill-on-close Job Object, and sends a fresh
 launch identity. The child checks that config hash before importing the runtime.
-Validated Windows provisional authentication publishes bounded `authenticated.json`
-evidence with phase `provisional`; activation replaces it with phase `active`.
-Both are bound to the launch and config, and disconnect removes the evidence.
-Provisional authentication does not enable tools, snapshots or heartbeat. This file grants no recovery authority.
+Validated Windows provisional authentication publishes a launch/config-bound
+verification receipt in `authenticated.json` with phase `provisional`. The backend
+immediately closes that connection; the receipt survives reconnects with its
+original timestamp. The installer accepts it for at most 30 seconds, together
+with authenticated backend `verified` status. Activation replaces it with phase
+`active`, which is removed immediately on disconnect. Runtime stop and a new
+service launch clear either phase. Provisional verification never enables tools,
+snapshots or heartbeat and cannot substitute for active readiness. This file
+grants no recovery authority.
 
 The native host has no enrollment HTTP or installer logic. SCM crash recovery
 uses 10/30/60-second restart delays and a one-day reset. Orderly stop waits up to

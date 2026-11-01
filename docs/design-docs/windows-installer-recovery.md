@@ -81,8 +81,11 @@ Source: control-plane `src/controllers/agentv-installation-controller.ts` and
   service host retains its four reviewed responsibilities, with no enrollment
   HTTP in C#.
 - Readiness requires fresh local authentication evidence bound to the selected
-  configuration and this service launch, cleared before each launch and
-  invalidated on disconnect. For enrollment transactions, valid authenticated
+  configuration and this service launch, cleared before each launch and on stop.
+  Active evidence is invalidated on disconnect. Provisional verification is a
+  receipt that survives the backend's immediate close and subsequent reconnects;
+  the installer rejects it after 30 seconds and never accepts it as active
+  readiness. For enrollment transactions, valid authenticated
   backend status is also required; network failure cannot waive this requirement.
   Task 3 exposes callbacks; task 5 owns launch identity and the fixed protected
   marker. LocalService-writable readiness is evidence only and never controls

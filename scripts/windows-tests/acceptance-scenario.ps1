@@ -53,9 +53,11 @@ function Invoke-CiAcceptance {
     (Get-Service AcornOpsAgentV).WaitForStatus([ServiceProcess.ServiceControllerStatus]::Stopped,[TimeSpan]::FromSeconds(25))
     $marker=Join-Path $paths.State 'authenticated.json'
     # This is intentionally stale, service-writable evidence, never journal authority.
-    Json-Ci $marker @{version=1;authenticated=$true;phase='active';launchId=$launch.launchId;configSha256=$launch.configSha256;authenticatedAt=[DateTimeOffset]::UtcNow.AddMinutes(-10).ToString('o')}
-    $ready=& $script:CiInstallationModule {param($Hash) Test-AgentVReady -ConfigHash $Hash -Phase active} -Hash $launch.configSha256
-    Assert-Ci (-not $ready) 'The production readiness verifier rejects stale proof even with the current launch and config binding'
+    foreach ($phase in @('active','provisional')) {
+        Json-Ci $marker @{version=1;authenticated=$true;phase=$phase;launchId=$launch.launchId;configSha256=$launch.configSha256;authenticatedAt=[DateTimeOffset]::UtcNow.AddSeconds(-31).ToString('o')}
+        $ready=& $script:CiInstallationModule {param($Hash,$Phase) Test-AgentVReady -ConfigHash $Hash -Phase $Phase} -Hash $launch.configSha256 -Phase $phase
+        Assert-Ci (-not $ready) ('The production verifier rejects '+$phase+' evidence older than 30 seconds with the current launch and config binding')
+    }
     Assert-Ci ($recovery.WaitForExit(120000) -and $recovery.ExitCode -ne 0 -and (Read-CiJson $paths.Journal).intent -ceq 'rollback-denied') 'Missing fresh active authentication cannot persist explicit acceptance intent'
     $script:evidence.stage='acceptance-intent-interruption'
     Json-Ci $controls @{holdAcceptanceRecheck=$true}

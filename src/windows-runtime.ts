@@ -14,7 +14,7 @@ import type { WindowsHost } from './windows/types.js';
 export interface WindowsRuntimeOptions {
   /** Only the trusted native host may supply its OS-API-discovered directory. */
   trustedSystemDirectory?: string;
-  sessionState?: { authenticated: () => void; disconnected: () => void; provisionalAuthenticated?: () => void };
+  sessionState?: { authenticated: () => void; disconnected: () => void; provisionalAuthenticated?: () => void; stopped?: () => void };
 }
 export interface WindowsStopHandle { stop(): Promise<void>; }
 
@@ -33,5 +33,7 @@ export async function startWindowsAgent(config: AgentConfig, options: WindowsRun
   const router = new McpRouter(new ToolExecutor({ localWriteEnabled: () => false, metrics }), logger);
   const lifecycle = LifecycleManager.forWindows(config, { kind: 'windows', logsEnabled: config.allowedLogChannels.length > 0, createSnapshots: (send) => new WindowsSnapshotManager(host, send, logger, metrics) }, router, logger, metrics, options.sessionState);
   lifecycle.start(); let stopped: Promise<void> | undefined;
-  return { stop: () => stopped ??= (async () => { lifecycle.stop(); await host.stop(); })() };
+  return { stop: () => stopped ??= (async () => {
+    try { lifecycle.stop(); options.sessionState?.stopped?.(); } finally { await host.stop(); }
+  })() };
 }

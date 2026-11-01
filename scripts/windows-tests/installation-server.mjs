@@ -81,6 +81,7 @@ sockets.on('connection', (socket, request) => {
     if (transaction) { transaction.status = 'verified'; persist(); }
     else { authenticatedSockets.set(socket, key); state.activeConnected = connected(); persist(); }
     socket.send(JSON.stringify({ jsonrpc: '2.0', id: message.id, result: { workspaceId: 'disposable-windows-ci', targetId: options.targetId, targetType: 'virtual_machine', provisional: Boolean(transaction), sessionPolicy: { allowedTools: [], writeEnabled: false } } }));
+    if (transaction) socket.close(1000, 'AgentV provisional readiness verified');
   });
 });
 server.listen(0, '127.0.0.1', () => { persist(); writeFileSync(options.listening, JSON.stringify({ port: server.address().port })); });
