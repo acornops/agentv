@@ -104,6 +104,16 @@ function Assert-AgentVJournal {
     $images=@(Get-AgentVImage $Journal.candidate); if ($null -ne $Journal.previous) { $images+=Get-AgentVImage $Journal.previous }
     if ($null -ne $service -and $service.PathName -cnotin $images) { throw 'Service selection does not belong to this transaction.' }
 }
+function Write-AgentVApiFailure {
+    param($Category,$NativeCode,$HttpCode)
+    try {
+        if ($Category -isnot [string] -or $Category -cnotin @('request','transport','invalid-status','missing-response','invalid-response','http')) { return }
+        $line = 'AgentV API failure category='+$Category
+        if ($Category -ceq 'transport' -and $NativeCode -is [int] -and $NativeCode -ge 1 -and $NativeCode -le 99) { $line += ' native='+$NativeCode }
+        if ($Category -ceq 'http' -and $HttpCode -is [int] -and $HttpCode -ge 100 -and $HttpCode -le 599) { $line += ' http='+$HttpCode }
+        [Console]::Error.WriteLine($line)
+    } catch { }
+}
 function Invoke-AgentVApi {
     param([string]$PlatformUrl,[string]$Suffix,[string]$Method='GET',$Body,[string]$Secret,[string]$CaBundle)
     Assert-AgentVHttpsUrl -Value $PlatformUrl
@@ -113,6 +123,7 @@ function Invoke-AgentVApi {
     $response = Join-Path $work 'response.json'; $request = Join-Path $work 'request.json'; $header = Join-Path $work 'curl.conf'
     $curl = Join-Path ([Environment]::SystemDirectory) 'curl.exe'; Assert-AgentVTrustedPath -Path $curl
     foreach ($file in @($response,$request,$header)) { if (Test-Path -LiteralPath $file) { Assert-AgentVTrustedPath -Path $file -Secret; Remove-Item -LiteralPath $file -Force } }
+    $failureCategory='request'; $nativeCode=$null; $httpCode=$null
     try {
         [IO.File]::WriteAllBytes($header,[byte[]]@()); Set-AgentVAcl -Path $header
         if ($Secret) { [IO.File]::WriteAllText($header,('header = "x-agentv-transaction-secret: '+$Secret+'"'),[Text.UTF8Encoding]::new($false)) }
@@ -122,14 +133,32 @@ function Invoke-AgentVApi {
         $arguments += ($PlatformUrl.TrimEnd('/')+$Suffix)
         $ambient=@{}
         foreach($name in @('CURL_CA_BUNDLE','SSL_CERT_FILE','SSL_CERT_DIR','HTTPS_PROXY','HTTP_PROXY','ALL_PROXY','NO_PROXY')) { $ambient[$name]=[Environment]::GetEnvironmentVariable($name,'Process'); [Environment]::SetEnvironmentVariable($name,$null,'Process') }
+        $failureCategory='transport'
         try { $code = & $curl @arguments 2>$null; $exit = $LASTEXITCODE }
         finally { foreach($name in $ambient.Keys){[Environment]::SetEnvironmentVariable($name,$ambient[$name],'Process')} }
-        if ($exit -ne 0 -or $code -notmatch '^\d{3}$' -or -not (Test-Path -LiteralPath $response)) { return [pscustomobject]@{ available=$false; code=0; data=$null } }
+        $nativeCode=$exit
+        if ($exit -ne 0 -or $code -notmatch '^\d{3}$' -or -not (Test-Path -LiteralPath $response)) {
+            if ($exit -ne 0) { $failureCategory='transport' }
+            elseif ($code -notmatch '^\d{3}$') { $failureCategory='invalid-status' }
+            else { $failureCategory='missing-response' }
+            return [pscustomobject]@{ available=$false; code=0; data=$null }
+        }
+        $failureCategory='invalid-response'
         Set-AgentVAcl -Path $response
         $data = Read-AgentVJson -Path $response -Limit 65536 -Secret
+        # Classify separately: PS5.1 empty native output retains parsed data with
+        # code zero. Keep the existing condition and return casts unchanged.
+        $failureCategory='invalid-status'
+        if ($code -is [string] -and $code -cmatch '\A[0-9]{3}\z') {
+            $httpCode=[int]$code
+            if ($httpCode -eq 200) { $failureCategory=$null } else { $failureCategory='http' }
+        }
         return [pscustomobject]@{ available=([int]$code -eq 200); code=[int]$code; data=$data }
     } catch { return [pscustomobject]@{ available=$false; code=0; data=$null } }
-    finally { foreach ($file in @($response,$request,$header)) { if (Test-Path -LiteralPath $file) { Remove-Item -LiteralPath $file -Force } } }
+    finally {
+        if ($null -ne $failureCategory) { Write-AgentVApiFailure -Category $failureCategory -NativeCode $nativeCode -HttpCode $httpCode }
+        foreach ($file in @($response,$request,$header)) { if (Test-Path -LiteralPath $file) { Remove-Item -LiteralPath $file -Force } }
+    }
 }
 function Get-AgentVCaBundle {
     param($Config)

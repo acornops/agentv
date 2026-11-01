@@ -22,7 +22,9 @@ $cases=@(
     @{name='excessive-status';code=0;data=$false;diagnostic='invalid-status'},
     @{name='multiple-status';code=0;data=$false;diagnostic='invalid-status'},
     @{name='unicode-status';code=0;data=$false;diagnostic='invalid-status'},
-    @{name='empty-status';code=0;data=$false;diagnostic='invalid-status'},
+    # Native PS5.1 no-output result passes the legacy condition, casts to zero,
+    # and keeps parsed JSON. Hosted characterization on both Server versions.
+    @{name='empty-status';code=0;data=$true;diagnostic='invalid-status'},
     @{name='missing-response';code=0;data=$false;diagnostic='missing-response'},
     @{name='malformed-response';code=0;data=$false;diagnostic='invalid-response'},
     @{name='oversized-response';code=0;data=$false;diagnostic='invalid-response'},
