@@ -223,6 +223,43 @@ timeout policy change. The next production proposal needs a bounded causal
 observation or matched control, actual startup/service-identity coverage and
 representative minimum-VM evidence. Rollout and writes remain disabled.
 
+## Deterministic follow-up fixes
+
+At AgentV `0bd62ea` and parent `314ecad`, the Linux mock's `list_services`
+returns only the five existing summary fields; `get_service` and restart
+preconditions remain intact. The parent now accepts ignored child symlinks,
+rejects tracked child contents (including platform-admin), and checks requirement
+counts against child-owned contract manifests. These are corrections to the
+previously recorded mock/workspace defects, not changes to live Linux collectors
+or Windows runtime behavior. Historical failed runs above remain unchanged.
+
+[Linux CI 41305615953](https://github.com/acornops/agentv/actions/runs/41305615953)
+at tested merge `65fad1ef8940269f17f33ad0062678da0653d881` passes validation,
+260 coverage/E2E tests in 37 files, package/bootstrap/curl checks and both Ubuntu
+24.04 Node 22/24 live systemd lifecycle gates. Coverage computation and the GitHub
+artifact pass; the optional Codecov upload now correctly skips when its token is
+unavailable. This is not successful external publication. Parent
+[CI 41305617865](https://github.com/acornops/acornops/actions/runs/41305617865)
+passes the four gate regressions, harness and title checks; full local
+`task validate` also passes. The independent follow-up review has no findings.
+
+Automatically triggered [native collectors](https://github.com/acornops/agentv/actions/runs/41305615972)
+pass all four Server 2022/2025 and Node 22/24 cells. Inspected host reads take
+5,110–7,600 ms; all boundary checks and injected assignment-cleanup checks pass.
+[Service-host CI](https://github.com/acornops/agentv/actions/runs/41305615963)
+passes 33 checks in each cell, including LocalService collection and containment.
+All eight collector/service-host artifacts were inspected. These passing samples
+do not resolve the earlier timeouts, service-identity failure or cold composition
+failures; none of those production paths changed in this follow-up.
+
+[Installer CI 41305615938](https://github.com/acornops/agentv/actions/runs/41305615938)
+passes 18/18 jobs at that same merge; all 22 artifacts were inspected. Each
+OS/Node pair passes lifecycle 23, recovery 21, startup 9 and acceptance 21 checks.
+The six short-fixture artifacts record 25 API-diagnostic cases, six generated
+wrapper cases and ten teardown-race checks per OS. Their synthetic native-I/O,
+bootstrap and backend boundaries remain as documented above. This is hosted
+transactional testing, not real-backend deployment or reboot qualification.
+
 ## Unmet gates
 
 1. **Explain and resolve native collector reliability failures.** Preserve failed

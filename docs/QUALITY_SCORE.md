@@ -50,3 +50,10 @@ separate backend design gate. See the updated qualification decision for exact
 evidence and limits; the historical scores remain unchanged. Final fixture checks
 pass on all four Windows cells, but the same run records another normal host
 collector timeout on Server 2022/Node 24. Earlier passing matrices do not erase it.
+
+Deterministic follow-up (2026-11-01): the Linux mock summary-contract mismatch and
+parent linked-workspace validation failures are corrected. Local and hosted
+coverage pass 260 tests; both hosted Ubuntu Node 22/24 lifecycle gates pass.
+Optional unconfigured Codecov publication skips cleanly while coverage and its
+GitHub artifact remain mandatory. Independent review has no findings. This adds
+regression evidence without changing live Linux code or Windows qualification.

@@ -1,5 +1,7 @@
 # Completed Execution Plans
 
+- [Deterministic follow-up fixes](windows-confident-gap-fixes.md) — Mock summary contract, linked-workspace validation and optional coverage publication corrected; live VM implementations and rollout gates unchanged.
+
 - [Windows review hardening](windows-review-hardening.md) — Scoped Windows fixes and executable compatibility/diagnostic checks reviewed; native rollout and shared-status repair remain separately blocked.
 
 - [Restart state input](restart-state-input.md) — Released in experimental.14 after local and hosted live-systemd qualification; enrolled hosts require an explicit upgrade.

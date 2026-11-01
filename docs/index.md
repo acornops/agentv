@@ -30,7 +30,7 @@ This `docs/` tree is the repository-local system of record for agent-readable de
 
 - [Plans](/docs/PLANS.md)
 - [Active Plans](/docs/exec-plans/active/README.md)
-- [Deterministic follow-up fixes](/docs/exec-plans/active/windows-confident-gap-fixes.md)
+- [Deterministic follow-up fixes](/docs/exec-plans/completed/windows-confident-gap-fixes.md)
 - [Windows VM assessment and Linux baseline](/docs/exec-plans/active/windows-vm-assessment.md)
 - [Windows VM implementation](/docs/exec-plans/active/windows-vm-implementation.md)
 - [Completed Plans](/docs/exec-plans/completed/README.md)
