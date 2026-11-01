@@ -78,14 +78,14 @@
 
 ### Task 5: Investigate overlapping native work and cold-start failures
 
-**Files:** Narrow `scripts/windows-tests/overlap-worker.mjs`, `overlap-evidence.mjs` and focused tests, plus `overlap-native.ps1` or a separate mode reusing the existing owned-job supervisor. `.github/workflows/windows-collectors.yml` gets a separate manual experiment flag/artifact. Qualification docs retain exact evidence. Qualification docs retain exact evidence.
+**Files:** Narrow `scripts/windows-tests/overlap-worker.mjs`, `overlap-evidence.mjs` and focused tests, plus `overlap-native.ps1` or a separate mode reusing the existing owned-job supervisor. `.github/workflows/windows-collectors.yml` gets a separate manual experiment flag/artifact. Qualification docs retain exact evidence.
 
 **Interfaces:** Use actual production Windows host/runner. Normal startup and current limits remain unchanged. Measure snapshot fan-out plus four tool reads as a distinct cold component workload that deliberately bypasses the mandatory runtime host preflight; do not infer failure causation from concurrency alone. Use the existing 12-second independent watchdog, one owned cleanup budget, actual child peak distinct from requested calls, and at most 64 KiB allowlisted evidence. Hosted minimum-VM representativeness remains unknown.
 
-- [ ] Review retained failed samples and specify one new discriminating observation before changing diagnostics. Record the hypothesis, bounds and what an inconclusive result means.
-- [ ] Add a bounded overlap check using real snapshot construction and tool execution, reporting only counts/status/timing/cleanup. State whether hosted hardware represents the minimum supported VM.
-- [ ] Execute the changed experiment once on the relevant supported matrix and inspect artifacts. Retain first-call failures; no unchanged reruns to seek green.
-- [ ] If evidence supports a narrow production correction, specify it as a separately reviewed follow-up before implementing. Otherwise retain the qualification blocker with the exact remaining missing evidence. No speculative queue, timeout or retry change.
+- [x] Review retained failed samples and specify one new discriminating observation before changing diagnostics. Record the hypothesis, bounds and what an inconclusive result means.
+- [x] Add a bounded overlap check using real snapshot construction and tool execution, reporting only counts/status/timing/cleanup. State whether hosted hardware represents the minimum supported VM.
+- [x] Execute the changed experiment once on the relevant supported matrix and inspect artifacts. Retain first-call failures; no unchanged reruns to seek green.
+- [x] If evidence supports a narrow production correction, specify it as a separately reviewed follow-up before implementing. Otherwise retain the qualification blocker with the exact remaining missing evidence. No speculative queue, timeout or retry change.
 - [ ] Review fixture safety and causal conclusions independently.
 
 ### Task 6: Separate shared VM status reconciliation

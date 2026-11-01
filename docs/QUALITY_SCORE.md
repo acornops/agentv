@@ -39,3 +39,12 @@ but a later first call still timed out before any script marker. Collector and
 service-identity reliability, real reboot, Core/Desktop Experience and combined
 native/real-backend deployment remain unqualified. Passing samples do not resolve
 those limits; the historical scores are not Windows release approval.
+
+Review hardening (2026-11-01): Windows reconnect snapshot and mock/live validation
+regressions are covered, producer/consumer compatibility is executable, and
+installer failures retain safe categories without changing recovery decisions.
+Linux CI passes 259 unit/E2E tests and both Node 22/24 systemd lifecycle gates.
+The bounded cold component experiment adds two unhealthy Windows samples; it
+does not establish a causal repair. Shared outage-status repair remains at a
+separate backend design gate. See the updated qualification decision for exact
+evidence and limits; the historical scores remain unchanged.

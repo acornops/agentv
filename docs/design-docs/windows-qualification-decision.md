@@ -114,6 +114,85 @@ requiring a complete `stop` line resolves the observed native setup failure.
 The exact original native input bytes were not captured. The four earlier failed
 runs remain failed; the local path-alias repair did not resolve that native symptom.
 
+## Review hardening and component observation
+
+The [focused hardening plan](../exec-plans/active/windows-review-hardening.md)
+adds Windows-only reconnect snapshot scheduling, shared pure mock/live log-input
+validation, executable producer/consumer fixtures and bounded installer failure
+categories. Installer return values and recovery decisions are preserved. No Linux
+adapter, scheduler, helper, packaging or release coordinate changed in this phase;
+no backend production code changed. The shared VM outage-status repair remains at
+its separately reviewed [ownership/liveness design gate](https://github.com/acornops/control-plane/blob/feat/windows-vm-support/docs/exec-plans/active/vm-connection-status-repair.md).
+Stale online status after dependency/process failure remains an inherited gap for
+both OS families; this phase does not claim to repair it.
+
+At AgentV `473698a5807a3ab4538a5ec4c15f81c4c54e8d67`, tested merge
+`294429b7f104ffab03e3dafce0979c52829336e6` contains that feature checkpoint
+and main `3d86cfc`. [Linux CI 41298109633](https://github.com/acornops/agentv/actions/runs/41298109633)
+passes validation, 259 unit/E2E tests in 37 files, package/bootstrap/curl checks and
+both Ubuntu 24.04 Node 22/24 install/restart/upgrade/rollback/uninstall gates.
+Computed coverage passes; optional tokenless Codecov upload still fails.
+[Normal collectors](https://github.com/acornops/agentv/actions/runs/41298109728)
+pass all four Windows cells and boundary checks; capped Event Log reads correctly
+remain partial. [Service host](https://github.com/acornops/agentv/actions/runs/41298109687)
+passes 33 checks per cell, including LocalService collection and owned cleanup.
+All eight native artifacts were inspected. These are passing samples, not a
+resolution of the historical cold-call or service-identity failures.
+
+Both short installer recovery jobs in
+[41298109634](https://github.com/acornops/agentv/actions/runs/41298109634)
+pass 25 API diagnostic cases each. All inspected preservation, diagnostic safety,
+native invocation, environment restoration and cleanup flags pass, including
+throwing/unavailable sinks. The native I/O executable is synthetic; the production
+API helper, ACL/JSON/cleanup paths and recovery decisions are real. Both generated
+HTTPS wrappers also pass six cases and owned cleanup, with a synthetic bootstrap.
+These results do not establish real-backend enrollment or reboot recovery.
+
+Backend [CI 41295301987](https://github.com/acornops/control-plane/actions/runs/41295301987)
+at `0b589ae` passes 1,731 tests/255 suites with zero failures/skips and all required
+gates. Actual AgentV-generated snapshots and backend-generated commands are now
+checked in each repository, with counterpart equality enforced by the workspace
+gate. The AgentV fixture comparison handles checkout CRLF without normalizing
+JSON string content; the initial Windows test failure remains recorded in
+[41296383285](https://github.com/acornops/agentv/actions/runs/41296383285).
+
+The one new [cold component experiment 41298126115](https://github.com/acornops/agentv/actions/runs/41298126115)
+at exact `473698a` uses the actual snapshot's five collectors plus four actual tool
+reads. It deliberately bypasses startup host preflight; hosted minimum-VM
+representativeness is unknown. All four cells observed nine simultaneous child
+callbacks and a peak of 19 processes in their owned job. Job counts include the
+worker and every owned descendant; neither their identities nor exact native
+overlap durations were measured.
+
+| Cell | Retained result |
+| --- | --- |
+| Server 2022 / Node 22 | Healthy worker; supervisor inconclusive because the fixture required exactly ten total owned processes. |
+| Server 2022 / Node 24 | Seven non-host collector timeouts; incomplete filesystem/service coverage and three tool timeouts. |
+| Server 2025 / Node 22 | Listener collector timeout; other collector/tool results healthy. |
+| Server 2025 / Node 24 | Healthy worker; supervisor inconclusive for the same count-predicate defect. |
+
+All workers finished before the independent 12-second cutoff, with confirmed
+owned cleanup. All assignment-failure and independent-watchdog negatives passed;
+all twelve artifacts were independently reviewed and retained unchanged. The
+fixture's image allowlist omitted `win25-vs2026`; matching watchdog artifacts
+retain that label. The Server 2025 cells also used different image versions.
+No Node-version, process-identity or causal concurrency conclusion follows.
+The aggregate-count/provenance fixture corrections are distinct from these
+original failed/inconclusive observations; no second composition experiment is
+used to manufacture a passing result.
+
+Fixture-only correction `857d95a` accepts a bounded count of at least ten owned
+processes with a live worker as aggregate corroboration and retains the exact
+known image label. It preserves all health, callback, cutoff and cleanup gates;
+original artifacts are not relabeled. Focused helper/negative checks now run in
+ordinary PR CI without executing another cold composition.
+
+This establishes a Windows composition qualification gap under existing bounds.
+It does not explain the native wait or justify a queue, retry, prewarming or
+timeout policy change. The next production proposal needs a bounded causal
+observation or matched control, actual startup/service-identity coverage and
+representative minimum-VM evidence. Rollout and writes remain disabled.
+
 ## Unmet gates
 
 1. **Explain and resolve native collector reliability failures.** Preserve failed
@@ -124,6 +203,9 @@ runs remain failed; the local path-alias repair did not resolve that native symp
    tolerance above has native evidence beyond eight seconds, but the underlying
    wait remains unattributed. Hosted jitter and CIM alone are not established
    causes; passing samples cannot erase the failures or qualify general reliability.
+   The component experiment above adds two unhealthy samples; serial smoke does
+   not cover that workload. Retain its failures and resolve the causal/representative
+   workload gaps before choosing any production concurrency policy.
 2. **Resolve the service-identity failure** in `41243496972`. Use retained bounded
    collector evidence to establish cause and validate the remedy under the actual
    low-privilege service identity on the supported matrix. Do not call the new
@@ -154,8 +236,8 @@ The single scoped re-review has no open findings. Draft PRs remain on
 The focused follow-up's broad review at `342a933..9fa1f4f` found no new Critical
 or Important source defect. The existing expected-error logging Minor remains
 deferred. Source approval does not approve Windows readiness: the cold-start
-qualification item stays open, despite the final passing matrix. Later commits
-only append verified evidence; no runtime or fixture code follows `7913f67`.
+qualification item stays open, despite that phase's passing matrix. Its later
+documentation commits precede the separate review-hardening phase recorded above.
 
 ## Requirements before any future native-action implementation
 
