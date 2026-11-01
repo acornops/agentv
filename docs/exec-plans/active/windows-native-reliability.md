@@ -55,12 +55,12 @@ is incremental: the exact repair is specified only after causal evidence exists.
 
 **Decision:** Permit at most10,000ms for the fixed `host` collector only. Preserve8,000ms for every other Windows collector. Preserve the existing12,000ms Windows tool deadline (including queue/trust/parse),15,000ms service initialization deadline,20,000ms installer doctor deadline and25,000ms backend command deadline. This is a bounded tolerance for observed cold native latency, not a claim that the native wait itself has been optimized or every historical failure resolved.
 
-- [ ] Before implementation, reproduce rejection of a valid host envelope arriving at8,369ms with the current8,000ms runner in a focused regression. Show an ordinary non-host collector still times out at8,000ms.
-- [ ] Make the smallest Windows-only host timeout change, exposing its fixed value for diagnostic provenance rather than duplicating stale8,000ms labels. Preserve fixed scripts/arguments/SHA, trusted executable, credential-free environment,1MiB output cap, cancellation, original error retention, and close/stop behavior. No retries, prewarming, configurable timeouts or helper privilege changes.
-- [ ] Verify host collection can complete after8,000ms but before10,000ms; that it is killed at10,000ms; and cancellation/output limits still stop it promptly. Check relevant outer tool/startup boundaries with focused tests so extra host time cannot bypass caller cancellation or startup rejection. Do not raise any outer deadline to force a pass.
-- [ ] Update diagnostic metadata to use the actual host limit. The existing12-second independent diagnostic watchdog remains unchanged and must still be proven. Retain the failed8-second artifacts and do not relabel historical evidence.
+- [x] Before implementation, reproduce rejection of a valid host envelope arriving at8,369ms with the current8,000ms runner in a focused regression. Show an ordinary non-host collector still times out at8,000ms.
+- [x] Make the smallest Windows-only host timeout change, exposing its fixed value for diagnostic provenance rather than duplicating stale8,000ms labels. Preserve fixed scripts/arguments/SHA, trusted executable, credential-free environment,1MiB output cap, cancellation, original error retention, and close/stop behavior. No retries, prewarming, configurable timeouts or helper privilege changes.
+- [x] Verify host collection can complete after8,000ms but before10,000ms; that it is killed at10,000ms; and cancellation/output limits still stop it promptly. Check relevant outer tool/startup boundaries with focused tests so extra host time cannot bypass caller cancellation or startup rejection. Do not raise any outer deadline to force a pass.
+- [x] Update diagnostic metadata to use the actual host limit. The existing12-second independent diagnostic watchdog remains unchanged and must still be proven. Retain the failed8-second artifacts and do not relabel historical evidence.
 - [ ] Run targeted Windows tests, `npm run validate`, `npm run test:coverage:all`, and `npm run smoke:package`. Native acceptance requires the complete supported collectors/service-host/installer matrices and Ubuntu Node22/24 lifecycle gates at the final source. Also run the opt-in first-call diagnostic once for the changed host bound, retaining any failure. Do not respond to a failure by raising budgets again without a new causal assessment.
-- [ ] Independently review the exact change and nested deadline evidence. Describe the outcome as measured bounded headroom with residual native-wait uncertainty; do not close real reboot/Core/Desktop, old unattributed service failure, or combined native-backend/release-artifact gates on that basis.
+- [x] Independently review the exact change and nested deadline evidence. Describe the outcome as measured bounded headroom with residual native-wait uncertainty; do not close real reboot/Core/Desktop, old unattributed service failure, or combined native-backend/release-artifact gates on that basis.
 
 ### Task 3: Execute the generated outer HTTPS wrapper
 
@@ -68,21 +68,31 @@ is incremental: the exact repair is specified only after causal evidence exists.
 
 **Interfaces:** Preserve the current parser/binding check. Add a disposable hosted test that executes the complete command emitted by the actual pinned control-plane builder. Use loopback HTTPS and an explicitly synthetic downloaded parameter-capture bootstrap, so this qualifies the outer wrapper boundary without claiming real-backend enrollment or a complete native deployment.
 
-- [ ] Regenerate the three fixture commands from the current actual control-plane builder at `3a1b969d5a4782880b615d1f12c38c8dc1f62b6f`; record the source SHA-256 and exact generation inputs. Use `https://localhost:18443/releases`, a synthetic target and one-use-format synthetic token. Do not reimplement or rewrite the generated wrapper inside the fixture.
-- [ ] On disposable hosted CI only, create an owned loopback HTTPS server, short-lived self-signed certificate and private scratch directory. Trust only this generated certificate in the Windows root store for the test; remove only its exact thumbprint in `finally`. Fail rather than replace any preexisting resource or listener. Do not alter production TLS or installer trust behavior.
-- [ ] Execute the entire initial/repair/replacement commands under native PowerShell 5.1 and the OS `curl.exe`. Compare every bound value against the generated expected fixture, preserving apostrophe-safe literal inputs and `ReplaceCredential` semantics. Capture sensitive test details locally only; publish booleans and bounded provenance.
-- [ ] Exercise untrusted TLS before installing the owned root, HTTP download failure, and downloaded bootstrap failure. Each must report failure, never invoke a bootstrap after a failed download, and remove both temporary paths. The three success paths must also remove both paths. Keep an unrelated sentinel file intact.
-- [ ] Bound owned server readiness and each child command, wait for owned processes to exit, and clean all owned paths/certificates on failure. Never terminate by image name or delete another fixture's resources. Do not upload raw commands, arguments, stdout or stderr.
-- [ ] Reuse the existing short Windows installer verification jobs for Server 2022/2025; avoid an additional full installation matrix just for this PowerShell wrapper boundary. Run focused local validation plus the repository-required validation; record unavailable local PowerShell execution honestly.
-- [ ] Inspect hosted results and independently review the task. Update qualification evidence to distinguish complete outer-wrapper execution with a synthetic bootstrap from the existing real package/SCM installation tests and the still-unqualified combined native-agent/real-backend deployment.
+- [x] Regenerate the three fixture commands from the current actual control-plane builder at `3a1b969d5a4782880b615d1f12c38c8dc1f62b6f`; record the source SHA-256 and exact generation inputs. Use `https://localhost:18443/releases`, a synthetic target and one-use-format synthetic token. Do not reimplement or rewrite the generated wrapper inside the fixture.
+- [x] On disposable hosted CI only, create an owned loopback HTTPS server, short-lived self-signed certificate and private scratch directory. Trust only this generated certificate in the Windows root store for the test; remove only its exact thumbprint in `finally`. Fail rather than replace any preexisting resource or listener. Do not alter production TLS or installer trust behavior.
+- [x] Execute the entire initial/repair/replacement commands under native PowerShell 5.1 and the OS `curl.exe`. Compare every bound value against the generated expected fixture, preserving apostrophe-safe literal inputs and `ReplaceCredential` semantics. Capture sensitive test details locally only; publish booleans and bounded provenance.
+- [x] Exercise untrusted TLS before installing the owned root, HTTP download failure, and downloaded bootstrap failure. Each must report failure, never invoke a bootstrap after a failed download, and remove both temporary paths. The three success paths must also remove both paths. Keep an unrelated sentinel file intact.
+- [x] Bound owned server readiness and each child command, wait for owned processes to exit, and clean all owned paths/certificates on failure. Never terminate by image name or delete another fixture's resources. Do not upload raw commands, arguments, stdout or stderr.
+- [x] Reuse the existing short Windows installer verification jobs for Server 2022/2025; avoid an additional full installation matrix just for this PowerShell wrapper boundary. Run focused local validation plus the repository-required validation; record unavailable local PowerShell execution honestly.
+- [x] Inspect hosted results and independently review the task. Update qualification evidence to distinguish complete outer-wrapper execution with a synthetic bootstrap from the existing real package/SCM installation tests and the still-unqualified combined native-agent/real-backend deployment.
 
-## Follow-on work
+## Outcome and remaining qualification
 
-After Task 1, add a focused repair task with the exact failing regression and
-production boundary supported by the evidence. Separately extend the generated
-PowerShell wrapper tests through real HTTPS download, invocation and temporary
-file cleanup; assess the smallest hosted native-agent/real-backend arrangement.
-Keep missing release-artifact or real-reboot evidence explicitly unqualified.
+Tasks 1 and 3 are complete. Task 2's implementation, focused tests and source
+review are complete, and its initial full native/Linux checkpoint passed.
+However, later run `41286059709` timed out at ten seconds before any script
+marker. Native acceptance remains open; the unchecked item above is intentional.
+One additional Server 2022/Node 24 diagnostic capture passed without reproducing
+the failure and did not identify its cause. No further deadline increase, retry
+or prewarming was selected. Retain the measured host-only tolerance and the
+explicit rollout blocker; do not describe Windows reliability as fixed.
+
+The complete generated HTTPS wrapper now passes both OS fixtures with a
+synthetic downloaded bootstrap. Real package/SCM tests remain a separate boundary.
+Combined native-agent/real-backend deployment, qualified release artifacts,
+real reboot and Core/Desktop Experience remain unqualified. Exact evidence and
+the held rollout decision are recorded in the
+[qualification decision](../../design-docs/windows-qualification-decision.md).
 
 ## Validation and handoff
 

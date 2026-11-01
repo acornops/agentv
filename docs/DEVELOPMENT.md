@@ -155,14 +155,17 @@ Native collector failures retain a sanitized artifact too. Fixed stage markers
 identify PowerShell startup, encoding, stdin decoding and host CIM boundaries;
 only allowlisted stage names, elapsed time, byte counts and stdin/spawn flags
 are reported. Raw stderr and input values are excluded. Collector time/output
-budgets remain unchanged while native timeout causes are investigated.
+limits remain fixed; the host read has a ten-second limit and the other
+collectors retain eight seconds. See the
+[native reliability follow-up](exec-plans/active/windows-native-reliability.md).
 
 All native collector cmdlets use fixed, documented module qualification. Native
 causal measurements showed unqualified command discovery took 22–29 seconds,
 while module-qualified Utility commands completed in 0.22–0.27 seconds across
 the hosted 2022/2025 × Node 22/24 matrix. This avoids broad command discovery
-without adding ambient environment variables or increasing the eight-second
-collector budget. The temporary 30-second diagnostic probes were removed after
+without adding ambient environment variables or increasing the then-eight-second
+collector budget. The later host-only ten-second tolerance is a separate change.
+The temporary 30-second diagnostic probes were removed after
 that measurement; fixed sanitized failure stages remain available.
 
 ## Windows service-host qualification

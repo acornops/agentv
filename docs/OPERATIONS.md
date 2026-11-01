@@ -273,11 +273,17 @@ and retains its exact systemd log-unit allowlist. Windows still permits only
 case-insensitive query and service-state/protocol contracts.
 
 Native collector smoke evidence includes a bounded timeline for its first real
-collector call: trust checks, spawn, received stages, the eight-second timer,
+collector call: trust checks, spawn, received stages, the collector timer,
 exit and close, plus an event-loop lag summary. The observer is enabled only by
 the smoke harness and records no raw output or input. These are parent receipt
 times, not native execution durations. A failed first call remains failed;
 later diagnostic timings do not qualify cold startup or establish its cause.
+The fixed host collector now allows ten seconds; other collectors retain eight
+seconds. Windows tool, service initialization, installer doctor and backend
+command deadlines remain 12, 15, 20 and 25 seconds respectively. There is no retry
+or prewarming. The optional first-call CI diagnostic measures native lifetime
+and CPU separately and has its own twelve-second cleanup watchdog; see the
+[qualification decision](design-docs/windows-qualification-decision.md).
 
 `dist/windows-service-entry.js --config <absolute protected JSON path>` is a
 private child entrypoint for the separately reviewed native SCM host. It waits

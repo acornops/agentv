@@ -88,7 +88,8 @@ dropped. Filesystem and memory pressure use the existing 90% threshold.
 
 `acornops.windows-collectors.v1` fixed script identifiers use absolute Windows PowerShell, UTF-16LE
 encoded fixed code and UTF-8 JSON stdin. Input never becomes code or WQL. Each
-script runs for at most eight seconds, combined stdout/stderr is at most 1 MiB,
+script has a ten-second deadline for `host` and an eight-second deadline for all
+other collectors, combined stdout/stderr is at most 1 MiB,
 and enumeration is capped at 1000 retained rows plus a truncation sentinel.
 Event enumeration is additionally capped at the requested 500-row maximum and
 native byte budget. A minimal environment excludes credentials, profile/module

@@ -33,7 +33,9 @@ gates, published checksums and signed provenance passed. See the
 
 Windows qualification (2026-11-01): the read-only source/integration stage is
 complete, but [rollout and writes remain unqualified](design-docs/windows-qualification-decision.md).
-Unexplained collector/service-identity failures and unexecuted reboot,
-Core/Desktop Experience and full generated-download gates remain open. Hosted
-passing samples do not resolve those limits; the historical scores are not Windows
-release approval.
+The full generated HTTPS wrapper passes both hosted OS fixtures with a synthetic
+bootstrap. Host-only ten-second headroom permits an observed 8.9-second read,
+but a later first call still timed out before any script marker. Collector and
+service-identity reliability, real reboot, Core/Desktop Experience and combined
+native/real-backend deployment remain unqualified. Passing samples do not resolve
+those limits; the historical scores are not Windows release approval.

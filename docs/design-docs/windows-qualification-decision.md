@@ -2,7 +2,8 @@
 
 Decision date: 2026-11-01. Scope: Task 8 of the
 [Windows implementation plan](../exec-plans/active/windows-vm-implementation.md),
-following Task 7 source/integration completion.
+following Task 7 source/integration completion, and the focused
+[native reliability follow-up](../exec-plans/active/windows-native-reliability.md).
 
 **Not qualified for Windows rollout or writes.** Keep rollout disabled and Windows
 write enrollment, policy changes, discovery and dispatch denied. No Windows
@@ -14,14 +15,14 @@ native rollout.
 
 ## Evidence and its boundaries
 
-The evaluated AgentV runtime is
+The initial implementation-stage AgentV runtime is
 `f86bd5ab7040c9372f6160383ef7620091f821ea`, also present unchanged at the
 documentation checkpoint `e9e9bbdc5a929efa821ad5192643dd5751de3b09`.
 Control-plane is `3a1b969d5a4782880b615d1f12c38c8dc1f62b6f`, console
 `5eabc881e6712cbd88570f3beddca30920a5b4c2`, and API docs
 `a39eb953907ed9b5e10a157f4fe2e0e5c37ffa8f`. These identify source, not
-released or enabled Windows artifacts. Later changes to this evidence record
-do not change the tested runtime.
+released or enabled Windows artifacts. The later runtime change is recorded
+separately below; the following table retains the original checkpoints.
 
 | Evidence | Result and limit |
 | --- | --- |
@@ -43,21 +44,75 @@ Native host source SHA-256 is
 `d85afcc72b2be7b7a804d2857c5171a8034d88bcefa2e68f86dd5e6a34d1be42`;
 host-summary script SHA-256 is
 `1951a5fcd4b1ebc40023c5fcf0742db1ac9b0db2e2a16576931076e0bea83b35`.
-Both are unchanged across the cited later native samples. No timeout increase,
-retry, prewarming or relaxed environment/output boundary explains the greens.
+Both are unchanged across the cited native samples. No timeout increase,
+retry, prewarming or relaxed environment/output boundary explains the initial
+implementation-stage greens above. The later host timeout change is explicit
+in the follow-up evidence below.
 The selected 80 Linux-owned tracked files match baseline `3d86cfc` exactly;
 shared config/lifecycle/entry/doctor/observability seams remain outside that
 comparison and rely on behavioral checks. This does not prove zero regressions.
+
+## Focused native reliability follow-up
+
+Runtime commit `c2eaf24a4a7b931ebf0956af9c072a452656b89b` changes only the
+Windows host collector deadline from 8,000 to 10,000 ms. Other Windows collectors
+retain 8,000 ms. Tool, service initialization, installer doctor and backend command
+deadlines remain 12,000, 15,000, 20,000 and 25,000 ms. Fixed script hashes, executable
+trust, credential-free environment, 1 MiB output cap and cancellation are preserved.
+No retry or prewarming was added. Linux and the other repositories' production
+source did not change in this follow-up.
+
+| Evidence | Result and limit |
+| --- | --- |
+| [Original-bound native measurement 41282917589](https://github.com/acornops/agentv/actions/runs/41282917589) at `3a1efa4` | Server 2022/Node 22 failed at the original bound: native lifetime 8,016 ms, CPU 719 ms, Node event-loop maximum lag 13 ms, exit-to-close 1 ms. Collection completed at 7,949 ms but no JSON arrived before termination. Three other cells passed. This rules out a multi-second parent observation delay for this sample; the underlying non-CPU wait remains unattributed. The failed sample is retained. |
+| [Changed-bound measurement 41284255184, attempt 1](https://github.com/acornops/agentv/actions/runs/41284255184/attempts/1) at exact `c2eaf24` | All four first calls and all four independent watchdog proofs passed. Server 2022/Node 22 completed with native lifetime 8,873 ms, observed close 8,884 ms and CPU 407 ms: actual useful headroom beyond the former limit. Other native lifetimes were 7,076, 5,144 and 4,625 ms. This does not prove every future cold call fits ten seconds. |
+| [Later collectors 41286059709](https://github.com/acornops/agentv/actions/runs/41286059709) at `ef30249`, runtime still `c2eaf24` | Server 2022/Node 24 failed at the ten-second deadline before any script stage or output; close was 10,493 ms and Node event-loop maximum lag 13 ms. Other three cells passed. Subsequent diagnostic calls took 8,537 and 1,472 ms; these are not recovery or first-call success evidence. This failure reopens native acceptance and establishes that ten-second headroom alone is insufficient. |
+| [Follow-up measurement 41284255184, attempt 2](https://github.com/acornops/agentv/actions/runs/41284255184/attempts/2), exact `c2eaf24` | One Server 2022/Node 24 job was rerun. It passed with 6,126 ms native lifetime/500 ms CPU and did not reproduce the no-marker failure. The result is inconclusive for its cause. The other three displayed matrix results retain attempt-1 timestamps/artifacts. No further capture was requested and the failed qualification remains open. |
+| [Collectors 41284256955](https://github.com/acornops/agentv/actions/runs/41284256955), tested merge `4264918384c787729a7cff3c2383402e90d2fc9f` containing `c2eaf24` | All four normal native cells passed; first closes 4,572–7,317 ms. Boundary checks and unchanged script provenance passed. |
+| [Service host 41284256962](https://github.com/acornops/agentv/actions/runs/41284256962), same merge | All four cells passed 33 checks each; actual LocalService host reads took 3,380–4,464 ms. The earlier lost service-identity error remains unattributed. |
+| [Linux CI 41284256959](https://github.com/acornops/agentv/actions/runs/41284256959), same merge | Validation, unit tests and both Ubuntu 24.04 live systemd Node 22/24 lifecycle jobs passed. |
+| [Installer recovery 41284256981](https://github.com/acornops/agentv/actions/runs/41284256981), same merge | All 18 jobs passed; all 18 artifacts were inspected. Each OS/Node pair passed lifecycle 23, recovery 21, startup 9 and acceptance 21 checks. Both owned teardown-race fixtures passed. This is real package/SCM evidence using synthetic transport, not reboot or combined real-backend deployment evidence. |
+| Local runtime validation | `npm run validate` passed 186 tests/33 files; `npm run test:coverage:all` passed 190/34; package/bootstrap checks passed. Focused tests cover a valid host result after eight seconds, the ten-second stop, unchanged non-host timing, cancellation/output limits during the added interval and the unchanged outer tool/startup deadlines. A Windows mock test now waits for both independently arriving messages before asserting both. |
+
+The diagnostic fixture initially failed before starting the collector because
+PowerShell discovered two Node executables and concatenated their paths. It now
+selects the first executable by existing command precedence. Runs
+`41282134273` and `41282605005` remain fixture failures, not production evidence.
+Native watchdog tests now require proof that the independent callback terminated
+the owned process tree before fallback cleanup. No raw trace, command line,
+environment, credentials or host observations are published by these diagnostics.
+
+The full generated HTTPS command now passes on Server 2022 and 2025 in the two
+recovery-state jobs of [run 41287130789](https://github.com/acornops/agentv/actions/runs/41287130789),
+fixture source `7913f6779ad38f3f6157e23a3b206941f992034c`, tested merge
+`85f8dd3f235c929464e0e73a5470a9363505b2c0`. Both inspected artifacts contain
+six passing cases: initial, repair and credential replacement, untrusted TLS,
+HTTP failure and bootstrap failure. Every case removes both temporary paths and
+preserves an unrelated sentinel; both fixtures confirm owned process, certificate
+and scratch cleanup. Commands match the actual pinned control-plane builder
+byte-for-byte, with both recorded source hashes independently verified.
+
+This executes native PowerShell 5.1 and OS curl with an explicitly synthetic
+downloaded parameter-capture bootstrap. It qualifies the outer download,
+invocation and cleanup boundary, not production bootstrap enrollment against a
+real backend. The initial fixture attempts failed before executing any case.
+Bounded observations eventually established premature successful server shutdown;
+the fixture incorrectly treated any stdin chunk as a shutdown command. Actual
+child-process regressions reproduced this with preamble/unrelated input, and
+requiring a complete `stop` line resolves the observed native setup failure.
+The exact original native input bytes were not captured. The four earlier failed
+runs remain failed; the local path-alias repair did not resolve that native symptom.
 
 ## Unmet gates
 
 1. **Explain and resolve native collector reliability failures.** Preserve failed
    [41231100915](https://github.com/acornops/agentv/actions/runs/41231100915) and
    [41234585971](https://github.com/acornops/agentv/actions/runs/41234585971):
-   Server 2022 Node 22/24 and earlier Server 2025 Node 24 hit the unchanged
-   eight-second bound; a later diagnostic took 8,369 ms. Establish a causal
-   production remedy and repeat native qualification. Hosted jitter and CIM alone
-   are not established causes; a later passing matrix cannot erase the failures.
+   Server 2022 Node 22/24 and earlier Server 2025 Node 24 hit the former
+   eight-second bound; a later diagnostic took 8,369 ms. The host-only ten-second
+   tolerance above has native evidence beyond eight seconds, but the underlying
+   wait remains unattributed. Hosted jitter and CIM alone are not established
+   causes; passing samples cannot erase the failures or qualify general reliability.
 2. **Resolve the service-identity failure** in `41243496972`. Use retained bounded
    collector evidence to establish cause and validate the remedy under the actual
    low-privilege service identity on the supported matrix. Do not call the new
@@ -65,10 +120,7 @@ comparison and rely on behavioral checks. This does not prove zero regressions.
 3. **Execute real reboot recovery and Core/Desktop Experience coverage.** Hosted
    SCM restart and hosted image labels do not establish those outcomes. The user
    selected hosted CI for now; these gates remain unexecuted.
-4. **Exercise the complete generated PowerShell install command** through outer
-   HTTPS download, temporary-file lifecycle and invocation. Native syntax parsing
-   and literal argument binding passed; the full wrapper has not run end to end.
-5. **Qualify the combined deployment and artifacts.** Hosted native packaging uses
+4. **Qualify the combined deployment and artifacts.** Hosted native packaging uses
    synthetic loopback transport; actual backend integration uses synthetic host
    observations/actions. Their combination is not native deployment/recovery
    evidence. Activation requires independently pinned qualified Windows artifacts
