@@ -5,6 +5,7 @@ import { WindowsCollectorRunner, type CollectorRunner } from './runner.js';
 import type { ScriptId } from './scripts.js';
 import { hostSchema, listenerSchema, logSchema, processSchema, serviceSchema, volumeSchema, type LogChannel, type WindowsHost, type WindowsList, type WindowsLogsInput, type WindowsQuery } from './types.js';
 import { isFailedService } from './service-health.js';
+import { validateWindowsLogInput } from './log-input.js';
 
 /** Collect local native Windows facts with explicit partial/denied evidence. */
 export class WindowsLiveHost implements WindowsHost {
@@ -36,12 +37,8 @@ export class WindowsLiveHost implements WindowsHost {
     return { ...result, items: filtered.slice(0, input.limit), original_count: filtered.length + result.omitted_count, omitted_count: result.omitted_count + Math.max(0, filtered.length - input.limit) };
   }
   async queryLogs(input: WindowsLogsInput, signal?: AbortSignal) {
-    if (!['Application', 'System'].includes(input.channel) || !this.channels.includes(input.channel)) throw new ToolExecutionError('PERMISSION_DENIED', 'Log channel is not locally allowed');
-    if (!Number.isInteger(input.limit) || input.limit < 1 || input.limit > 500) throw new ToolExecutionError('INVALID_ARGUMENTS', 'Windows log row limit is invalid');
-    const until = input.until ? Date.parse(input.until) : Date.now(); const since = input.since ? Date.parse(input.since) : until - 3600_000;
-    if (!Number.isFinite(since) || !Number.isFinite(until) || until < since || until - since > 86400_000 || until > Date.now() + 60_000) throw new ToolExecutionError('INVALID_ARGUMENTS', 'Windows logs require a valid window no larger than 24 hours');
-    if (!Number.isInteger(input.byte_limit) || input.byte_limit < 1024 || input.byte_limit > 1024 * 1024) throw new ToolExecutionError('INVALID_ARGUMENTS', 'Windows log byte limit is invalid');
-    const result = await this.collect('events', logSchema, { limit: 1000 }, { channel: input.channel, since: new Date(since).toISOString(), until: new Date(until).toISOString(), limit: input.limit, byte_limit: input.byte_limit }, signal);
+    const { since, until } = validateWindowsLogInput(input, this.channels, Date.now());
+    const result = await this.collect('events', logSchema, { limit: 1000 }, { channel: input.channel, since, until, limit: input.limit, byte_limit: input.byte_limit }, signal);
     const filtered = result.items.filter((item) => item.channel === input.channel && (!input.query || item.message.toLowerCase().includes(input.query.toLowerCase())));
     const entries = filtered.slice(0, input.limit); while (entries.length && Buffer.byteLength(JSON.stringify(entries)) > input.byte_limit) entries.pop();
     return { entries, returned_count: entries.length, original_count: filtered.length, byte_count: Buffer.byteLength(JSON.stringify(entries)), truncated: result.omitted_count > 0 || entries.length < filtered.length || result.health.status !== 'ok', health: result.health };

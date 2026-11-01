@@ -1,5 +1,6 @@
 import { ToolExecutionError } from '../tools/errors.js';
 import { isFailedService } from './service-health.js';
+import { validateWindowsLogInput } from './log-input.js';
 import type { LogChannel, WindowsHost, WindowsHostSummary, WindowsList, WindowsLogsInput, WindowsQuery, WindowsService } from './types.js';
 
 /** Deterministic synthetic fixtures, never captured native qualification evidence. */
@@ -16,6 +17,6 @@ export class WindowsMockHost implements WindowsHost {
   }
   async getService(name: string) { const item = (await this.listServices({ limit: 100 })).items.find((item) => item.name === name); if (!item) throw new ToolExecutionError('RESOURCE_NOT_FOUND', 'Service not found'); return item; }
   async listListeners(input: WindowsQuery & { protocol?: 'tcp' | 'udp'; port?: number }) { return this.list([{ protocol: 'tcp' as const, address: '127.0.0.1', port: 8080, pid: 101, ownership_status: 'available' as const }].filter((item) => (!input.protocol || item.protocol === input.protocol) && (!input.port || item.port === input.port) && (!input.query || item.address.toLowerCase().includes(input.query.toLowerCase()))), input.limit, 'windows_listeners'); }
-  async queryLogs(input: WindowsLogsInput) { if (!this.channels.includes(input.channel)) throw new ToolExecutionError('PERMISSION_DENIED', 'Log channel is not locally allowed'); return { entries: [], returned_count: 0, original_count: 0, byte_count: 2, truncated: false, health: { collector: 'windows_events', status: 'ok' as const, duration_ms: 0 } }; }
+  async queryLogs(input: WindowsLogsInput) { validateWindowsLogInput(input, this.channels, Date.now()); return { entries: [], returned_count: 0, original_count: 0, byte_count: 2, truncated: false, health: { collector: 'windows_events', status: 'ok' as const, duration_ms: 0 } }; }
   async stop(): Promise<void> {}
 }
