@@ -8,13 +8,12 @@
 
 **Tech stack:** TypeScript, Vitest, systemd, existing Ubuntu 24.04 CI on Node 22/24.
 
-**Spec:** The reported demo VM chat failure and the requirement to preserve existing Linux behavior; systemd's `WATCHDOG=1` notification contract.
+**Spec:** Preserve existing Linux behavior and satisfy systemd's `WATCHDOG=1` notification contract.
 
 ## Evidence and scope
 
-- The demo VM socket closes after roughly 90 seconds, then reconnects roughly six seconds later. Redis ownership continues renewing until the socket closes.
-- Installed AgentV experimental.14 and released experimental.15 both invoke the unsupported `systemd-notify --watchdog`; the host rejects that option. Its unit uses `WatchdogSec=90s` and `RestartSec=5`.
-- Read-only VM log retrieval confirmed repeated `Watchdog timeout (limit 1min 30s)` failures before the platform rollout. The failure at 00:50:25 UTC matches the failed chat request and socket closure.
+- Released AgentV experimental.14 and experimental.15 both invoke the unsupported `systemd-notify --watchdog` option. The packaged unit uses `WatchdogSec=90s` and `RestartSec=5`.
+- systemd rejects that option; missing watchdog notifications cause repeated service restarts even when authentication and transport heartbeats succeed.
 - No API, credential, control-plane, Windows, service policy or timer changes.
 
 ## Review focus
@@ -35,7 +34,7 @@ Interface: existing `notifyWatchdog(): Promise<boolean>`; no signature changes.
 
 ## Rollout and rollback
 
-An installed agent needs the corrected artifact; updating the platform's installer pin alone does not upgrade it. Confirm its actual systemd unit and watchdog logs, preserve its identity/configuration, and validate continuous connection and read tools after an authorized update. Do not disable watchdog protection. Roll back the agent artifact if the update introduces a separate failure.
+An installed agent needs the corrected artifact; updating an installer pin alone does not upgrade it. Confirm its systemd unit and watchdog logs, preserve its identity/configuration, and validate continuous connection and read tools after an authorized update. Do not disable watchdog protection. Roll back the agent artifact if the update introduces a separate failure.
 
 ## Progress
 
@@ -44,5 +43,5 @@ An installed agent needs the corrected artifact; updating the platform's install
 - Regression test: one expected argument mismatch before the fix; all three notification tests pass after it.
 - `npm run validate`: passed (266 unit tests, contracts, harness, lint/typecheck, build and 28 process/Windows fixtures). `npm run test:e2e`: four passed. `npm run smoke:package`, `bash -n scripts/systemd-smoke.sh` and `git diff --check`: passed.
 - Independent review found no blockers. [Hosted CI](https://github.com/acornops/agentv/actions/runs/41371163660) passed at `af2c135`, including Node 22 and 24 native systemd gates: both completed 100 seconds without restart and with advancing watchdog timestamps, then passed the existing recovery/action scenarios.
-- Prepare `0.0.1-experimental.16` with unchanged dependencies; rerun validation for that artifact, then publish through the existing release gate. Update the demo's generated installer pin only after release assets are verified. The separate VM still needs an operator-run upgrade using its retained credential.
+- Prepare `0.0.1-experimental.16` with unchanged dependencies; rerun validation for that artifact, then publish through the existing release gate. Update downstream installer pins only after release assets are verified. Existing installations need an operator-run upgrade using their retained credentials.
 - Completion and live verification: pending.
