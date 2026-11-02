@@ -1,5 +1,7 @@
 # Completed Execution Plans
 
+- [Systemd watchdog repair](2026-11-02-systemd-watchdog.md) — Released experimental.16 after native continuity gates and artifact verification; installed hosts require an explicit upgrade.
+
 - [Windows qualification preparation](windows-qualification-preparation.md) — Verified candidate assets, protected reboot probe and real-store race coverage; real reboot and production rollout remain unqualified.
 
 - [Deterministic follow-up fixes](windows-confident-gap-fixes.md) — Mock summary contract, linked-workspace validation and optional coverage publication corrected; live VM implementations and rollout gates unchanged.
