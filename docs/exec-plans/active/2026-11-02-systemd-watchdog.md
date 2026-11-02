@@ -14,7 +14,7 @@
 
 - The demo VM socket closes after roughly 90 seconds, then reconnects roughly six seconds later. Redis ownership continues renewing until the socket closes.
 - Installed AgentV experimental.14 and released experimental.15 both invoke the unsupported `systemd-notify --watchdog`; the host rejects that option. Its unit uses `WatchdogSec=90s` and `RestartSec=5`.
-- A saved October 28 control-plane log also contains a VM disconnect/reconnect before the November 2 platform release. Agent-side logs still need correlation.
+- Read-only VM log retrieval confirmed repeated `Watchdog timeout (limit 1min 30s)` failures before the platform rollout. The failure at 00:50:25 UTC matches the failed chat request and socket closure.
 - No API, credential, control-plane, Windows, service policy or timer changes.
 
 ## Review focus
@@ -43,5 +43,6 @@ An installed agent needs the corrected artifact; updating the platform's install
 - Initial sandboxed baseline could not bind loopback sockets (EPERM). With loopback permitted, all 264 baseline tests passed.
 - Regression test: one expected argument mismatch before the fix; all three notification tests pass after it.
 - `npm run validate`: passed (266 unit tests, contracts, harness, lint/typecheck, build and 28 process/Windows fixtures). `npm run test:e2e`: four passed. `npm run smoke:package`, `bash -n scripts/systemd-smoke.sh` and `git diff --check`: passed.
-- Native systemd cannot run on this macOS workstation; hosted Linux verification and independent review are pending.
+- Independent review found no blockers. [Hosted CI](https://github.com/acornops/agentv/actions/runs/41371163660) passed at `af2c135`, including Node 22 and 24 native systemd gates: both completed 100 seconds without restart and with advancing watchdog timestamps, then passed the existing recovery/action scenarios.
+- Prepare `0.0.1-experimental.16` with unchanged dependencies; rerun validation for that artifact, then publish through the existing release gate. Update the demo's generated installer pin only after release assets are verified. The separate VM still needs an operator-run upgrade using its retained credential.
 - Completion and live verification: pending.
