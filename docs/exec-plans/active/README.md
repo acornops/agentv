@@ -5,8 +5,6 @@ Active multi-step plans live here. Move completed plans to `docs/exec-plans/comp
 Released work is indexed under completed plans; its remaining production
 acceptance gates are preserved in the release records.
 
-- [Systemd watchdog repair](2026-11-02-systemd-watchdog.md) — Correct the Linux watchdog notification and verify service stability beyond its deadline.
-
 ## Windows VM support
 
 - [Windows VM assessment and Linux baseline](windows-vm-assessment.md) — Completed baseline and approved compatibility design.
