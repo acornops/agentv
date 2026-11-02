@@ -24,5 +24,5 @@ export async function notifyReady(): Promise<boolean> {
 
 /** Send one bounded watchdog notification from the systemd-owned main process. */
 export async function notifyWatchdog(): Promise<boolean> {
-  return notify(['--watchdog']);
+  return notify(['WATCHDOG=1']);
 }

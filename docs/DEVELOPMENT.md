@@ -93,6 +93,10 @@ through the tool executor and helper, display-state normalization, canonical
 replay, stale/contradictory precondition rejection, upgrade, rollback, and
 uninstall-preservation checks.
 
+The gate also observes the installed service for 100 seconds, beyond its
+90-second watchdog deadline. It requires an unchanged main PID/restart count
+and advancing systemd watchdog timestamps; startup readiness alone is insufficient.
+
 The live gate runs on Node 22 and 24. Before running it, CI uses
 `scripts/prepare-node-runtime-smoke.sh` to place the selected Node binary at a
 root-owned `/usr/local/bin/node` and an unsupported-version fixture at
