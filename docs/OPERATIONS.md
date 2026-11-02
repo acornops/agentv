@@ -186,6 +186,16 @@ retrying old arguments or approvals.
 
 ## Logs And Diagnostics
 
+AgentV `0.0.1-experimental.16` corrects the systemd watchdog notification used by
+earlier releases. If the journal reports `systemd watchdog notification failed`
+followed by `Watchdog timeout (limit 1min 30s)`, the agent may reconnect every
+90 seconds and intermittently fail tool calls. Use **Upgrade or repair AgentV**
+with the corrected release to retain the VM registration and credential. A
+platform redeploy alone does not update the installed agent. After upgrading,
+verify that `MainPID` and `NRestarts` remain unchanged and
+`WatchdogTimestampMonotonic` advances across more than 90 seconds; keep the
+watchdog enabled.
+
 Use journalctl for systemd installs:
 
 ```bash

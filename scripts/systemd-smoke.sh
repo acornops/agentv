@@ -174,6 +174,28 @@ wait_for_authentication
 systemctl is-active --quiet acornops-agentv.service
 [[ -f /run/acornops-agentv/authenticated ]]
 [[ "$(systemctl show acornops-agentv.service --property=User --value)" == "acornops-agent" ]]
+# A service can be active and authenticated while its watchdog is broken.
+# Observe longer than the packaged 90-second deadline before intentional restarts.
+watchdog_pid="$(systemctl show acornops-agentv.service --property=MainPID --value)"
+watchdog_restarts="$(systemctl show acornops-agentv.service --property=NRestarts --value)"
+watchdog_before="$(systemctl show acornops-agentv.service --property=WatchdogTimestampMonotonic --value)"
+echo 'Checking AgentV watchdog continuity for 100 seconds.'
+watchdog_deadline=$((SECONDS + 100))
+while (( SECONDS < watchdog_deadline )); do
+  sleep 5
+  if ! systemctl is-active --quiet acornops-agentv.service \
+    || [[ "$(systemctl show acornops-agentv.service --property=MainPID --value)" != "${watchdog_pid}" ]] \
+    || [[ "$(systemctl show acornops-agentv.service --property=NRestarts --value)" != "${watchdog_restarts}" ]]; then
+    echo 'AgentV stopped or restarted during watchdog continuity check.' >&2
+    systemctl show acornops-agentv.service --property=MainPID,NRestarts,Result,WatchdogTimestampMonotonic
+    exit 1
+  fi
+done
+if [[ "$(systemctl show acornops-agentv.service --property=WatchdogTimestampMonotonic --value)" -le "${watchdog_before}" ]]; then
+  echo 'AgentV watchdog timestamp did not advance after startup.' >&2
+  exit 1
+fi
+echo 'AgentV watchdog advanced without restarting the service.'
 acornops-agentv-doctor
 action_smoke="$(mktemp /tmp/acornops-agentv-action-smoke.XXXXXX.mjs)"
 install -o acornops-agent -g acornops-agent -m 0400 "${repo_root}/scripts/systemd-action-smoke.mjs" "${action_smoke}"
