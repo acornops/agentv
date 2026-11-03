@@ -1,5 +1,7 @@
 # Completed Execution Plans
 
+- [Snapshot CPU sampling](2026-11-03-cpu-sampling.md) — One-second sampling before inventory, with generation and missing-command regressions; production-host acceptance remains a release gate.
+
 - [Systemd watchdog repair](2026-11-02-systemd-watchdog.md) — Released experimental.16 after native continuity gates and artifact verification; installed hosts require an explicit upgrade.
 
 - [Windows qualification preparation](windows-qualification-preparation.md) — Verified candidate assets, protected reboot probe and real-store race coverage; real reboot and production rollout remain unqualified.

@@ -1,3 +1,4 @@
+import { spawnSync } from 'node:child_process';
 import { describe, expect, it, vi } from 'vitest';
 import { FilesystemAdapter } from './filesystems.js';
 import { SocketAdapter } from './sockets.js';
@@ -73,4 +74,19 @@ describe('live adapter command boundaries', () => {
       expect.objectContaining({ protocol: 'udp', port: 5353, pid: null, ownership_status: 'unavailable' }),
     ]));
   });
+
+  it('retains a missing socket command error until delayed inventory consumes it', () => {
+    const child = spawnSync(process.execPath, ['--unhandled-rejections=strict', '--import', 'tsx', '--input-type=module', '--eval', `
+      import assert from 'node:assert/strict';
+      import { SocketAdapter } from './src/adapters/sockets.ts';
+      import { ToolExecutionError } from './src/tools/errors.ts';
+      const unavailable = new ToolExecutionError('COMMAND_UNAVAILABLE', 'ss unavailable');
+      const adapter = new SocketAdapter(async () => { throw unavailable; }, async () => { assert.fail('must not invoke an unresolved command'); });
+      await new Promise((resolve) => setImmediate(resolve));
+      await assert.rejects(adapter.list({ limit: 10 }), (error) => error === unavailable);
+    `], { cwd: new URL('../../', import.meta.url), encoding: 'utf8', timeout: 5000 });
+
+    expect(child.error).toBeUndefined();
+    expect(child.status, child.stderr).toBe(0);
+  }, 10_000);
 });

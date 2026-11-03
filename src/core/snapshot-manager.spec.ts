@@ -4,7 +4,23 @@ import { MockHostAdapter } from '../adapters/mock.js';
 import type { FilesystemSummary } from '../adapters/types.js';
 import { createLogger } from '../logger.js';
 import { Observability } from '../observability.js';
+import { ToolExecutionError } from '../tools/errors.js';
 import { SnapshotManager } from './snapshot-manager.js';
+
+/** Hold a collector at a known boundary without waiting on wall-clock time. */
+function deferred() {
+  let resolve!: () => void;
+  const promise = new Promise<void>((release) => { resolve = release; });
+  return { promise, resolve };
+}
+
+/** Observe calls to the inventory boundary while keeping its normal results. */
+function observeInventory(host: MockHostAdapter) {
+  return [
+    vi.spyOn(host, 'listFilesystems'), vi.spyOn(host, 'listServices'),
+    vi.spyOn(host, 'listProcesses'), vi.spyOn(host, 'listListeners'),
+  ];
+}
 
 /** Capture real snapshot serialization with controlled host filesystem facts. */
 async function collectFilesystemSnapshot(filesystems: FilesystemSummary[]) {
@@ -27,6 +43,111 @@ async function collectFilesystemSnapshot(filesystems: FilesystemSummary[]) {
 }
 
 describe('SnapshotManager', () => {
+  it('finishes the host sample before starting inventory collectors in parallel', async () => {
+    const host = new MockHostAdapter();
+    const summary = await host.getHostSummary();
+    const hostSample = deferred();
+    const filesystemCollection = deferred();
+    vi.spyOn(host, 'getHostSummary').mockImplementation(async () => { await hostSample.promise; return summary; });
+    const listFilesystems = host.listFilesystems.bind(host);
+    const inventory = observeInventory(host);
+    vi.mocked(host.listFilesystems).mockImplementation(async (input) => { await filesystemCollection.promise; return listFilesystems(input); });
+    const sent: Buffer[] = [];
+    const manager = new SnapshotManager(host, (payload) => { sent.push(payload); return true; }, createLogger('error'), new Observability());
+
+    try {
+      manager.start(60_000, 64 * 1024);
+      for (const collector of inventory) expect(collector).not.toHaveBeenCalled();
+      expect(sent).toEqual([]);
+
+      hostSample.resolve();
+      await vi.waitFor(() => { for (const collector of inventory) expect(collector).toHaveBeenCalledOnce(); });
+      expect(sent).toEqual([]);
+
+      filesystemCollection.resolve();
+      await vi.waitFor(() => expect(sent).toHaveLength(1));
+      const snapshot = JSON.parse(gunzipSync(sent[0]).toString('utf8')).params.data;
+      expect(snapshot.host_summary).toEqual(summary);
+      expect(snapshot.top_processes).toHaveLength(1);
+    } finally {
+      manager.stop(); hostSample.resolve(); filesystemCollection.resolve();
+    }
+  });
+
+  it.each([
+    { error: new Error('host unavailable'), status: 'unavailable' },
+    { error: new ToolExecutionError('TOOL_TIMEOUT', 'host timed out'), status: 'timed_out' },
+  ])('still collects inventory when host facts are $status', async ({ error, status }) => {
+    const host = new MockHostAdapter();
+    vi.spyOn(host, 'getHostSummary').mockRejectedValue(error);
+    const sent: Buffer[] = [];
+    const manager = new SnapshotManager(host, (payload) => { sent.push(payload); return true; }, createLogger('error'), new Observability());
+
+    try {
+      manager.start(60_000, 64 * 1024);
+      await vi.waitFor(() => expect(sent).toHaveLength(1));
+      const snapshot = JSON.parse(gunzipSync(sent[0]).toString('utf8')).params.data;
+      expect(snapshot.host_summary).toBeNull();
+      for (const section of ['filesystems', 'degraded_services', 'top_processes', 'listeners']) expect(snapshot[section]).toHaveLength(1);
+      expect(snapshot.collector_health).toContainEqual(expect.objectContaining({ collector: 'host_facts', status }));
+    } finally {
+      manager.stop();
+    }
+  });
+
+  it('does not launch inventory or send a snapshot after stopping during the host sample', async () => {
+    const host = new MockHostAdapter();
+    const summary = await host.getHostSummary();
+    const hostSample = deferred();
+    vi.spyOn(host, 'getHostSummary').mockImplementation(async () => { await hostSample.promise; return summary; });
+    const inventory = observeInventory(host);
+    const metrics = new Observability();
+    const finished = vi.spyOn(metrics, 'recordCollection');
+    const sent: Buffer[] = [];
+    const manager = new SnapshotManager(host, (payload) => { sent.push(payload); return true; }, createLogger('error'), metrics);
+
+    try {
+      manager.start(60_000, 64 * 1024);
+      manager.stop();
+      hostSample.resolve();
+      await vi.waitFor(() => expect(finished).toHaveBeenCalledOnce());
+
+      for (const collector of inventory) expect(collector).not.toHaveBeenCalled();
+      expect(sent).toEqual([]);
+    } finally {
+      manager.stop(); hostSample.resolve();
+    }
+  });
+
+  it('restarts with a fresh host sample without launching stale inventory', async () => {
+    const host = new MockHostAdapter();
+    const summary = await host.getHostSummary();
+    const staleSample = deferred();
+    const currentSample = deferred();
+    const hostSummary = vi.spyOn(host, 'getHostSummary')
+      .mockImplementationOnce(async () => { await staleSample.promise; return { ...summary, hostname: 'stale' }; })
+      .mockImplementationOnce(async () => { await currentSample.promise; return { ...summary, hostname: 'current' }; });
+    const inventory = observeInventory(host);
+    const sent: Buffer[] = [];
+    const manager = new SnapshotManager(host, (payload) => { sent.push(payload); return true; }, createLogger('error'), new Observability());
+
+    try {
+      manager.start(60_000, 64 * 1024);
+      manager.start(60_000, 64 * 1024);
+      staleSample.resolve();
+      await vi.waitFor(() => expect(hostSummary).toHaveBeenCalledTimes(2));
+      for (const collector of inventory) expect(collector).not.toHaveBeenCalled();
+      expect(sent).toEqual([]);
+
+      currentSample.resolve();
+      await vi.waitFor(() => expect(sent).toHaveLength(1));
+      for (const collector of inventory) expect(collector).toHaveBeenCalledOnce();
+      expect(JSON.parse(gunzipSync(sent[0]).toString('utf8')).params.data.host_summary.hostname).toBe('current');
+    } finally {
+      manager.stop(); staleSample.resolve(); currentSample.resolve();
+    }
+  });
+
   it.each([
     { type: 'squashfs', mount: '/snap/certbot/5781', read_only: true },
     { type: 'squashfs', mount: '/opt/application-image', read_only: false },

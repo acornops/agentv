@@ -62,8 +62,10 @@ export class SnapshotManager {
           health.push({ collector, status, message: 'Collection failed', duration_ms: Date.now() - collectorStarted }); return fallback;
         }
       };
-      const [hostSummary, filesystems, services, processes, listeners] = await Promise.all([
-        safe('host_facts', () => this.host.getHostSummary(), null),
+      // Finish the CPU sample before inventory work can inflate host utilization.
+      const hostSummary = await safe('host_facts', () => this.host.getHostSummary(), null);
+      if (!this.active || generation !== this.generation) return;
+      const [filesystems, services, processes, listeners] = await Promise.all([
         // df output and runtime are bounded by the adapter. Inventory row limits
         // must not hide capacity findings for later mounts in that result.
         safe('filesystems', () => this.host.listFilesystems({ include_pseudo: false, limit: Number.POSITIVE_INFINITY }), null),

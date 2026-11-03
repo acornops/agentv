@@ -30,6 +30,7 @@ This `docs/` tree is the repository-local system of record for agent-readable de
 
 - [Plans](/docs/PLANS.md)
 - [Active Plans](/docs/exec-plans/active/README.md)
+- [Snapshot CPU sampling](/docs/exec-plans/completed/2026-11-03-cpu-sampling.md)
 - [Systemd watchdog repair](/docs/exec-plans/completed/2026-11-02-systemd-watchdog.md)
 - [Deterministic follow-up fixes](/docs/exec-plans/completed/windows-confident-gap-fixes.md)
 - [Windows VM assessment and Linux baseline](/docs/exec-plans/active/windows-vm-assessment.md)

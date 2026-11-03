@@ -29,7 +29,11 @@ export class SocketAdapter {
   constructor(
     resolver: ExecutableResolver = resolveExecutable,
     private readonly command: CommandRunner = runCommand,
-  ) { this.executable = resolver(['/usr/bin/ss', '/usr/sbin/ss']); }
+  ) {
+    this.executable = resolver(['/usr/bin/ss', '/usr/sbin/ss']);
+    // Inventory can wait for host sampling; list() still receives this failure.
+    void this.executable.catch(() => {});
+  }
   async list(input: { protocol?: 'tcp' | 'udp'; port?: number; address?: string; process_query?: string; limit: number }, signal?: AbortSignal): Promise<{ items: ListenerSummary[]; original_count: number; omitted_count: number; partial: boolean; health: CollectorHealth }> {
     const started = Date.now();
     const executable = await this.executable;

@@ -2,6 +2,8 @@ import { readFile } from 'node:fs/promises';
 import os from 'node:os';
 import type { CollectorHealth, HostSummary } from './types.js';
 
+const CPU_SAMPLE_MS = 1000;
+
 interface HostFactsDependencies {
   readText: (path: string, signal?: AbortSignal) => Promise<string>;
   sleep: (milliseconds: number, signal?: AbortSignal) => Promise<void>;
@@ -43,15 +45,14 @@ function memBytes(value: string | undefined): number {
 async function cpuSample(dependencies: HostFactsDependencies, signal?: AbortSignal): Promise<{ usage_percent: number | null; sampled_ms: number }> {
   const read = async () => (await dependencies.readText('/proc/stat', signal)).split('\n')[0].trim().split(/\s+/).slice(1).map(Number);
   const before = await read();
-  const sampledMs = 100;
-  await dependencies.sleep(sampledMs, signal);
+  await dependencies.sleep(CPU_SAMPLE_MS, signal);
   const after = await read();
   const totalBefore = before.reduce((sum, value) => sum + value, 0);
   const totalAfter = after.reduce((sum, value) => sum + value, 0);
   const idleBefore = (before[3] || 0) + (before[4] || 0);
   const idleAfter = (after[3] || 0) + (after[4] || 0);
   const total = totalAfter - totalBefore;
-  return { usage_percent: total > 0 ? Number((100 * (1 - ((idleAfter - idleBefore) / total))).toFixed(2)) : null, sampled_ms: sampledMs };
+  return { usage_percent: total > 0 ? Number((100 * (1 - ((idleAfter - idleBefore) / total))).toFixed(2)) : null, sampled_ms: CPU_SAMPLE_MS };
 }
 
 /** Collect immutable and sampled host facts from Linux procfs. */
@@ -71,7 +72,7 @@ export class HostFactsAdapter {
     const available = memBytes(memory.MemAvailable);
     const swapTotal = memBytes(memory.SwapTotal);
     const swapFree = memBytes(memory.SwapFree);
-    let cpu = { usage_percent: null as number | null, sampled_ms: 100 };
+    let cpu = { usage_percent: null as number | null, sampled_ms: CPU_SAMPLE_MS };
     try { cpu = await cpuSample(this.dependencies, signal); health.push({ collector: 'cpu', status: 'ok', duration_ms: Date.now() - started }); }
     catch { health.push({ collector: 'cpu', status: 'partial', message: 'CPU sample unavailable', duration_ms: Date.now() - started }); }
     let pressureAvailable = true;

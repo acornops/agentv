@@ -31,7 +31,7 @@ describe('HostFactsAdapter', () => {
     expect(result).toMatchObject({
       hostname: 'vm-1', distro: { id: 'ubuntu', version: '24.04', pretty_name: 'Ubuntu 24.04 LTS' },
       kernel: '6.8.0', architecture: 'x64', boot_id: 'boot-id-1', uptime_seconds: 1234,
-      load: { one: 1.25, five: 2.5, fifteen: 3.75 }, cpu: { usage_percent: 50, sampled_ms: 100 },
+      load: { one: 1.25, five: 2.5, fifteen: 3.75 }, cpu: { usage_percent: 50, sampled_ms: 1000 },
       memory: { total_bytes: 1024000, available_bytes: 409600, used_bytes: 614400, used_percent: 60 },
       swap: { total_bytes: 204800, free_bytes: 51200, used_bytes: 153600, used_percent: 75 },
       pressure_available: true,
@@ -42,6 +42,64 @@ describe('HostFactsAdapter', () => {
     ]));
   });
 
+  it('waits a full second between CPU counter reads', async () => {
+    vi.useFakeTimers();
+    try {
+      let statReads = 0;
+      const adapter = new HostFactsAdapter({
+        ...dependencies(async (path) => {
+          if (path === '/proc/stat') return statReads++ === 0 ? 'cpu 100 0 100 800 0\n' : 'cpu 150 0 150 900 0\n';
+          return baseFiles[path];
+        }),
+        sleep: (milliseconds) => new Promise((resolve) => setTimeout(resolve, milliseconds)),
+      });
+      const collecting = adapter.collect();
+      await vi.advanceTimersByTimeAsync(999);
+      expect(statReads).toBe(1);
+      await vi.advanceTimersByTimeAsync(1);
+      expect((await collecting).cpu).toEqual({ usage_percent: 50, sampled_ms: 1000 });
+      expect(statReads).toBe(2);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it.each([
+    { state: 'idle', after: 'cpu 100 0 100 1000 0\n', usage_percent: 0 },
+    { state: 'fully busy', after: 'cpu 200 0 200 800 0\n', usage_percent: 100 },
+    { state: 'unchanged counters', after: 'cpu 100 0 100 800 0\n', usage_percent: null },
+  ])('preserves $state CPU measurements over the sample', async ({ after, usage_percent }) => {
+    let statReads = 0;
+    const adapter = new HostFactsAdapter(dependencies(async (path) => {
+      if (path === '/proc/stat') return statReads++ === 0 ? 'cpu 100 0 100 800 0\n' : after;
+      return baseFiles[path];
+    }));
+
+    expect((await adapter.collect()).cpu).toEqual({ usage_percent, sampled_ms: 1000 });
+  });
+
+  it('keeps host facts and a partial CPU result when the sampling wait is aborted', async () => {
+    const controller = new AbortController();
+    let statReads = 0;
+    const adapter = new HostFactsAdapter({
+      ...dependencies(async (path) => {
+        if (path === '/proc/stat') { statReads++; return 'cpu 100 0 100 800 0\n'; }
+        return baseFiles[path];
+      }),
+      sleep: async (_milliseconds, signal) => {
+        controller.abort(new Error('cancelled'));
+        signal?.throwIfAborted();
+      },
+    });
+
+    const result = await adapter.collect(controller.signal);
+
+    expect(statReads).toBe(1);
+    expect(result.hostname).toBe('vm-1');
+    expect(result.cpu).toEqual({ usage_percent: null, sampled_ms: 1000 });
+    expect(result.collector_health).toContainEqual(expect.objectContaining({ collector: 'cpu', status: 'partial' }));
+  });
+
   it('reports CPU and pressure degradation without converting the host result to empty success', async () => {
     const adapter = new HostFactsAdapter(dependencies(async (path) => {
       if (path === '/proc/stat' || path === '/proc/pressure/cpu') throw new Error('unavailable');
@@ -49,7 +107,7 @@ describe('HostFactsAdapter', () => {
     }));
     const result = await adapter.collect();
     expect(result.hostname).toBe('vm-1');
-    expect(result.cpu.usage_percent).toBeNull();
+    expect(result.cpu).toEqual({ usage_percent: null, sampled_ms: 1000 });
     expect(result.pressure_available).toBe(false);
     expect(result.collector_health).toContainEqual(expect.objectContaining({ collector: 'cpu', status: 'partial' }));
   });

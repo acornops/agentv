@@ -204,6 +204,17 @@ journalctl -u acornops-agentv -f
 
 The agent logs startup configuration without secrets, WebSocket connection status, handshake acknowledgement, snapshot upload summaries, snapshot collection failures, and WebSocket errors.
 
+## Linux CPU Sampling
+
+Host CPU usage is measured from procfs counter changes over a nominal one-second
+interval, reported as `cpu.sampled_ms: 1000`. Snapshots finish this host sample
+before starting filesystem, service, process and socket inventory collection in
+parallel, so that inventory work does not dominate the CPU reading. This adds
+about one second before snapshot inventory starts; the `get_host_summary` tool
+keeps its existing five-second timeout. Genuine sustained CPU saturation still
+reports 100%, and an unavailable sample retains null CPU usage with partial
+collector health. Installed hosts need an AgentV upgrade to receive this fix.
+
 ## Filesystem Capacity Findings
 
 AgentV emits `FILESYSTEM_PRESSURE` at 90% used capacity, except for the known
